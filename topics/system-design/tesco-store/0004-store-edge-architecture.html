@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Store-Edge Architecture</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0003-system-overview.html">← File 3</a></div>
+
+<h1>Store-Edge Architecture</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 4 of 12</div>
+
+<p>
+  File 0003 established WHY a per-store edge cluster exists. This file goes into WHAT it
+  actually is: the physical/logical stack running on "the machine in each store" the recalled
+  hint referred to, and the choices that make a fleet of ~3,000 of them manageable rather than
+  ~3,000 individual snowflakes.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Edge Kubernetes flavour — the actual decision</h2>
+
+<table>
+  <tr><th>Option</th><th>Fit for a single store</th><th>Trade-off</th></tr>
+  <tr>
+    <td><strong>K3s</strong> (Rancher's lightweight, CNCF-certified K8s distro)</td>
+    <td>Strong fit — single binary, ~512MB RAM footprint, designed for exactly this
+    "edge/single-node" use case</td>
+    <td>Not a managed Azure product itself — you register it into Azure's control plane via
+    Arc separately (below) rather than getting fleet management for free</td>
+  </tr>
+  <tr>
+    <td><strong>Azure IoT Edge</strong></td>
+    <td>Weaker fit — built around IoT device/module patterns (telemetry, device twins), not
+    general-purpose stateless microservices</td>
+    <td>Would fight the abstraction to run Spring Boot services as generic containers rather
+    than IoT modules</td>
+  </tr>
+  <tr>
+    <td><strong>Full AKS at the edge</strong> (Azure Stack / AKS Edge Essentials)</td>
+    <td>Overkill for one store — AKS's control-plane overhead assumes a cluster with multiple
+    nodes worth managing</td>
+    <td>Higher resource cost per store for capability a single store doesn't need</td>
+  </tr>
+</table>
+
+<div class="callout pass">
+  <strong>Recommendation: K3s per store, fleet-managed via Azure Arc</strong>
+  Run lightweight K3s locally for the actual workload, and register every store's cluster into
+  <strong>Azure Arc-enabled Kubernetes</strong> — Arc gives you a single pane of glass in
+  Azure for policy, monitoring, and GitOps config delivery across the whole fleet, without
+  requiring the workload itself to run on "real" AKS. This is also what makes file 0002's
+  GitOps fleet-rollout story (Flux via Arc) concrete rather than hand-wavy — Arc is the actual
+  mechanism that lets a central Git repo drive config into thousands of independently-running
+  K3s clusters.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. The stack, top to bottom</h2>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" font-family="Menlo,Consolas,monospace" font-size="11">
+  <rect width="900" height="560" fill="#fafafa"/>
+
+  <!-- Azure control plane (dotted line down to store) -->
+  <rect x="330" y="10" width="240" height="60" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="450" y="32" text-anchor="middle" font-weight="bold" fill="#14532d">Azure Arc control plane</text>
+  <text x="450" y="48" text-anchor="middle" fill="#14532d" font-size="9">policy, monitoring, GitOps config source</text>
+  <path d="M450 70 L450 100" stroke="#16a34a" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrowG)"/>
+  <text x="470" y="88" fill="#16a34a" font-size="9">Arc agent</text>
+
+  <!-- Store box outer -->
+  <rect x="60" y="105" width="780" height="440" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="450" y="128" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="13">In-store machine (× ~3,000 stores)</text>
+
+  <!-- Hardware layer -->
+  <rect x="90" y="145" width="720" height="50" rx="6" fill="#f3f4f6" stroke="#6b7280"/>
+  <text x="450" y="166" text-anchor="middle" fill="#374151" font-weight="bold">Hardware — small-form-factor server / NUC-class box, local SSD, dual NIC</text>
+  <text x="450" y="182" text-anchor="middle" fill="#374151" font-size="9">one NIC for store LAN (tills), one for WAN uplink — keeps the two traffic classes separable</text>
+
+  <!-- OS layer -->
+  <rect x="90" y="205" width="720" height="34" rx="6" fill="#e5e7eb" stroke="#6b7280"/>
+  <text x="450" y="226" text-anchor="middle" fill="#374151">Linux host OS (minimal, container-optimised) + Azure Arc agent</text>
+
+  <!-- K3s layer -->
+  <rect x="90" y="249" width="720" height="34" rx="6" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="450" y="270" text-anchor="middle" fill="#1e3a8a" font-weight="bold">K3s (single-node or 2-node, see Section 3)</text>
+
+  <!-- Pods -->
+  <rect x="90" y="293" width="170" height="90" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="175" y="313" text-anchor="middle" fill="#1e3a8a" font-weight="bold">POS pod</text>
+  <text x="175" y="330" text-anchor="middle" fill="#1e3a8a" font-size="9">WS server,</text>
+  <text x="175" y="343" text-anchor="middle" fill="#1e3a8a" font-size="9">basket state</text>
+  <text x="175" y="360" text-anchor="middle" fill="#1e3a8a" font-size="8">(file 0005)</text>
+
+  <rect x="270" y="293" width="170" height="90" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="355" y="313" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Pricing pod</text>
+  <text x="355" y="330" text-anchor="middle" fill="#1e3a8a" font-size="9">local cache,</text>
+  <text x="355" y="343" text-anchor="middle" fill="#1e3a8a" font-size="9">read-through</text>
+
+  <rect x="450" y="293" width="170" height="90" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="535" y="313" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Inventory pod</text>
+  <text x="535" y="330" text-anchor="middle" fill="#1e3a8a" font-size="9">stock count</text>
+  <text x="535" y="343" text-anchor="middle" fill="#1e3a8a" font-size="9">this store only</text>
+
+  <rect x="630" y="293" width="180" height="90" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="720" y="313" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Payment pod</text>
+  <text x="720" y="330" text-anchor="middle" fill="#1e3a8a" font-size="9">tokenises,</text>
+  <text x="720" y="343" text-anchor="middle" fill="#1e3a8a" font-size="9">isolated netpol</text>
+  <text x="720" y="360" text-anchor="middle" fill="#1e3a8a" font-size="8">(file 0009)</text>
+
+  <rect x="90" y="393" width="720" height="50" rx="6" fill="#c7d2fe" stroke="#4338ca"/>
+  <text x="450" y="414" text-anchor="middle" fill="#3730a3" font-weight="bold">Store-Sync pod</text>
+  <text x="450" y="430" text-anchor="middle" fill="#3730a3" font-size="9">reads local outbox table, retries against central when WAN is up — only pod that assumes connectivity</text>
+
+  <!-- storage -->
+  <rect x="90" y="453" width="345" height="50" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-dasharray="3,2"/>
+  <text x="262" y="474" text-anchor="middle" fill="#374151" font-weight="bold">Local Postgres/SQLite</text>
+  <text x="262" y="490" text-anchor="middle" fill="#374151" font-size="9">stock, price cache, transaction log</text>
+
+  <rect x="455" y="453" width="355" height="50" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-dasharray="3,2"/>
+  <text x="632" y="474" text-anchor="middle" fill="#374151" font-weight="bold">Outbox table (durable queue)</text>
+  <text x="632" y="490" text-anchor="middle" fill="#374151" font-size="9">events awaiting central sync — survives a reboot</text>
+
+  <text x="450" y="530" text-anchor="middle" fill="#1e3a8a" font-size="10">Store LAN below: cashier terminals connect here (file 0005)</text>
+
+  <defs>
+    <marker id="arrowG" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#16a34a"/></marker>
+  </defs>
+</svg>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Single-node vs redundant edge nodes — an assumption worth stating out loud</h2>
+
+<p>
+  A real system-design decision, not a detail to skip: does each store get ONE edge box, or
+  two for redundancy? This is exactly the kind of trade-off file 0001 says to surface
+  explicitly rather than silently picking one.
+</p>
+
+<table>
+  <tr><th>Option</th><th>Argument for</th><th>Argument against</th></tr>
+  <tr><td>Single node per store</td><td>Cheaper (~3,000× the hardware cost of a second box adds up fast); a whole-store outage (power, till network) already takes the store down regardless of node count, so a second K8s node doesn't remove the real single point of failure</td><td>A single box failure (not power/network, just the machine dying) takes the whole store's local layer down until it's replaced</td></tr>
+  <tr><td>Two nodes, active/passive or K3s HA mode</td><td>Survives a single hardware failure without a store visit</td><td>Doubles edge hardware cost across the whole estate; added complexity (leader election, data replication) for a failure mode that's rare relative to power/network outages</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>Reasonable interview answer either way — the point is justifying it</strong>
+  "I'd start with a single node per store, because the dominant failure mode for a shop
+  (power cut, WAN drop) takes the whole store down regardless of node count, and doubling
+  ~3,000 stores' worth of edge hardware for a comparatively rare pure-hardware failure isn't
+  obviously worth it — though if Tesco's own outage data showed hardware failure was a bigger
+  driver than I'd expect, I'd revisit that." Stating the reasoning, and that you'd revisit it
+  given real data, matters more than which option you pick.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Resource discipline — why heavy services stay central</h2>
+
+<p>
+  An edge box is deliberately small. That constrains what can run there: only the services
+  that need to survive a WAN outage (file 0003's boundary rule) belong at the edge; everything
+  else — reporting, analytics, the promotions rules engine, loyalty ledger — stays central,
+  where compute is elastic and cheap. Container image size discipline matters more here than
+  in a typical cloud deployment: a bloated image is a slow store-boot and a slow rollout
+  across a fleet where bandwidth per store may be modest.
+</p>
+
+<footer>
+  Tesco System Design Prep · File 4 of 12 · Next:
+  <a href="0005-websockets-deep-dive.html">0005 — WebSockets Deep-Dive</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

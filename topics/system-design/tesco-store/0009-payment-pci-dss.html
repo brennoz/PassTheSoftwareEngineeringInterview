@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Payment &amp; PCI-DSS</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0008-k8s-azure-topology.html">← File 8</a></div>
+
+<h1>Payment &amp; PCI-DSS</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 9 of 12</div>
+
+<p>
+  Not a recalled hint — this file exists because any real retail POS design has to address it,
+  and an interviewer probing "go into more detail" would very plausibly land here given
+  payment is the highest-stakes flow in the whole system.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. The core principle: minimise PCI-DSS scope, don't just secure everything</h2>
+
+<p>
+  The naive instinct is "encrypt everything, lock down everything." The stronger answer is
+  narrower: PCI-DSS compliance cost and audit burden scale with how many systems touch raw
+  card data (the PAN — Primary Account Number). The actual architectural goal is making that
+  set of systems as small as possible, so the rest of the estate (POS, Inventory, Pricing,
+  central reporting) never falls in scope at all.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>2. Payment flow, and where tokenisation happens</h2>
+
+<div class="diagram">Card presented at terminal (chip/contactless reader)
+   │
+   ▼
+Card reader hardware performs P2PE (point-to-point encryption) —
+raw PAN is encrypted at the physical reader, before it ever reaches
+any Tesco-operated software
+   │
+   ▼
+Payment Service pod receives the ENCRYPTED payload (never plaintext PAN)
+   │
+   ▼
+Forwards to external Payment Gateway (a PCI Level 1 certified processor)
+   │
+   ▼
+Gateway decrypts, authorises against the card network, returns:
+   - approved / declined
+   - a TOKEN representing this card (safe to store, useless if stolen)
+   - last 4 digits (for the receipt)
+   │
+   ▼
+Payment Service relays ONLY {status, token, last4} back to POS pod
+   │
+   ▼
+POS pod updates basket/receipt — never sees, stores, or logs raw PAN</div>
+
+<div class="callout pass">
+  <strong>Why this shrinks PCI scope so much</strong>
+  Because the card reader hardware encrypts at the point of capture (P2PE) and the gateway
+  handles the actual decrypt+authorise, the ONLY Tesco-operated system that ever handles
+  anything payment-related is the Payment Service pod — and even it only ever sees an
+  encrypted blob going out and a token coming back, never plaintext PAN. POS, Inventory,
+  Pricing, Store-Sync, and everything central are entirely out of PCI-DSS scope. This is the
+  single highest-leverage decision in the whole payment design.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Network isolation at the store</h2>
+
+<p>
+  Even though Payment Service never sees raw card data, defense in depth still applies —
+  isolate it anyway, on the assumption that a design decision today doesn't guarantee no
+  future engineer ever accidentally logs something sensitive.
+</p>
+
+<table>
+  <tr><th>Control</th><th>Effect</th></tr>
+  <tr><td>Kubernetes NetworkPolicy restricting ingress to Payment pod</td><td>Only POS Service is allowed to call it — Pricing, Inventory, Store-Sync have no network path to Payment at all, even though they're on the same cluster</td></tr>
+  <tr><td>Separate physical/VLAN segmentation for card-reader traffic where feasible</td><td>The card reader's own network path to the Payment pod is isolated from general store Wi-Fi/LAN traffic — reduces the blast radius if the general store network were ever compromised</td></tr>
+  <tr><td>No egress from Payment pod except to the certified gateway's known endpoints</td><td>Even if compromised, the pod can't exfiltrate data anywhere except the one allow-listed destination</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>4. Logging discipline</h2>
+
+<p>
+  A PCI-DSS requirement worth naming specifically, since it's a common real-world audit
+  failure: Payment Service logs must NEVER contain PAN or CVV, even at debug level. Structured
+  logging with an explicit allow-list of loggable fields (token, last4, status, amount, not
+  the whole request object dumped wholesale) is the safe default — a generic
+  <code>log.debug(request)</code> on a payment request object is exactly the kind of thing
+  that silently leaks sensitive data into log aggregation systems that then themselves fall
+  into PCI scope.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>5. Honest limitation: payment during a WAN outage</h2>
+
+<div class="callout warn">
+  <strong>Where to be honest about the edge of your design, rather than overclaiming</strong>
+  File 0007/0010 establish that the store keeps SELLING during a WAN outage — but authorising
+  a CARD payment specifically requires reaching the external gateway, which requires
+  connectivity. Real payment terminals handle this via issuer-negotiated "store-and-forward"
+  offline authorization for small amounts under a risk-managed floor limit — a specialised
+  arrangement between the merchant, acquirer, and card networks, not something a from-scratch
+  system design invents cleanly in an interview. The honest answer: "cash and any
+  already-loaded gift-card/loyalty balance would still work offline; card payments above an
+  issuer-agreed floor limit would need to queue or be declined until connectivity returns —
+  the exact offline-authorization arrangement is a commercial/compliance negotiation with the
+  payment processor, not purely an engineering decision." Naming that boundary honestly is
+  stronger than inventing a fake technical solution to a problem that's actually
+  partly-commercial.
+</div>
+
+<footer>
+  Tesco System Design Prep · File 9 of 12 · Next:
+  <a href="0010-failure-modes-resilience.html">0010 — Failure Modes &amp; Resilience</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

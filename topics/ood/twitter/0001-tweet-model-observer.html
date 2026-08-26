@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Twitter OOD: Tweet Model &amp; Observer Feed</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a></div>
+
+<h1>Lesson 01 — Twitter OOD: Tweet Model &amp; Observer Feed</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 15 min</div>
+
+<p>
+  Twitter is a classic OOD question with two design challenges: a
+  <strong>polymorphic tweet hierarchy</strong> (original / retweet / reply are structurally different)
+  and an <strong>Observer-driven feed</strong> (post a tweet → all followers see it).
+</p>
+
+<div class="callout pass">
+  <strong>After this lesson you can:</strong>
+  Design the Tweet hierarchy without putting <code>tweetType</code> switch-statements everywhere,
+  wire follower feeds using Observer Pattern, and explain the fan-out trade-off in one sentence.
+</div>
+
+<!-- ─────────── 1. ENTITIES ─────────── -->
+<h2>1. Core entities</h2>
+
+<div class="diagram">Twitter OOD — Core Entities
+
+  ┌────────────────────┐       ┌───────────────────────────┐
+  │       User         │ 1──N  │          Tweet            │
+  │ id, username,      │       │ id, author, content,      │
+  │ bio, followersCount│       │ createdAt, likeCount      │
+  └──────┬─────────────┘       └───────────┬───────────────┘
+         │ follows (M:N)                   │ extends
+         │                       ┌─────────┼──────────┐
+  ┌──────▼─────────────┐   OriginalTweet  Retweet    Reply
+  │  Follow (edge)     │   (hashtags,    (source    (parent
+  │  follower + followee│   media)        Tweet)     Tweet)
+  └────────────────────┘
+
+  ┌──────────────────┐   ┌─────────────┐
+  │     Feed         │   │    Like     │
+  │ owner + List of  │   │ user+tweet  │
+  │ Tweet (ordered)  │   │ createdAt   │
+  └──────────────────┘</div>
+
+<table>
+  <tr><th>Entity</th><th>Key fields</th><th>Design note</th></tr>
+  <tr><td><code>User</code></td><td>id, username, followingList, followerList, feed</td><td>Owns its Feed; follow/unfollow mutate both sides</td></tr>
+  <tr><td><code>Tweet</code> (abstract)</td><td>id, author, createdAt, likeCount</td><td>Common behaviour in base class</td></tr>
+  <tr><td><code>OriginalTweet</code></td><td>content, hashtags, mediaUrl</td><td>Most common type</td></tr>
+  <tr><td><code>Retweet</code></td><td>sourceTweet</td><td>Shares another tweet — content comes from source</td></tr>
+  <tr><td><code>Reply</code></td><td>content, parentTweet</td><td>Links back to the tweet being replied to</td></tr>
+  <tr><td><code>Feed</code></td><td>owner, List&lt;Tweet&gt; timeline</td><td>Sorted by recency; bounded (last N tweets)</td></tr>
+  <tr><td><code>Like</code></td><td>user, tweet, createdAt</td><td>Many-to-many join entity</td></tr>
+</table>
+
+<!-- ─────────── 2. TWEET HIERARCHY ─────────── -->
+<h2>2. Tweet type hierarchy — why not a <code>type</code> enum?</h2>
+
+<p>
+  Naïve approach: one <code>Tweet</code> class with a <code>TweetType</code> enum and nullable fields
+  (<code>sourceTweet</code> is null unless it's a retweet, etc.).
+  Every method that cares about type ends up with a switch block. Adding "Quote Tweet" means editing them all.
+</p>
+
+<pre>
+// Pattern: polymorphism — tweet type is a class, not a flag
+public abstract class Tweet {
+
+    private final String    id;
+    private final User      author;
+    private final Instant   createdAt;
+    private int             likeCount;
+
+    protected Tweet(User author) {
+        this.id        = UUID.randomUUID().toString();
+        this.author    = author;
+        this.createdAt = Instant.now();
+    }
+
+    // <span class="kw-why">Template Method — each subclass defines what 'displayContent' means</span>
+    public abstract String displayContent();
+
+    public void like()   { likeCount++; }
+    public void unlike() { if (likeCount > 0) likeCount--; }
+
+    public String  getId()        { return id; }
+    public User    getAuthor()    { return author; }
+    public Instant getCreatedAt() { return createdAt; }
+    public int     getLikeCount() { return likeCount; }
+}
+
+public class OriginalTweet extends Tweet {
+    private final String       content;
+    private final List&lt;String&gt; hashtags;
+    private final String       mediaUrl;   // nullable
+
+    public OriginalTweet(User author, String content, List&lt;String&gt; hashtags, String mediaUrl) {
+        super(author);
+        this.content  = content;
+        this.hashtags = List.copyOf(hashtags);
+        this.mediaUrl = mediaUrl;
+    }
+
+    @Override public String displayContent() { return content; }
+    public List&lt;String&gt; getHashtags()       { return hashtags; }
+}
+
+public class Retweet extends Tweet {
+    private final Tweet sourceTweet;
+
+    public Retweet(User author, Tweet sourceTweet) {
+        super(author);
+        this.sourceTweet = sourceTweet;
+    }
+
+    // <span class="kw-why">Content belongs to the source — Retweet is just attribution</span>
+    @Override public String displayContent() {
+        return "RT @" + sourceTweet.getAuthor().getUsername()
+             + ": " + sourceTweet.displayContent();
+    }
+}
+
+public class Reply extends Tweet {
+    private final String content;
+    private final Tweet  parentTweet;
+
+    public Reply(User author, String content, Tweet parentTweet) {
+        super(author);
+        this.content     = content;
+        this.parentTweet = parentTweet;
+    }
+
+    @Override public String displayContent() {
+        return "@" + parentTweet.getAuthor().getUsername() + " " + content;
+    }
+}
+</pre>
+
+<div class="callout">
+  <strong>Adding Quote Tweet in the future</strong>
+  With polymorphism: add <code>QuoteTweet extends Tweet</code>, implement <code>displayContent()</code>.
+  Zero changes to existing classes. Open/Closed Principle preserved.
+  With the enum approach: add a case to every switch block — Shotgun Surgery.
+</div>
+
+<!-- ─────────── 3. TWEET BUILDER ─────────── -->
+<h2>3. Builder for OriginalTweet</h2>
+
+<p>
+  <code>OriginalTweet</code> has optional fields (hashtags, mediaUrl). Builder eliminates
+  telescoping constructors.
+</p>
+
+<pre>
+// <span class="kw-pat">Pattern: Builder — optional fields with a readable, validated construction API</span>
+public class TweetBuilder {
+
+    private final User         author;
+    private final String       content;
+    private List&lt;String&gt;       hashtags = new ArrayList&lt;&gt;();
+    private String             mediaUrl;
+
+    public TweetBuilder(User author, String content) {
+        if (content == null || content.isBlank())
+            throw new IllegalArgumentException("Tweet content cannot be blank");
+        if (content.length() &gt; 280)
+            throw new IllegalArgumentException("Tweet exceeds 280 characters");
+        this.author  = author;
+        this.content = content;
+    }
+
+    public TweetBuilder hashtag(String tag)  { hashtags.add(tag); return this; }
+    public TweetBuilder media(String url)    { this.mediaUrl = url; return this; }
+
+    public OriginalTweet build() {
+        return new OriginalTweet(author, content, hashtags, mediaUrl);
+    }
+}
+
+// Usage:
+Tweet tweet = new TweetBuilder(alice, "Just landed!")
+        .hashtag("travel")
+        .hashtag("NYC")
+        .media("https://cdn.example.com/photo.jpg")
+        .build();
+</pre>
+
+<!-- ─────────── 4. OBSERVER ─────────── -->
+<h2>4. Observer Pattern — fan-out on write</h2>
+
+<p>
+  When Alice posts a tweet, all of Alice's followers should see it in their feed.
+  Observer Pattern: Alice's account is the <em>subject</em>; followers' feeds are the <em>observers</em>.
+</p>
+
+<pre>
+// <span class="kw-pat">Pattern: Observer — tweet posted → all follower feeds updated automatically</span>
+public interface FeedObserver {
+    void onTweetPosted(Tweet tweet);
+}
+
+public class Feed implements FeedObserver {
+
+    private static final int MAX_FEED_SIZE = 200;
+
+    private final User         owner;
+    // <span class="kw-why">LinkedList for O(1) prepend; feed is chronological, always add at head</span>
+    private final Deque&lt;Tweet&gt; timeline = new LinkedList&lt;&gt;();
+
+    public Feed(User owner) { this.owner = owner; }
+
+    @Override
+    public void onTweetPosted(Tweet tweet) {
+        timeline.addFirst(tweet);
+        if (timeline.size() &gt; MAX_FEED_SIZE) timeline.removeLast();
+    }
+
+    public List&lt;Tweet&gt; getTimeline() { return List.copyOf(timeline); }
+}
+</pre>
+
+<pre>
+public class User {
+
+    private final String           id;
+    private final String           username;
+    // <span class="kw-why">CopyOnWriteArrayList — observers iterated on every post; rare writes, frequent reads</span>
+    private final List&lt;FeedObserver&gt; observers = new CopyOnWriteArrayList&lt;&gt;();
+    private final Feed             feed;
+
+    public User(String id, String username) {
+        this.id       = id;
+        this.username = username;
+        this.feed     = new Feed(this);
+    }
+
+    public void follow(User target) {
+        // Register this user's feed as observer of target's tweets
+        target.addObserver(this.feed);
+    }
+
+    public void unfollow(User target) {
+        target.removeObserver(this.feed);
+    }
+
+    public Tweet post(String content) {
+        Tweet tweet = new TweetBuilder(this, content).build();
+        notifyObservers(tweet);   // push to all follower feeds
+        return tweet;
+    }
+
+    void addObserver(FeedObserver o)    { observers.add(o); }
+    void removeObserver(FeedObserver o) { observers.remove(o); }
+
+    private void notifyObservers(Tweet tweet) {
+        observers.forEach(o -&gt; o.onTweetPosted(tweet));
+    }
+
+    public Feed getFeed() { return feed; }
+    public String getId() { return id; }
+    public String getUsername() { return username; }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Fan-out on write — the scalability trade-off</strong>
+  This in-memory model is correct for OOD. At Twitter scale (celebrity with 100M followers),
+  notifying 100M observers synchronously on one post is too slow.
+  Real Twitter uses a hybrid: celebrities use fan-out on read (pull on load); regular users use fan-out on write.
+  For the OOD question, the in-memory Observer is the right answer — mention the scale caveat if the interviewer asks.
+</div>
+
+<!-- ─────────── 5. INTERVIEW PROBES ─────────── -->
+<h2>5. What interviewers probe</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>How do you model retweet vs reply vs original?</td><td>Subclass per type. Each overrides <code>displayContent()</code>. No type enum + switch.</td></tr>
+  <tr><td>Why Builder for Tweet?</td><td>Optional fields (hashtags, media). Avoid 4-arg constructor with nulls. Validates 280-char limit at construction.</td></tr>
+  <tr><td>How does a follower's feed update?</td><td>Observer Pattern. Feed implements FeedObserver. User.follow() registers feed as observer on target.</td></tr>
+  <tr><td>What collection for the timeline?</td><td>Deque (LinkedList) — O(1) prepend for newest-first. Cap at 200 to bound memory.</td></tr>
+  <tr><td>Thread safety of observer list?</td><td>CopyOnWriteArrayList — concurrent follows/unfollows are rare; iterations (on every post) are frequent. Avoids ConcurrentModificationException.</td></tr>
+  <tr><td>How do you handle celebrity fan-out?</td><td>At OOD scale: synchronous Observer. At Twitter scale: pull model for high-follower accounts (fan-out on read).</td></tr>
+</table>
+
+<!-- ─────────── QUIZ ─────────── -->
+<h2>6. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is <code>Retweet</code> a subclass of <code>Tweet</code> rather than a flag on the same class?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Java does not allow enums inside entity classes</li>
+      <li>B) A subclass lets each tweet type define its own <code>displayContent()</code> without switch-statements — adding Quote Tweet later touches zero existing classes</li>
+      <li>C) Subclasses are required by the JPA @Inheritance annotation</li>
+      <li>D) Enums cannot hold nullable fields, so a class is needed</li>
+    </ul>
+    <div class="explanation">Each tweet type has different behaviour (display logic, data fields). Polymorphism encapsulates that per class. A <code>tweetType</code> enum forces every caller to switch — Shotgun Surgery on any new type. Subclass = Open/Closed satisfied.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Which collection is best for a feed's timeline, and why?</p>
+    <ul class="options" data-correct="3">
+      <li>A) <code>ArrayList</code> — fast random access for pagination</li>
+      <li>B) <code>TreeSet</code> — keeps tweets sorted by timestamp automatically</li>
+      <li>C) <code>LinkedList</code> (used as <code>Deque</code>) — O(1) prepend for newest-first insertion, O(1) tail removal when feed is full</li>
+      <li>D) <code>PriorityQueue</code> — supports ranked feeds natively</li>
+    </ul>
+    <div class="explanation">Feed is always newest-first. Every post prepends. When capped at 200, tail is dropped. LinkedList gives O(1) for both operations. ArrayList.add(0, tweet) is O(N) due to element shifting. TreeSet would require a Comparator and doesn't give O(1) tail access. PriorityQueue doesn't maintain insertion order and has O(log N) ops.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why use <code>CopyOnWriteArrayList</code> for the observer list rather than <code>ArrayList</code>?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Every <code>post()</code> iterates the observer list while concurrent follow/unfollow can modify it — CopyOnWriteArrayList prevents ConcurrentModificationException without blocking reads</li>
+      <li>B) CopyOnWriteArrayList is faster for all list operations</li>
+      <li>C) ArrayList cannot store interface types like FeedObserver</li>
+      <li>D) CopyOnWriteArrayList automatically deduplicates observers</li>
+    </ul>
+    <div class="explanation">post() calls forEach on observers (read). follow/unfollow add/remove (write). If both happen concurrently on ArrayList, iterating thread throws ConcurrentModificationException. CopyOnWriteArrayList: writes copy the array, iterators see a stable snapshot. Reads are fast (no lock); writes are slightly slower — fine here since follows are rare vs posts.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. Alice (10M followers) posts a tweet. The Observer Pattern pushes to all 10M feeds synchronously. What's the problem and what's the mitigation?</p>
+    <ul class="options" data-correct="4">
+      <li>A) No problem — Observer is designed for exactly this; synchronous fan-out is always correct</li>
+      <li>B) The observer list runs out of memory; fix by limiting followers to 1000</li>
+      <li>C) CopyOnWriteArrayList cannot hold 10M elements; use a database-backed list</li>
+      <li>D) Synchronous fan-out to 10M takes seconds; celebrity accounts should use fan-out on read — followers pull the feed lazily, merging celebrity tweets at query time</li>
+    </ul>
+    <div class="explanation">Synchronous fan-out to 10M observers on one post can take seconds — unacceptable latency. Real Twitter uses a hybrid: regular users (fan-out on write, push to follower feeds immediately); celebrities (fan-out on read, followers pull celebrity's timeline at query time and merge). For OOD, Observer is correct — add this caveat when asked about scalability.</div>
+  </div>
+
+</div>
+
+<footer>Lesson 01 · Twitter OOD · <a href="INDEX.md">← Index</a></footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

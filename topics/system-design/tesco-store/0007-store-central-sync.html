@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Store ↔ Central Sync</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0006-microservice-boundaries.html">← File 6</a></div>
+
+<h1>Store ↔ Central Sync</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 7 of 12</div>
+
+<p>
+  This is where "thousands of stores" scale actually bites (file 0005 explicitly isn't this
+  problem). Two directions of flow, each with a different consistency story.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Two directions, two different rules</h2>
+
+<table>
+  <tr><th>Direction</th><th>What flows</th><th>Who's the writer</th></tr>
+  <tr><td>Central → Store</td><td>Price/promo updates, occasional stock-master corrections</td><td>Central is the SOLE writer; every store is a read-only subscriber/cache</td></tr>
+  <tr><td>Store → Central</td><td>Sales transactions, local stock decrements, loyalty point events</td><td>Each store is the sole writer for ITS OWN store's events; central aggregates from all stores</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Why there's no real write-conflict to resolve</strong>
+  Both directions are single-writer per piece of data — central owns prices, each store owns
+  its own sales/stock events. That's a deliberate design choice, not luck: partitioning
+  ownership this way means "conflict resolution" reduces to "handle staleness," which is a
+  much easier problem than true concurrent-write conflict resolution (no CRDTs or
+  last-writer-wins tie-breaking needed anywhere in this flow).
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. Central → Store: price/promo propagation</h2>
+
+<div class="diagram">Central Pricing Service updates a price
+   │
+   ▼
+Publishes change event to Azure Service Bus topic
+   │
+   ▼
+Each store's local Pricing Service subscribes, applies to its local cache
+   │
+   (if a store is offline, the message waits in Service Bus —
+    or the store catches up via a periodic full-sync pull on reconnect,
+    whichever is simpler to reason about for staleness bounds)</div>
+
+<p>
+  A store offline for an hour during a price change means that store sells at the OLD price
+  for up to that hour once reconnected and caught up — an accepted, bounded business risk, not
+  a bug to design away entirely. The interesting design question is bounding HOW stale:
+  cap it with a "last synced at" timestamp shown to store ops staff, and/or a maximum
+  acceptable offline duration after which the store manager is alerted to intervene manually
+  (file 0010 covers the WAN-down operating mode in full).
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>3. Store → Central: the outbox pattern</h2>
+
+<div class="diagram">Sale completes at till
+   │
+   ▼
+Store-Sync Service writes event to LOCAL outbox table
+(same local transaction as the sale itself — atomic, survives a reboot)
+   │
+   ▼
+Background process reads outbox, attempts to publish to Azure Service Bus
+   │
+   ├─ WAN up: publish succeeds → mark outbox row as sent
+   │
+   └─ WAN down: publish fails → row stays pending, retried with backoff
+                the STORE KEEPS SELLING regardless (file 0010) —
+                the outbox just grows until connectivity returns</div>
+
+<p>
+  This is the standard outbox pattern: writing the "sale happened" fact and queuing the
+  central-sync event happen in the same local transaction, so a crash between "sale recorded"
+  and "event queued" can't happen — either both happened or neither did. Publishing to Service
+  Bus is a separate, retryable step decoupled from the sale itself, which is exactly what
+  makes the store's checkout flow independent of WAN health.
+</p>
+
+<div class="callout warn">
+  <strong>Idempotency — a detail worth having ready</strong>
+  A retried publish after a flaky reconnect could send the same event twice. Central's
+  consumer must dedupe by an idempotency key (e.g. a UUID generated when the outbox row is
+  first written, not regenerated per retry) — otherwise a single sale could get double-counted
+  in central reporting/stock decrement. This is the same idempotency-key pattern used anywhere
+  "at-least-once delivery + a system that must behave exactly-once" meet — worth naming by
+  name if asked, since it signals you've hit this class of problem before, not just this
+  specific scenario.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Transport choice: Service Bus vs Event Hubs</h2>
+
+<table>
+  <tr><th>Option</th><th>Fit</th></tr>
+  <tr><td><strong>Azure Service Bus (queue/topic)</strong></td><td>Recommended for this sync path — ordered delivery per store, reliable at-least-once, dead-letter queue for poison messages, moderate volume (sales events, not high-frequency telemetry)</td></tr>
+  <tr><td><strong>Azure Event Hubs</strong></td><td>Better fit for pure high-throughput streaming — if this were also carrying, say, fine-grained clickstream/telemetry data at much higher volume, Event Hubs' partition-based consumer-group model would be the right pick instead. Worth naming as the alternative and why it loses here (this sync doesn't need that throughput, but DOES need the reliable delivery guarantees Service Bus gives more directly)</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>5. Why local stock accuracy and central stock accuracy have different bars</h2>
+
+<p>
+  A subtlety worth stating explicitly if probed: a store's OWN local stock count must be
+  accurate in real time <em>locally</em>, because the checkout can't sell what the shelf
+  doesn't have and the local Inventory Service is the thing preventing that. But CENTRAL's
+  aggregate view across all 3,000 stores can lag by minutes without real business harm — a
+  warehouse replenishment decision made on 5-minute-old aggregate stock data is fine; a
+  single till selling based on 5-minute-old LOCAL stock data risks overselling an
+  already-empty shelf. Same word ("stock accuracy"), two different consistency requirements
+  depending on which system is asking.
+</p>
+
+<footer>
+  Tesco System Design Prep · File 7 of 12 · Next:
+  <a href="0008-k8s-azure-topology.html">0008 — K8s/Azure Topology</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

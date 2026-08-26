@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Enabled Cloud Workflows — Interview Prep</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.recall { border-color: #7c3aed; background: #f5f3ff; }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 1.25rem 0 2rem; }
+  .question { margin: 1rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a></div>
+
+<h1>AI-Enabled Cloud Workflows — Interview Prep</h1>
+<div class="meta">Interview Prep · Round 1 discussion topic · Est. time: 15 min</div>
+
+<div class="callout recall">
+  <strong>What triggered this doc</strong>
+  Interview invite email, verbatim: "It might be worth doing a bit of research into Utilising
+  cloud-based, AI enabled workflows to increase productivity and what that looks like as we
+  are very heavily AI focused and these questions around AI will come up." Round 2 (live
+  JetBrains Code With Me pairing) is confirmed to be a standard Java business-logic/TDD/
+  edge-cases exercise — this topic is for round 1's discussion, not the coding content.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. Three layers the phrase actually covers</h2>
+
+<p>
+  "AI-enabled workflows" gets used loosely — worth knowing which layer a follow-up question
+  is actually asking about before answering.
+</p>
+
+<table>
+  <tr><th>Layer</th><th>What it is</th><th>Concrete names</th></tr>
+  <tr>
+    <td><strong>AI-assisted coding</strong></td>
+    <td>Cloud-hosted models embedded in the IDE</td>
+    <td>GitHub Copilot, Claude Code, Cursor, Amazon Q Developer, Gemini Code Assist, JetBrains AI Assistant</td>
+  </tr>
+  <tr>
+    <td><strong>AI in the delivery pipeline</strong></td>
+    <td>AI applied to CI/CD itself, not just the editor</td>
+    <td>AI PR/code review bots (CodeRabbit, Copilot code review), AI test generation, AI-assisted incident response/log analysis (Datadog Bits AI, PagerDuty AI), natural-language-to-Terraform</td>
+  </tr>
+  <tr>
+    <td><strong>Cloud AI platforms for the product</strong></td>
+    <td>Managed AI services used to build AI features INTO what the company ships, not just to write code faster</td>
+    <td>Azure OpenAI Service, AWS Bedrock, Google Vertex AI</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Why the third layer matters here specifically</strong>
+  A retailer saying "we're heavily AI-focused" often means both at once: engineers using AI to
+  build faster, AND the product itself shipping AI features (personalisation, chat,
+  demand forecasting). If the recalled hints from an earlier round point to an Azure stack,
+  Azure OpenAI Service is the concrete name worth having ready — don't only prepare the
+  "I use Copilot" answer.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. Autocomplete vs agentic — the distinction worth naming</h2>
+
+<table>
+  <tr><th></th><th>Autocomplete-tier</th><th>Agentic-tier</th></tr>
+  <tr><td>Examples</td><td>GitHub Copilot (classic), Cursor's basic mode</td><td>Claude Code, Cursor's agent mode, Copilot Workspace, OpenAI Codex CLI</td></tr>
+  <tr><td>What it does</td><td>Suggests the next few lines/functions from local context</td><td>Reads a whole codebase, plans multi-step changes, runs tests/builds, iterates on failures, works toward a stated goal</td></tr>
+  <tr><td>Human's role</td><td>Accept/reject suggestions line by line</td><td>Set the goal, review the plan, verify the result — much less line-by-line steering</td></tr>
+</table>
+
+<p>
+  <strong>"Agentic"</strong> is the current industry term for the second tier — worth using by
+  name if asked "what's changed recently in AI-assisted development." It's a genuinely
+  different capability, not just a faster autocomplete.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>3. The productivity claim — nuance beats a stat</h2>
+
+<p>
+  Don't recite a single inflated percentage. The defensible pattern, and a stronger answer
+  than any specific number: AI gives the biggest lift on <strong>boilerplate, repetitive,
+  well-specified tasks</strong> — CRUD, test scaffolding, docs, migrations, matching a known
+  pattern to a new spec. It gives much less lift, sometimes a net drag once verification time
+  is counted, on <strong>novel architecture and design decisions</strong>, where checking the
+  AI's output correctly requires the same expertise as doing the work yourself.
+</p>
+
+<div class="callout pass">
+  <strong>A stronger sentence than any statistic</strong>
+  "AI is a productivity multiplier for the mechanical parts of engineering — the parts where
+  the pattern is already known — not a substitute for judgement on the hard parts, where
+  verifying the output takes as much skill as producing it would have."
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Governance — often what's actually being probed</h2>
+
+<p>
+  In a regulated retail/payments-adjacent environment, "how do you use AI responsibly" matters
+  at least as much as "do you use AI":
+</p>
+
+<ul style="margin: 0 0 1.5rem 1.5rem;">
+  <li>Never paste secrets, credentials, or customer PII into a prompt sent to a third-party API</li>
+  <li>Treat AI-generated code like a PR from an unfamiliar engineer — read it, run the tests, don't trust its own description of what it did</li>
+  <li>Understand hallucination risk — an AI confidently citing an API or method that doesn't exist is a known, common failure mode, not a rare edge case</li>
+  <li>You remain accountable for what you ship — "the AI wrote it" isn't a defence in a post-incident review</li>
+</ul>
+
+<div class="callout warn">
+  <strong>A real, tellable story for "how do you verify AI output"</strong>
+  During this exact interview-prep process, an AI-assisted code review caught a submission
+  where a code comment claimed a design approach had been verified, but running the actual
+  code revealed a genuine logic bug the comment didn't catch. The lesson worth stating out
+  loud: verify by RUNNING the code and checking real output, not by trusting a
+  self-description — whether that description came from a person or an AI.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>5. Likely questions + answer shape</h2>
+
+<table>
+  <tr><th>Question</th><th>Strong answer shape</th></tr>
+  <tr><td>"How do you use AI tools day to day?"</td><td>Specific and honest — a genuine current example beats a generic claim</td></tr>
+  <tr><td>"What are the risks of AI-assisted coding?"</td><td>Hallucination, over-reliance/skill atrophy, security/IP leakage, false confidence in the AI's own claims about its work</td></tr>
+  <tr><td>"How would you verify AI-generated code before shipping it?"</td><td>Same rigor as reviewing any PR — read it, test it, don't take its self-description at face value</td></tr>
+  <tr><td>"Autocomplete vs agentic AI — what's the difference?"</td><td>Suggests-next-line vs plans-and-executes-multi-step-tasks-autonomously (Section 2)</td></tr>
+  <tr><td>"What's a downside of AI productivity claims?"</td><td>Gains are uneven across task types — big on boilerplate, small/negative on novel design once verification cost is counted (Section 3)</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>Retrieval Quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. What's the actual difference between an "autocomplete-tier" AI coding tool and an "agentic-tier" one?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Autocomplete tools are free, agentic tools always cost money</li>
+      <li>B) There's no real difference, just marketing terminology</li>
+      <li>C) Agentic tools can only be used for Python, autocomplete tools work with any language</li>
+      <li>D) Autocomplete suggests the next few lines from local context; agentic tools can read a whole codebase, plan multi-step changes, run tests/builds, and iterate toward a stated goal with far less line-by-line human steering</li>
+    </ul>
+    <div class="explanation">This is a genuine capability difference, not just marketing — agentic tools (Claude Code, Cursor's agent mode, Copilot Workspace) operate at the level of "accomplish this goal" rather than "suggest this line," which changes what the human's role in the loop looks like.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Why is "AI gives a uniform productivity boost across all engineering tasks" a weak claim to make in an interview?</p>
+    <ul class="options" data-correct="2">
+      <li>A) It isn't weak, it's the strongest possible answer</li>
+      <li>B) Because the real, defensible pattern is uneven — large gains on boilerplate/well-specified tasks, much smaller or negative gains on novel design work where verifying the output takes as much expertise as doing it yourself</li>
+      <li>C) Because AI provides no measurable productivity benefit at all</li>
+      <li>D) Because productivity can't be measured in software engineering</li>
+    </ul>
+    <div class="explanation">A uniform-boost claim signals reciting a marketing stat rather than genuine understanding. Naming the actual unevenness — and WHY it's uneven (verification cost) — is a stronger, more credible answer.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. In a regulated retail/payments-adjacent environment, what's a concrete AI-usage risk worth naming unprompted?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Pasting secrets, credentials, or customer PII into a prompt sent to a third-party API</li>
+      <li>B) AI tools being too slow to be useful</li>
+      <li>C) AI tools requiring a GPU on the local machine</li>
+      <li>D) AI tools being incompatible with Git</li>
+    </ul>
+    <div class="explanation">Data governance — what leaves your network boundary when you use a cloud AI API — is exactly the kind of risk a regulated employer wants to hear a candidate has already thought about, not something they discover the candidate hasn't considered.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. "The AI wrote this code, so any bug in it isn't really my fault" — why is this the wrong framing to bring into an interview?</p>
+    <ul class="options" data-correct="4">
+      <li>A) It's actually the correct framing — AI tools should be held accountable, not engineers</li>
+      <li>B) Only true for code written by Copilot specifically, not other tools</li>
+      <li>C) It's only wrong in regulated industries</li>
+      <li>D) The engineer who reviews and ships code remains accountable for it regardless of what tool helped write it — the same standard as shipping a copy-pasted Stack Overflow answer without understanding it</li>
+    </ul>
+    <div class="explanation">This is the core "responsible AI use" principle interviewers are listening for: the tool changes HOW code gets written, not WHO is accountable for what gets shipped.</div>
+  </div>
+
+</div>
+
+<footer>
+  AI-Enabled Cloud Workflows · Interview Prep · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

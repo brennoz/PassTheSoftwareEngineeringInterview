@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Card Authorization: Template Method</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 1.25rem 0 2rem; }
+  .question { margin: 1rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Card Authorization: Template Method</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 25 min · Lesson 1 of 1</div>
+
+<p>
+  Card authorization is a fixed sequence of steps — validate the card, check risk, contact the
+  card network, log the outcome — where every card network runs THAT SAME sequence, but one
+  step (how you actually talk to Visa vs Mastercard) genuinely differs per network. That's the
+  exact shape Template Method exists for: put the fixed skeleton in one place, force the
+  varying step to be supplied by a subclass, and make it structurally impossible for a
+  subclass to reorder or skip the fixed parts.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Explain why the template method itself should be <code>final</code>, correctly distinguish
+  an abstract "primitive operation" (must override) from a "hook" (may override, has a
+  sensible default), and say precisely why this is a different tool from Strategy (q043) even
+  though both let you vary behaviour per subtype.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. Entities at a glance</h2>
+
+<div class="diagram">Card Authorization — Template Method
+
+  ┌──────────────────────────────┐
+  │ CardAuthorizationProcessor    │  abstract class
+  │  (abstract)                   │
+  │                                │
+  │  final authorize(card, amt)   │◄── the template method — fixed skeleton, cannot be
+  │    1. validateCard()          │    overridden or reordered by any subclass
+  │    2. requiresManualReview()  │◄── HOOK — has a default, subclasses MAY override
+  │    3. contactIssuerNetwork()  │◄── ABSTRACT — subclasses MUST override
+  │    4. logResult()             │
+  └──────────────┬─────────────────┘
+                 │ extends
+        ┌────────┴─────────┐
+        │                   │
+┌───────▼────────┐  ┌───────▼──────────┐
+│ VisaAuthoriz.   │  │ MastercardAuthoriz.│
+│  contactIssuer  │  │  contactIssuer     │
+│  Network()      │  │  Network()          │
+│  (only this)    │  │  requiresManual     │
+│                 │  │  Review() (hook,    │
+│                 │  │  overridden too)    │
+└─────────────────┘  └────────────────────┘</div>
+
+<table>
+  <tr><th>Member</th><th>Kind</th><th>Who implements it</th></tr>
+  <tr><td><code>authorize(card, amount)</code></td><td>Template method — <code>final</code></td><td>The abstract base class, once, forever</td></tr>
+  <tr><td><code>validateCard(card)</code></td><td>Concrete step</td><td>Base class — identical for every network</td></tr>
+  <tr><td><code>requiresManualReview(amount)</code></td><td>Hook — has a default</td><td>Base class provides a default (<code>false</code>); a subclass MAY override for a stricter policy</td></tr>
+  <tr><td><code>contactIssuerNetwork(card, amount)</code></td><td>Abstract primitive operation</td><td>Every subclass MUST provide its own — this is the one genuinely-different step</td></tr>
+  <tr><td><code>logResult(card, result)</code></td><td>Concrete step</td><td>Base class — identical for every network</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>2. Why the template method itself must be <code>final</code></h2>
+
+<pre>
+public abstract class CardAuthorizationProcessor {
+
+    // Pattern: Template Method — final so no subclass can reorder, skip, or duplicate
+    // these steps. The discipline this pattern enforces IS the fixed sequence; a
+    // non-final template method would let a subclass override authorize() itself and
+    // do something completely different, which defeats the entire point of centralising
+    // the skeleton here in the first place.
+    public final AuthorizationResult authorize(Card card, BigDecimal amount) {
+        validateCard(card);
+        if (requiresManualReview(amount)) {
+            return AuthorizationResult.pendingReview();
+        }
+        AuthorizationResult result = contactIssuerNetwork(card, amount);
+        logResult(card, result);
+        return result;
+    }
+
+    protected void validateCard(Card card) { /* shared validation */ }
+
+    protected boolean requiresManualReview(BigDecimal amount) {
+        return false; // hook: sensible default, override only if a network needs stricter policy
+    }
+
+    protected abstract AuthorizationResult contactIssuerNetwork(Card card, BigDecimal amount);
+
+    protected void logResult(Card card, AuthorizationResult result) { /* shared logging */ }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>What goes wrong without <code>final</code></strong>
+  If <code>authorize()</code> weren't final, nothing stops a future
+  <code>AmexAuthorizationProcessor</code> from overriding it to skip
+  <code>validateCard()</code> "just this once for a special partner integration." Six months
+  later that's a silent compliance gap nobody remembers approving. <code>final</code> turns
+  "please don't skip validation" from a code-review convention into something the compiler
+  enforces.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Abstract primitive operations vs hooks — not the same thing</h2>
+
+<p>
+  GoF's Template Method has two different kinds of "step a subclass can touch," and mixing
+  them up is the most common mistake when applying this pattern:
+</p>
+
+<table>
+  <tr><th></th><th>Abstract primitive operation</th><th>Hook</th></tr>
+  <tr><td>Example here</td><td><code>contactIssuerNetwork()</code></td><td><code>requiresManualReview()</code></td></tr>
+  <tr><td>Has a default body?</td><td>No — <code>abstract</code>, compile error if not overridden</td><td>Yes — base class supplies sensible behaviour</td></tr>
+  <tr><td>Must every subclass override it?</td><td>Yes, by construction</td><td>No — only if that subclass needs to deviate</td></tr>
+  <tr><td>What it's for</td><td>The one part of the algorithm that's genuinely different per subtype and has no sensible universal default</td><td>An optional extension point — most subclasses are fine with the default</td></tr>
+</table>
+
+<p>
+  In this exercise, <code>MastercardAuthorizationProcessor</code> overrides the hook
+  (<code>requiresManualReview</code>) to flag larger amounts for manual review, while
+  <code>VisaAuthorizationProcessor</code> leaves it at the default and never triggers manual
+  review. Same fixed skeleton, same abstract step both must implement, but only one of them
+  bothers to touch the hook — and that's fine, that's what a hook is for.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>4. Template Method vs Strategy (q043) — genuinely different tools</h2>
+
+<table>
+  <tr><th></th><th>Template Method (this lesson)</th><th>Strategy (q043's SchedulingStrategy)</th></tr>
+  <tr><td>Mechanism</td><td>Inheritance — subclass overrides specific steps</td><td>Composition — a whole algorithm object is injected/swapped</td></tr>
+  <tr><td>What varies</td><td>One or two steps within an otherwise-fixed sequence</td><td>The entire algorithm, swappable at runtime</td></tr>
+  <tr><td>Can the caller change behaviour at runtime?</td><td>No — the subclass is chosen at construction/compile time</td><td>Yes — a new strategy object can be injected any time</td></tr>
+  <tr><td>Where does shared logic live?</td><td>In the base class's concrete steps, shared automatically by every subclass</td><td>Nowhere automatically — each Strategy implementation must repeat any shared logic itself, or it's factored into a shared helper</td></tr>
+</table>
+
+<div class="callout">
+  <strong>The question to ask when choosing between them</strong>
+  Is there a FIXED SEQUENCE most of which is identical across every variant, with only one or
+  two steps genuinely differing? Template Method. Is the ENTIRE algorithm meaningfully
+  different per variant, or does it need to be swappable at runtime without subclassing?
+  Strategy. Card authorization is the first shape: validate → risk-check → contact-network →
+  log is the same four steps for every card network, only step 3's implementation differs —
+  that's why this lesson reaches for Template Method rather than Strategy.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>Retrieval Quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is <code>authorize()</code> declared <code>final</code>?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Java requires all abstract class methods to be final</li>
+      <li>B) It makes the method run faster (JIT inlining)</li>
+      <li>C) It structurally prevents a subclass from reordering, skipping, or duplicating the fixed sequence of steps — the discipline the pattern is built around</li>
+      <li>D) So subclasses can call it via <code>super.authorize()</code></li>
+    </ul>
+    <div class="explanation">The entire value of Template Method is that the sequence of steps is guaranteed identical across every subclass. If authorize() could be overridden, a subclass could silently skip validateCard() or reorder the steps, and nothing in the type system would catch it.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. What's the actual difference between <code>contactIssuerNetwork()</code> (abstract) and <code>requiresManualReview()</code> (a hook)?</p>
+    <ul class="options" data-correct="2">
+      <li>A) There's no real difference, both are just methods a subclass can override</li>
+      <li>B) The abstract method has no default and every subclass MUST supply one; the hook has a sensible default and a subclass only overrides it if it needs to deviate</li>
+      <li>C) Hooks can only be called from within the same package</li>
+      <li>D) Abstract methods must be static, hooks must be instance methods</li>
+    </ul>
+    <div class="explanation">This is the actual GoF distinction: primitive operations (abstract, no default, mandatory) vs hooks (concrete, sensible default, optional to override). Mixing them up — e.g. making contactIssuerNetwork() a hook with some arbitrary default network — would silently produce wrong behaviour for any subclass that forgot to override it.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why is this Card Authorization example Template Method rather than Strategy?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Because the four-step sequence (validate → risk-check → contact network → log) is identical across every card network, and only one step's implementation genuinely differs — Strategy would be the right choice if the ENTIRE algorithm needed to vary or be swappable at runtime instead</li>
+      <li>B) Because Strategy can't be used with abstract classes</li>
+      <li>C) Because Template Method is always the better pattern for payment systems</li>
+      <li>D) Because there are only two subclasses (Visa, Mastercard)</li>
+    </ul>
+    <div class="explanation">The decision criterion is about how much of the algorithm varies, not the number of subtypes or the domain. A fixed sequence with one differing step fits Template Method; a fully swappable whole algorithm fits Strategy.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. <code>VisaAuthorizationProcessor</code> never overrides <code>requiresManualReview()</code>. What happens when <code>authorize()</code> is called on it?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Compile error — every hook must be overridden</li>
+      <li>B) It uses the base class's default implementation (returns false), so manual review is never triggered for Visa</li>
+      <li>C) It throws UnsupportedOperationException at runtime</li>
+      <li>D) It silently skips the requiresManualReview check entirely</li>
+    </ul>
+    <div class="explanation">That's exactly what makes it a hook rather than an abstract method — a subclass that has no special requirement simply inherits the base class's default behaviour without needing to write any code for it.</div>
+  </div>
+
+</div>
+
+<footer>
+  Lesson 01 · Card Authorization: Template Method · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

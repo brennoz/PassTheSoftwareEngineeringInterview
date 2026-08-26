@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Library System Domain Model</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Library System Domain Model</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 15 min · Lesson 1 of N</div>
+
+<p>
+  Library Management is a classic OOD interview question. It looks simple but contains
+  two rich design challenges: a <strong>BookCopy state machine</strong> (State Pattern)
+  and <strong>swappable fine calculation</strong> (Strategy Pattern).
+  This lesson builds the domain model from entities up to patterns.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Given "design a library system", produce a complete class diagram in under 5 minutes,
+  name the State and Strategy patterns correctly, and explain why BookCopy is a separate
+  entity from Book.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. Entities at a glance</h2>
+
+<div class="diagram">Library System — Core Entities
+
+  ┌─────────┐      ┌──────────┐      ┌────────────┐
+  │ Library │ 1──N │  Book    │ 1──N │  BookCopy  │
+  └─────────┘      │ (title,  │      │ (barcode,  │
+                   │ author,  │      │  status)   │
+                   │ ISBN)    │      └─────┬──────┘
+                   └──────────┘            │ borrowed via
+                                    ┌──────▼──────┐
+  ┌──────────┐                      │    Loan     │
+  │  Member  │ 1──────────────────N │ (dueDate,   │
+  │ (id,name │                      │  returnDate)│
+  │  email)  │                      └─────────────┘
+  └────┬─────┘
+       │ 1──N
+  ┌────▼──────────┐      ┌──────────────┐
+  │  Reservation  │      │    Fine      │
+  │ (bookId,      │      │ (amount,     │
+  │  expiresAt)   │      │  paid)       │
+  └───────────────┘      └──────────────┘</div>
+
+<table>
+  <tr><th>Entity</th><th>Key responsibility</th><th>Interview signal</th></tr>
+  <tr><td><code>Book</code></td><td>Catalogue record — title, author, ISBN, genre</td><td>Aggregate root for search</td></tr>
+  <tr><td><code>BookCopy</code></td><td>Physical copy — barcode, shelf location, status</td><td>This is what gets borrowed, not Book</td></tr>
+  <tr><td><code>Member</code></td><td>Library user — identity, borrow limit, active loans</td><td>Enforce borrow limit here</td></tr>
+  <tr><td><code>Loan</code></td><td>Active borrow — links Member to BookCopy with due date</td><td>Source of Fine on overdue</td></tr>
+  <tr><td><code>Reservation</code></td><td>Intent to borrow — holds a copy when returned</td><td>Expires after N days if uncollected</td></tr>
+  <tr><td><code>Fine</code></td><td>Penalty for overdue/lost copy</td><td>Calculated by Strategy</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>2. Why BookCopy is not Book</h2>
+
+<p>
+  A library owns 5 copies of <em>Clean Code</em>. Each copy has its own status:
+  copy #1 is BORROWED, copy #2 AVAILABLE, copy #3 RESERVED.
+  The <code>Book</code> entity is the catalogue record (one per title).
+  <code>BookCopy</code> is the physical item (many per title, each with its own state).
+</p>
+
+<div class="callout">
+  <strong>Interview trap</strong>
+  Putting <code>status</code> on <code>Book</code> is the most common mistake.
+  An interviewer immediately follows with: "what if you have 5 copies and 3 are borrowed?"
+  You cannot answer without a BookCopy entity.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. BookCopy state machine — State Pattern</h2>
+
+<div class="diagram">                ┌─────────────┐
+                │  AVAILABLE  │◄──────────────────────┐
+                └──────┬──────┘                       │
+                       │ reserve()                    │
+                ┌──────▼──────┐                       │
+                │  RESERVED   │                       │
+                └──────┬──────┘                       │
+                       │ checkout()                   │ return()
+                ┌──────▼──────┐                       │
+                │  BORROWED   │───────────────────────┤
+                └──────┬──────┘                       │
+                       │ due date passed              │
+                ┌──────▼──────┐                       │
+                │   OVERDUE   │───────────────────────┘
+                └──────┬──────┘
+                       │ reported missing
+                ┌──────▼──────┐
+                │    LOST     │  (terminal — no transitions out)
+                └─────────────┘</div>
+
+<p>
+  Naïve approach: <code>if (status == BORROWED && ...) { status = OVERDUE; }</code>
+  everywhere. This scatters transition logic across the codebase.
+  State Pattern centralises it.
+</p>
+
+<pre>
+// <span class="kw-pat">Pattern: State — each state is an object; transitions are methods on the state</span>
+public interface CopyState {
+    void reserve(BookCopy copy);
+    void checkout(BookCopy copy);
+    void returnCopy(BookCopy copy);
+    void markLost(BookCopy copy);
+    String name();
+}
+
+public class AvailableState implements CopyState {
+    @Override
+    public void reserve(BookCopy copy)   { copy.setState(new ReservedState()); }
+    @Override
+    public void checkout(BookCopy copy)  { copy.setState(new BorrowedState()); }
+    @Override
+    public void returnCopy(BookCopy copy){ throw new IllegalStateException("Not borrowed"); }
+    @Override
+    public void markLost(BookCopy copy)  { throw new IllegalStateException("Not borrowed"); }
+    @Override public String name()       { return "AVAILABLE"; }
+}
+
+public class BorrowedState implements CopyState {
+    @Override
+    public void reserve(BookCopy copy)   { throw new IllegalStateException("Already borrowed"); }
+    @Override
+    public void checkout(BookCopy copy)  { throw new IllegalStateException("Already borrowed"); }
+    @Override
+    public void returnCopy(BookCopy copy){ copy.setState(new AvailableState()); }
+    @Override
+    public void markLost(BookCopy copy)  { copy.setState(new LostState()); }
+    @Override public String name()       { return "BORROWED"; }
+}
+
+// OverdueState and ReservedState follow the same pattern
+</pre>
+
+<pre>
+public class BookCopy {
+
+    private final String barcode;
+    private final Book   book;
+    // <span class="kw-why">State held as object, not enum — transitions are encapsulated in the state itself</span>
+    private CopyState state = new AvailableState();
+
+    public BookCopy(String barcode, Book book) {
+        this.barcode = barcode;
+        this.book    = book;
+    }
+
+    public void reserve()    { state.reserve(this); }
+    public void checkout()   { state.checkout(this); }
+    public void returnCopy() { state.returnCopy(this); }
+    public void markLost()   { state.markLost(this); }
+
+    void setState(CopyState state) { this.state = state; }   // package-private
+    public String getStatus()      { return state.name(); }
+}
+</pre>
+
+<div class="callout">
+  <strong>State vs enum + switch</strong>
+  Enum approach: <code>switch(status) { case AVAILABLE: ... }</code> in every service method.
+  Adding a new state (e.g. MAINTENANCE) means editing every switch block.
+  State Pattern: new state = new class. Existing states untouched. Open/Closed satisfied.
+</div>
+
+<div class="callout warn">
+  <strong>The single most common mistake on this exact question</strong>
+  Defining all five state classes correctly, then wiring <code>BookCopy</code> wrong — <code>reserve()</code>
+  directly mutating <code>state = new ReservedState()</code> instead of delegating with <code>state.reserve(this)</code>.
+  Every state class gets written correctly and is <em>never actually reached</em> — a <code>LOST</code> copy
+  can still be "reserved" because the guard that would throw is dead code. The tell: if any
+  <code>BookCopy</code> method contains the word <code>new</code> for a state class, delegation is broken —
+  only <code>CopyState</code> implementations are allowed to call <code>copy.setState(new X())</code>.
+  Rule to say out loud: <strong>the state object controls the transition, the entity only delegates to it.</strong>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Fine calculation — Strategy Pattern</h2>
+
+<p>
+  Different libraries charge differently: flat rate per overdue loan, daily rate,
+  tiered rate (cheap first week, expensive after). Swappable without touching Loan.
+</p>
+
+<pre>
+// <span class="kw-pat">Pattern: Strategy — fine formula injected, not hardcoded</span>
+public interface FineCalculationStrategy {
+    BigDecimal calculate(Loan loan);
+}
+
+public class DailyFineStrategy implements FineCalculationStrategy {
+    private final BigDecimal ratePerDay;
+
+    public DailyFineStrategy(BigDecimal ratePerDay) { this.ratePerDay = ratePerDay; }
+
+    @Override
+    public BigDecimal calculate(Loan loan) {
+        long daysOverdue = ChronoUnit.DAYS.between(loan.getDueDate(), LocalDate.now());
+        if (daysOverdue <= 0) return BigDecimal.ZERO;
+        // <span class="kw-why">BigDecimal not double — money arithmetic must be exact</span>
+        return ratePerDay.multiply(BigDecimal.valueOf(daysOverdue));
+    }
+}
+
+public class FlatFineStrategy implements FineCalculationStrategy {
+    private final BigDecimal flatAmount;
+
+    public FlatFineStrategy(BigDecimal flatAmount) { this.flatAmount = flatAmount; }
+
+    @Override
+    public BigDecimal calculate(Loan loan) {
+        long daysOverdue = ChronoUnit.DAYS.between(loan.getDueDate(), LocalDate.now());
+        return daysOverdue > 0 ? flatAmount : BigDecimal.ZERO;
+    }
+}
+</pre>
+
+<!-- ─────────────────────────── -->
+<h2>5. Loan and Reservation</h2>
+
+<pre>
+// <span class="kw-why">Why record: Loan is immutable value once created; returnDate set via separate method</span>
+public class Loan {
+
+    private final String     id;
+    private final Member     member;
+    private final BookCopy   copy;
+    private final LocalDate  borrowedOn;
+    private final LocalDate  dueDate;
+    private LocalDate        returnedOn;   // null until returned
+
+    public Loan(Member member, BookCopy copy, int loanDays) {
+        this.id         = UUID.randomUUID().toString();
+        this.member     = member;
+        this.copy       = copy;
+        this.borrowedOn = LocalDate.now();
+        this.dueDate    = borrowedOn.plusDays(loanDays);
+    }
+
+    public boolean isOverdue()   { return returnedOn == null && LocalDate.now().isAfter(dueDate); }
+    public void returnBook()     { this.returnedOn = LocalDate.now(); copy.returnCopy(); }
+    public LocalDate getDueDate(){ return dueDate; }
+}
+</pre>
+
+<!-- ─────────────────────────── -->
+<h2>6. LibraryService — orchestrates operations</h2>
+
+<pre>
+public class LibraryService {
+
+    private final FineCalculationStrategy fineStrategy;
+
+    public LibraryService(FineCalculationStrategy fineStrategy) {
+        this.fineStrategy = fineStrategy;
+    }
+
+    public Loan checkout(Member member, BookCopy copy, int loanDays) {
+        if (member.hasReachedBorrowLimit())
+            throw new BorrowLimitExceededException(member.getId());
+        copy.checkout();                         // delegates to state
+        Loan loan = new Loan(member, copy, loanDays);
+        member.addActiveLoan(loan);
+        return loan;
+    }
+
+    public Fine returnBook(Loan loan) {
+        loan.returnBook();                       // state transition + returnedOn set
+        BigDecimal amount = fineStrategy.calculate(loan);
+        return amount.compareTo(BigDecimal.ZERO) > 0
+                ? new Fine(loan, amount)
+                : null;
+    }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>The second most common mistake on this exact question</strong>
+  <code>fine == BigDecimal.ZERO</code> instead of <code>fine.compareTo(BigDecimal.ZERO) == 0</code> (or <code>&gt; 0</code>
+  for the check above). <code>==</code> on <code>BigDecimal</code> compares object identity, not numeric value —
+  it works by accident when a strategy happens to return the exact static <code>BigDecimal.ZERO</code>
+  constant, and silently breaks the moment any strategy returns <code>new BigDecimal("0")</code> or
+  <code>BigDecimal.valueOf(0)</code> instead — a different object, same value, wrong answer. Compounding
+  version of this bug seen in practice: the <code>==</code> check plus an <strong>inverted ternary</strong> —
+  returning a real <code>Fine</code> object when the amount IS zero, and <code>null</code> when it isn't.
+  Rule to say out loud: <strong>never <code>==</code>/<code>!=</code> on BigDecimal — always <code>.compareTo()</code>
+  or <code>.equals()</code>, and for a zero check specifically, <code>.signum() == 0</code> reads even cleaner.</strong>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>7. What interviewers probe</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>Why separate BookCopy from Book?</td><td>Multiple physical copies, each with independent state</td></tr>
+  <tr><td>What pattern for status transitions?</td><td>State Pattern — each status is an object with transition methods</td></tr>
+  <tr><td>Why not a simple enum + switch?</td><td>Adding new states requires editing every switch — violates Open/Closed</td></tr>
+  <tr><td>How is fine calculated?</td><td>Strategy Pattern — DailyFineStrategy / FlatFineStrategy injected into LibraryService</td></tr>
+  <tr><td>What's the difference between Reservation and Loan?</td><td>Reservation = intent (copy not yet taken, expires N days); Loan = active borrow (copy in member's hands)</td></tr>
+  <tr><td>How do you enforce borrow limit?</td><td>Check <code>member.hasReachedBorrowLimit()</code> in LibraryService before checkout</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>8. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is <code>BookCopy</code> a separate entity from <code>Book</code>?</p>
+    <ul class="options" data-correct="1">
+      <li>A) A library owns multiple physical copies of the same title — each copy has its own independent status, barcode, and shelf location</li>
+      <li>B) Book is an interface; BookCopy is the concrete implementation of that interface</li>
+      <li>C) Java does not allow a single class to track both catalogue data and inventory status</li>
+      <li>D) BookCopy extends Book via inheritance to add the status field</li>
+    </ul>
+    <div class="explanation">Book is the catalogue record (one per title). BookCopy is the physical item (many per title). Copy #1 may be BORROWED while copy #2 is AVAILABLE — impossible to model without separating them. This is the single most important design decision in a library system question.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. What is the key advantage of State Pattern over an enum + switch for BookCopy status?</p>
+    <ul class="options" data-correct="3">
+      <li>A) State Pattern uses less memory than storing an enum value</li>
+      <li>B) Enums cannot be used as fields in JPA entities</li>
+      <li>C) Adding a new state (e.g. MAINTENANCE) requires only a new class — no existing switch blocks to edit, Open/Closed satisfied</li>
+      <li>D) State Pattern automatically persists status changes to the database</li>
+    </ul>
+    <div class="explanation">With enum + switch, every method that cares about status has a switch block. Add MAINTENANCE → edit every block → shotgun surgery. State Pattern: add MaintenanceState class, define its transitions, done. Existing states are untouched. This is the Open/Closed Principle in action.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Which pattern makes fine calculation swappable between daily rate and flat rate without changing <code>LibraryService</code>?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Template Method — LibraryService is abstract and subclasses override calculateFine()</li>
+      <li>B) Strategy — FineCalculationStrategy interface injected into LibraryService constructor</li>
+      <li>C) Observer — Fine events are published and a listener calculates the amount</li>
+      <li>D) Factory — a FineFactory decides which calculation class to instantiate</li>
+    </ul>
+    <div class="explanation">Strategy: the algorithm (fine formula) is extracted behind an interface and injected. LibraryService holds FineCalculationStrategy and delegates. Template Method would require subclassing LibraryService — one subclass per fine policy, which doesn't compose well. Observer would add unnecessary async complexity for a synchronous calculation.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. A member tries to check out a book but has reached the borrow limit. Where should this guard live?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Inside BookCopy.checkout() — the copy decides if checkout is allowed</li>
+      <li>B) Inside Loan constructor — throw if member already has too many loans</li>
+      <li>C) Inside Member.addActiveLoan() — member enforces its own limit</li>
+      <li>D) Inside LibraryService.checkout() — the service orchestrates the rule before delegating to copy and member</li>
+    </ul>
+    <div class="explanation">BookCopy knows nothing about members — it only tracks its own state. Loan constructor shouldn't enforce business rules — it's a data record. Member.addActiveLoan() could work but mixes rule enforcement into a data method. LibraryService is the use-case orchestrator — it's the right place for cross-entity business rules like "member limit before copy state change".</div>
+  </div>
+
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>9. Primary source</h2>
+
+<p>
+  Read <a href="https://refactoring.guru/design-patterns/state" target="_blank">
+    Refactoring.Guru — State Pattern
+  </a> (free, 10 min). Focus on the vending machine example — identical structure to BookCopy states.
+</p>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unclear when State Pattern beats a simple enum + if/else?
+  Or how Reservation interacts with the state machine when a copy is returned?
+  Ask before moving to the question.
+</div>
+
+<footer>
+  Lesson 01 · Library System Domain Model · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Microservice Boundaries</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0005-websockets-deep-dive.html">← File 5</a></div>
+
+<h1>Microservice Boundaries (Spring Boot)</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 6 of 12</div>
+
+<p>
+  File 0003 listed the services; this file justifies why they're split THAT way rather than
+  some other way, and how they're built internally. "Microservices with Spring Boot" was one
+  of the recalled hints — worth being ready to talk concretely about what that means beyond
+  the name.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. The boundary rule: bounded contexts, not technical layers</h2>
+
+<p>
+  Each service boundary in file 0003 maps to a distinct business capability with its own data
+  and its own reason to change independently — POS (checkout flow), Pricing, Inventory,
+  Payment, Store-Sync. None of them are split by technical layer ("the database service", "the
+  API service") — that's the classic anti-pattern this boundary rule explicitly avoids, since
+  a layer-based split means almost every feature change touches multiple services anyway,
+  which defeats the point of splitting at all.
+</p>
+
+<div class="callout">
+  <strong>The concrete test for "should this be its own service"</strong>
+  Does it own data nothing else should directly touch, and does it change for a different
+  reason than its neighbours? Payment changes when card-scheme/PCI requirements change.
+  Pricing changes when the promotions team ships a new campaign. Those are different rates of
+  change driven by different stakeholders — a real signal they belong in different services,
+  not just a theoretical DDD exercise.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. Internal shape of a store-edge service</h2>
+
+<p>
+  Standard layered architecture inside each Spring Boot service — the same shape real
+  production Spring Boot systems use, not something invented for this exercise:
+</p>
+
+<div class="diagram">Controller layer
+   REST controllers (service-to-service calls) +
+   WebSocket/@MessageMapping handlers (POS only, file 0005)
+        │
+        ▼
+Service layer
+   Business logic — price calculation, promo application, stock decrement
+   Owns the transaction boundary
+        │
+        ▼
+Repository layer
+   Spring Data JPA (or JDBC for the smallest services) against this
+   service's OWN schema only — never another service's tables</div>
+
+<h3>Data ownership at edge scale — a pragmatic compromise worth naming</h3>
+
+<p>
+  "Pure" microservices usually means one database instance per service. On a resource-limited
+  edge box running four or five small services, running five separate Postgres processes is
+  wasteful for the actual data volume involved (one store's worth of stock/price cache is
+  small). The pragmatic answer: <strong>one Postgres instance per store, one schema per
+  service</strong>, with the ownership rule enforced in code, not by physical database
+  separation — each service's repository layer only ever queries its own schema; no service
+  is allowed to write SQL against another's tables, even though they're technically reachable
+  on the same instance.
+</p>
+
+<div class="callout warn">
+  <strong>Be ready to defend this if pushed</strong>
+  This is a genuine trade-off, not a free lunch — a determined future engineer COULD write a
+  cross-schema join and quietly break the boundary, since the database itself doesn't enforce
+  it the way separate instances would. The mitigation is discipline (code review, service
+  accounts scoped per-schema if the DB engine supports it) rather than physical impossibility.
+  Naming that honestly, rather than presenting it as risk-free, is the stronger answer.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Inter-service communication within the store</h2>
+
+<p>
+  POS pod calling Pricing pod, or Pricing pod calling Inventory pod, all happen inside the
+  same store-edge cluster — plain synchronous REST (or gRPC if you want stronger typed
+  contracts), not WebSocket. WebSocket in this design is specifically the device-facing
+  protocol (till ↔ POS pod, file 0005); pod-to-pod calls inside the cluster are ordinary
+  short-lived HTTP calls over the cluster's internal network, since there's no need for a
+  persistent connection or server-push semantics between two services that are both always
+  co-located and reachable with single-digit-millisecond latency.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>4. Why not split further, and why not merge</h2>
+
+<table>
+  <tr><th>Temptation</th><th>Why resist it</th></tr>
+  <tr><td>Split Pricing further (e.g. separate "product pricing" vs "promo pricing" services)</td><td>Nanoservice smell — at this scale (one store, small data volume) the extra network hop and deployment unit buys nothing; promo application is a query concern within Pricing, not a separate capability with its own stakeholders</td></tr>
+  <tr><td>Merge everything into one edge monolith pod</td><td>Loses independent restart/rollback (a Pricing bug shouldn't force a Payment pod restart), and specifically breaks the PCI-DSS isolation argument in file 0009 — Payment needs to be a separately network-policy-scoped workload, which requires it to be its own deployable</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>5. Central services differ — briefly</h2>
+
+<p>
+  Central (file 0008) runs on real AKS with elastic compute, so the "keep it small, share a
+  Postgres instance" compromise from Section 2 doesn't apply there — central services can
+  each get their own dedicated datastore (and even different engines per service — Cosmos DB
+  for the loyalty ledger's flexible schema, Azure SQL for structured warehouse data — true
+  polyglot persistence), since resource constraints aren't the limiting factor centrally the
+  way they are on a single edge box.
+</p>
+
+<footer>
+  Tesco System Design Prep · File 6 of 12 · Next:
+  <a href="0007-store-central-sync.html">0007 — Store ↔ Central Sync</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,77 @@
+package com.interview.ood.q036_bank_service_layer;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class MyAnswerTest {
+
+    private BankService bank;
+
+    @BeforeEach
+    void setUp() { bank = new BankService(); }
+
+    @Test
+    void deposit_increases_balance_and_ledger_records_credit() {
+        Account acc = bank.openAccount("owner-1", AccountType.SAVINGS);
+
+        Transaction txn = bank.deposit(acc.id(), new BigDecimal("500.00"));
+
+        assertEquals(new BigDecimal("500.00"), bank.getBalance(acc.id()));
+        assertEquals(TransactionType.CREDIT, txn.type());
+        assertEquals(0, new BigDecimal("500.00").compareTo(txn.amount()));
+        assertEquals(0, new BigDecimal("500.00").compareTo(txn.balanceAfter()));
+
+        List<Transaction> history = bank.history(acc.id());
+        assertEquals(1, history.size());
+        assertEquals(txn.id(), history.get(0).id());
+    }
+
+    @Test
+    void withdraw_decreases_balance_and_throws_when_insufficient() {
+        Account acc = bank.openAccount("owner-2", AccountType.CURRENT);
+        bank.deposit(acc.id(), new BigDecimal("200.00"));
+
+        Transaction txn = bank.withdraw(acc.id(), new BigDecimal("150.00"));
+
+        assertEquals(0, new BigDecimal("50.00").compareTo(bank.getBalance(acc.id())));
+        assertEquals(TransactionType.DEBIT, txn.type());
+        assertEquals(0, new BigDecimal("50.00").compareTo(txn.balanceAfter()));
+
+        assertThrows(InsufficientFundsException.class,
+                () -> bank.withdraw(acc.id(), new BigDecimal("100.00")));
+    }
+
+    @Test
+    void transfer_moves_funds_between_accounts_and_both_ledgers_updated() {
+        Account alice = bank.openAccount("alice", AccountType.CURRENT);
+        Account bob   = bank.openAccount("bob",   AccountType.CURRENT);
+        bank.deposit(alice.id(), new BigDecimal("1000.00"));
+
+        Transfer transfer = bank.transfer(alice.id(), bob.id(), new BigDecimal("300.00"));
+
+        assertEquals(0, new BigDecimal("700.00").compareTo(bank.getBalance(alice.id())));
+        assertEquals(0, new BigDecimal("300.00").compareTo(bank.getBalance(bob.id())));
+        assertEquals(alice.id(), transfer.fromAccountId());
+        assertEquals(bob.id(),   transfer.toAccountId());
+
+        assertEquals(2, bank.history(alice.id()).size()); // deposit + debit
+        assertEquals(1, bank.history(bob.id()).size());   // credit only
+    }
+
+    @Test
+    void close_account_succeeds_when_empty_and_rejects_withdrawal_after_close() {
+        Account acc = bank.openAccount("owner-3", AccountType.SAVINGS);
+        bank.deposit(acc.id(), new BigDecimal("100.00"));
+        bank.withdraw(acc.id(), new BigDecimal("100.00"));
+
+        bank.closeAccount(acc.id());
+
+        assertThrows(IllegalStateException.class,
+                () -> bank.withdraw(acc.id(), new BigDecimal("1.00")));
+    }
+}

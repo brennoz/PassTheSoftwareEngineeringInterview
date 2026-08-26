@@ -1,0 +1,110 @@
+<title>Adapter Pattern — Third-Party Game Provider Integration</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 840px; margin: 40px auto; padding: 0 20px; line-height: 1.55; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #2563eb; padding-bottom: 8px; }
+  h2 { border-left: 5px solid #2563eb; padding-left: 12px; margin-top: 40px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 0.9em; }
+  .question { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .options { list-style: none; padding: 0; }
+  .options li { padding: 8px 12px; margin: 6px 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; }
+  .options li.correct { border-color: #16a34a; background: #f0fdf4; }
+  .explanation { margin-top: 10px; padding: 10px; background: #fffbeb; border-left: 4px solid #f59e0b; display: none; }
+  .explanation.show { display: block; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0b1220; color: #e2e8f0; }
+    .question { background: #111827; border-color: #1f2937; }
+    .options li { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+    .options li.correct { background: #052e1a; border-color: #16a34a; }
+    .explanation { background: #1c1608; border-left-color: #f59e0b; }
+  }
+</style>
+
+<h1>Adapter Pattern — Third-Party Game Provider Integration</h1>
+<p><strong>Question this lesson prepares you for:</strong> q059 — integrate two third-party
+game providers with different SDK shapes behind one internal interface.</p>
+
+<h2>Why Adapter, specifically</h2>
+<p>You don't control the third party's API. <code>SlotForgeClient</code> is one blocking call,
+pence as <code>long</code>. <code>ReelMasterXClient</code> is a handshake + async poll loop,
+pounds as <code>double</code>. Every OTHER pattern (Strategy, Observer, Template Method) assumes
+the implementations you're switching between already share a compatible shape — Adapter is the
+one pattern whose entire job is reconciling shapes you don't control into one you do.</p>
+
+<h2>The structure</h2>
+<pre><code>interface GameProviderAdapter {        // Target — the only contract callers see
+    SpinResult spin(GameSession session, Money stake);
+}
+
+class SlotForgeAdapter implements GameProviderAdapter {   // Concrete Adapter #1
+    private final SlotForgeClient client;                  // wraps the given SDK (Adaptee)
+    // spin() converts Money -> pence(long), calls client.spin(), converts response back
+}
+
+class ReelMasterXAdapter implements GameProviderAdapter {  // Concrete Adapter #2
+    private final ReelMasterXClient client;
+    // spin() does authenticate -> submitSpin -> poll-until-COMPLETE, ALL hidden inside
+    // this one method. Caller never sees a token, a ticket ID, or a poll loop.
+}
+</code></pre>
+
+<h2>The two traps this exercise plants</h2>
+<ol>
+  <li><strong>Unbounded polling.</strong> If <code>ReelMasterXAdapter</code> polls in a
+  <code>while(true)</code> with no attempt cap, one slow/broken provider hangs every spin
+  that touches it — a resource leak disguised as "just waiting for a result." Bound the
+  attempts; return a failed <code>SpinResult</code> once exhausted.</li>
+  <li><strong>Unsafe double→BigDecimal conversion.</strong> <code>new BigDecimal(0.1)</code>
+  captures the double's actual binary value
+  (<code>0.1000000000000000055511151231257827021181583404541015625</code>), not the "0.1" you
+  think you typed. <code>BigDecimal.valueOf(0.1)</code> goes via
+  <code>Double.toString(0.1)</code> first — exactly <code>0.1</code>. Always
+  <code>valueOf</code> when converting a third party's double-based money field.</li>
+</ol>
+
+<h2>System design angle</h2>
+<p>The adapter's polling loop currently blocks the calling thread with
+<code>Thread.sleep</code>. At scale this caps throughput at "however many threads you have,"
+regardless of how fast the provider actually is. Two real fixes: (1) the provider pushes a
+webhook/event on completion instead of you polling it, or (2) you return immediately and
+the caller subscribes to a completion event (Kafka/SQS) — decoupling request from response.
+Both trade implementation complexity for not tying up a thread per in-flight spin.</p>
+
+<div class="question" id="q1">
+  <p><strong>Q1.</strong> Why does <code>GameProviderAdapter</code> expose zero
+  provider-specific detail (no <code>pollReelMasterX(ticketId)</code> "just in case")?</p>
+  <ul class="options" data-correct="1">
+    <li>Hiding provider-specific shape behind one interface is the entire point of Adapter — leaking one vendor detail back onto the Target forces every other adapter to fake-implement it or breaks the abstraction</li>
+    <li>Because polling is always slower than a synchronous call</li>
+    <li>Because ReelMasterX doesn't actually support polling</li>
+    <li>To reduce the number of HTTP requests made overall</li>
+  </ul>
+  <div class="explanation">Adding one vendor-specific method to the Target interface means every future adapter (SlotForge, and any third provider) must implement or no-op that method too — the interface stops being a true abstraction and starts leaking whichever provider was integrated first.</div>
+</div>
+
+<div class="question" id="q2">
+  <p><strong>Q2.</strong> Why <code>BigDecimal.valueOf(double)</code> instead of
+  <code>new BigDecimal(double)</code> when converting ReelMasterX's win amount?</p>
+  <ul class="options" data-correct="2">
+    <li><code>valueOf</code> is measurably faster at runtime</li>
+    <li><code>new BigDecimal(double)</code> captures the double's exact binary value, not the decimal you'd expect — <code>valueOf</code> goes via <code>Double.toString()</code> first, giving the expected decimal</li>
+    <li>They're functionally identical; <code>valueOf</code> is just more idiomatic style</li>
+    <li><code>new BigDecimal(double)</code> throws for negative values</li>
+  </ul>
+  <div class="explanation">Binary floating point can't represent most decimal fractions exactly. <code>new BigDecimal(0.1)</code> reveals that imprecision directly; <code>valueOf</code> avoids it by parsing the double's canonical string form instead.</div>
+</div>
+
+<script>
+document.querySelectorAll('.options').forEach(function(ul) {
+  var correctIdx = parseInt(ul.dataset.correct, 10) - 1;
+  var items = ul.querySelectorAll('li');
+  var explanation = ul.parentElement.querySelector('.explanation');
+  items.forEach(function(li, idx) {
+    li.addEventListener('click', function() {
+      items.forEach(function(l) { l.classList.remove('correct'); });
+      items[correctIdx].classList.add('correct');
+      explanation.classList.add('show');
+    });
+  });
+});
+</script>

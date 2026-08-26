@@ -1,0 +1,22 @@
+target/
+*.class
+*.jar
+*.war
+*.ear
+.idea/
+*.iml
+.vscode/
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.claude/settings.local.json
+.superpowers/
+
+# Excluded from this repo — kept local only
+topics/projects/arm-pythia/
+topics/projects/global/

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LRU Cache — Step-by-Step Animation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+  h1 { color: #cba6f7; font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: #6c7086; font-size: 0.85rem; margin-bottom: 24px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; }
+
+  .panel { background: #181825; border: 1px solid #313244; border-radius: 10px; padding: 20px; }
+  .panel h2 { font-size: 0.8rem; color: #a6adc8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
+
+  /* DLL */
+  .dll-row { display: flex; align-items: center; gap: 0; min-height: 80px; flex-wrap: wrap; gap: 4px; }
+  .sentinel { background: #313244; border: 2px solid #45475a; border-radius: 8px; padding: 10px 14px; font-size: 0.75rem; color: #6c7086; }
+  .arrow { color: #45475a; font-size: 1.2rem; padding: 0 4px; }
+  .node {
+    background: #313244; border: 2px solid #89b4fa;
+    border-radius: 8px; padding: 10px 14px;
+    font-size: 0.85rem; font-weight: bold;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .node .key { color: #89dceb; font-size: 0.7rem; }
+  .node .val { color: #a6e3a1; font-size: 1rem; }
+  .node.highlight-new  { border-color: #a6e3a1; background: #1e3a2a; box-shadow: 0 0 12px #a6e3a188; }
+  .node.highlight-move { border-color: #f9e2af; background: #3a2e1a; box-shadow: 0 0 12px #f9e2af88; }
+  .node.highlight-evict{ border-color: #f38ba8; background: #3a1a1e; box-shadow: 0 0 12px #f38ba888; }
+  .node.highlight-hit  { border-color: #cba6f7; background: #2a1e3a; box-shadow: 0 0 12px #cba6f788; }
+
+  /* HashMap */
+  .map-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+  .map-key { color: #89dceb; font-size: 0.85rem; text-align: right; }
+  .map-val { color: #a6e3a1; font-size: 0.85rem; }
+  .map-arrow { color: #45475a; }
+  .map-entry { display: contents; }
+  .map-entry.hl-new .map-key, .map-entry.hl-new .map-val { color: #a6e3a1; font-weight: bold; }
+  .map-entry.hl-evict .map-key, .map-entry.hl-evict .map-val { color: #f38ba8; text-decoration: line-through; opacity: 0.5; }
+
+  /* Op log */
+  .op-log { background: #181825; border: 1px solid #313244; border-radius: 10px; padding: 20px; max-width: 1000px; margin-top: 20px; }
+  .op-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .op-chip {
+    padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;
+    border: 2px solid #45475a; background: #313244; color: #a6adc8;
+    transition: all 0.2s;
+  }
+  .op-chip.active   { border-color: #cba6f7; background: #2a1e3a; color: #cba6f7; }
+  .op-chip.done     { border-color: #45475a; background: #1e1e2e; color: #45475a; }
+  .op-chip.type-put  { }
+  .op-chip.type-get  { }
+
+  /* Explanation */
+  .explanation {
+    background: #181825; border: 1px solid #313244; border-radius: 10px;
+    padding: 20px; max-width: 1000px; margin-top: 20px;
+    min-height: 80px;
+  }
+  .explanation .step-title { color: #cba6f7; font-size: 1rem; margin-bottom: 8px; }
+  .explanation .step-body  { color: #cdd6f4; font-size: 0.9rem; line-height: 1.6; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-right: 6px; }
+  .tag.evict { background: #3a1a1e; color: #f38ba8; }
+  .tag.add   { background: #1e3a2a; color: #a6e3a1; }
+  .tag.move  { background: #3a2e1a; color: #f9e2af; }
+  .tag.hit   { background: #2a1e3a; color: #cba6f7; }
+  .tag.miss  { background: #313244; color: #6c7086; }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  button {
+    padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: 'Courier New', monospace; font-size: 0.9rem; font-weight: bold;
+    transition: all 0.15s;
+  }
+  #btnPrev { background: #313244; color: #a6adc8; }
+  #btnPrev:hover { background: #45475a; }
+  #btnNext { background: #cba6f7; color: #1e1e2e; }
+  #btnNext:hover { background: #d0bcff; }
+  #btnPrev:disabled, #btnNext:disabled { opacity: 0.3; cursor: not-allowed; }
+  .step-counter { color: #6c7086; font-size: 0.85rem; }
+
+  /* Return value badge */
+  .return-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 6px;
+    font-size: 0.85rem; font-weight: bold; margin-left: 8px;
+  }
+  .return-hit  { background: #2a1e3a; color: #cba6f7; }
+  .return-miss { background: #313244; color: #6c7086; }
+</style>
+</head>
+<body>
+
+<h1>LRU Cache — Interactive Animation</h1>
+<p class="subtitle">capacity = 3 &nbsp;|&nbsp; click Next to step through operations</p>
+
+<div class="layout">
+  <div class="panel">
+    <h2>Doubly Linked List</h2>
+    <div class="dll-row" id="dll"></div>
+  </div>
+  <div class="panel">
+    <h2>HashMap</h2>
+    <div class="map-grid" id="hashmap"></div>
+  </div>
+</div>
+
+<div class="op-log">
+  <div class="op-list" id="opList"></div>
+  <div class="controls">
+    <button id="btnPrev">← Prev</button>
+    <button id="btnNext">Next →</button>
+    <span class="step-counter" id="stepCounter"></span>
+  </div>
+</div>
+
+<div class="explanation" id="explanation">
+  <div class="step-title">Ready</div>
+  <div class="step-body">Press <strong>Next</strong> to start the animation.</div>
+</div>
+
+<script>
+const CAPACITY = 3;
+
+const ops = [
+  { type: 'put', key: 1, val: 'A' },
+  { type: 'put', key: 2, val: 'B' },
+  { type: 'put', key: 3, val: 'C' },
+  { type: 'get', key: 1 },
+  { type: 'put', key: 4, val: 'D' },
+  { type: 'get', key: 2 },
+  { type: 'put', key: 5, val: 'E' },
+  { type: 'get', key: 5 },
+  { type: 'get', key: 1 },
+];
+
+// State snapshots — pre-computed
+// Each snapshot: { list: [{key,val,hl}], map: {key: {val,hl}}, explanation: {...}, returnVal }
+const snapshots = [];
+
+function computeSnapshots() {
+  // Simulate LRU and record state at each step
+  let order = []; // array of {key, val} — index 0 = most recent
+  let cache = {}; // key → val
+  let evicted = null;
+  let moved = null;
+  let added = null;
+  let mapHl = {}; // key → 'new'|'evict'|null
+
+  // Step 0: initial empty state
+  snapshots.push({
+    list: [],
+    map: {},
+    explanation: { title: 'Initial State', body: 'Cache is empty. Capacity = 3.', tags: [] },
+    returnVal: null
+  });
+
+  for (const op of ops) {
+    evicted = null; moved = null; added = null; mapHl = {};
+
+    if (op.type === 'put') {
+      let existed = cache.hasOwnProperty(op.key);
+      if (existed) {
+        // Update + move to front
+        cache[op.key] = op.val;
+        order = order.filter(n => n.key !== op.key);
+        order.unshift({ key: op.key, val: op.val });
+        moved = op.key;
+        mapHl[op.key] = 'new';
+        snapshots.push({
+          list: order.map(n => ({ ...n, hl: n.key === moved ? 'move' : null })),
+          map: Object.fromEntries(Object.entries(cache).map(([k,v]) => [k, { val: v, hl: mapHl[k] || null }])),
+          explanation: {
+            title: `put(${op.key}, ${op.val}) — key exists, update + move to front`,
+            body: `Key ${op.key} already in cache. Update value to ${op.val} and move to front (most recently used).`,
+            tags: [{ label: 'MOVE TO FRONT', type: 'move' }]
+          },
+          returnVal: null
+        });
+      } else {
+        // New key
+        if (order.length >= CAPACITY) {
+          // Evict LRU
+          const lru = order[order.length - 1];
+          evicted = lru.key;
+          order.pop();
+          delete cache[lru.key];
+          mapHl[lru.key] = 'evict';
+        }
+        cache[op.key] = op.val;
+        order.unshift({ key: op.key, val: op.val });
+        added = op.key;
+        mapHl[op.key] = 'new';
+
+        const evictMsg = evicted !== null
+          ? ` Cache was full → evicted key <strong>${evicted}</strong> (LRU = rightmost).`
+          : '';
+        const tags = [];
+        if (evicted !== null) tags.push({ label: `EVICT ${evicted}`, type: 'evict' });
+        tags.push({ label: `ADD ${op.key}`, type: 'add' });
+
+        snapshots.push({
+          list: order.map(n => ({ ...n, hl: n.key === added ? 'new' : null })),
+          map: (() => {
+            const m = {};
+            for (const [k, v] of Object.entries(cache)) m[k] = { val: v, hl: mapHl[k] || null };
+            if (evicted !== null) m['_evicted_' + evicted] = { key: evicted, val: '—', hl: 'evict' };
+            return m;
+          })(),
+          explanation: {
+            title: `put(${op.key}, ${op.val}) — new key added at front`,
+            body: `Add [${op.key}:${op.val}] at front (most recently used).${evictMsg}`,
+            tags
+          },
+          returnVal: null
+        });
+      }
+    } else {
+      // get
+      if (cache.hasOwnProperty(op.key)) {
+        const val = cache[op.key];
+        order = order.filter(n => n.key !== op.key);
+        order.unshift({ key: op.key, val });
+        moved = op.key;
+        mapHl[op.key] = 'hit';
+        snapshots.push({
+          list: order.map(n => ({ ...n, hl: n.key === moved ? 'hit' : null })),
+          map: Object.fromEntries(Object.entries(cache).map(([k,v]) => [k, { val: v, hl: mapHl[k] || null }])),
+          explanation: {
+            title: `get(${op.key}) → "${val}" — CACHE HIT`,
+            body: `Key ${op.key} found in map. Move node to front (mark as most recently used). Return value <strong>${val}</strong>.`,
+            tags: [{ label: 'HIT', type: 'hit' }, { label: `MOVE ${op.key} TO FRONT`, type: 'move' }]
+          },
+          returnVal: { val, hit: true }
+        });
+      } else {
+        snapshots.push({
+          list: order.map(n => ({ ...n, hl: null })),
+          map: Object.fromEntries(Object.entries(cache).map(([k,v]) => [k, { val: v, hl: null }])),
+          explanation: {
+            title: `get(${op.key}) → -1 — CACHE MISS`,
+            body: `Key ${op.key} not in map (was evicted or never added). Return -1. Cache unchanged.`,
+            tags: [{ label: 'MISS', type: 'miss' }]
+          },
+          returnVal: { val: -1, hit: false }
+        });
+      }
+    }
+  }
+}
+
+computeSnapshots();
+
+let current = 0;
+
+function renderOps() {
+  const el = document.getElementById('opList');
+  el.innerHTML = '';
+  ops.forEach((op, i) => {
+    const label = op.type === 'put' ? `put(${op.key}, ${op.val})` : `get(${op.key})`;
+    const chip = document.createElement('div');
+    chip.className = `op-chip type-${op.type}${i + 1 === current ? ' active' : i + 1 < current ? ' done' : ''}`;
+    chip.textContent = label;
+    chip.onclick = () => { current = i + 1; render(); };
+    el.appendChild(chip);
+  });
+}
+
+function renderDLL(snap) {
+  const el = document.getElementById('dll');
+  el.innerHTML = '';
+
+  const sentinel = (label) => {
+    const d = document.createElement('div');
+    d.className = 'sentinel';
+    d.textContent = label;
+    return d;
+  };
+  const arrow = () => {
+    const d = document.createElement('div');
+    d.className = 'arrow';
+    d.textContent = '↔';
+    return d;
+  };
+
+  el.appendChild(sentinel('HEAD'));
+  if (snap.list.length === 0) {
+    el.appendChild(arrow());
+    el.appendChild(sentinel('TAIL'));
+    return;
+  }
+  for (let i = 0; i < snap.list.length; i++) {
+    const n = snap.list[i];
+    el.appendChild(arrow());
+    const node = document.createElement('div');
+    node.className = `node${n.hl ? ' highlight-' + n.hl : ''}`;
+    node.innerHTML = `<div class="key">key=${n.key}</div><div class="val">${n.val}</div>`;
+    el.appendChild(node);
+  }
+  el.appendChild(arrow());
+  el.appendChild(sentinel('TAIL'));
+}
+
+function renderMap(snap) {
+  const el = document.getElementById('hashmap');
+  el.innerHTML = '';
+
+  // Filter out _evicted_ entries and separate them
+  const evicted = [];
+  const live = [];
+  for (const [k, v] of Object.entries(snap.map)) {
+    if (k.startsWith('_evicted_')) evicted.push({ key: v.key, val: v.val, hl: v.hl });
+    else live.push({ key: k, val: v.val, hl: v.hl });
+  }
+
+  // Sort live by key
+  live.sort((a, b) => a.key - b.key);
+
+  const addRow = (key, val, hl) => {
+    const kEl = document.createElement('div');
+    kEl.className = 'map-key';
+    kEl.textContent = key;
+    const vEl = document.createElement('div');
+    vEl.className = 'map-val';
+    vEl.textContent = `→  "${val}"`;
+    if (hl === 'new')   { kEl.style.color = '#a6e3a1'; vEl.style.color = '#a6e3a1'; kEl.style.fontWeight = 'bold'; }
+    if (hl === 'hit')   { kEl.style.color = '#cba6f7'; vEl.style.color = '#cba6f7'; }
+    if (hl === 'evict') { kEl.style.color = '#f38ba8'; vEl.style.color = '#f38ba8'; kEl.style.textDecoration = 'line-through'; vEl.style.textDecoration = 'line-through'; vEl.style.opacity = '0.5'; }
+    el.appendChild(kEl);
+    el.appendChild(vEl);
+  };
+
+  if (live.length === 0 && evicted.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.color = '#45475a';
+    empty.style.gridColumn = '1/-1';
+    empty.textContent = '(empty)';
+    el.appendChild(empty);
+    return;
+  }
+
+  live.forEach(e => addRow(e.key, e.val, e.hl));
+  evicted.forEach(e => addRow(e.key, '— evicted', e.hl));
+}
+
+function renderExplanation(snap) {
+  const el = document.getElementById('explanation');
+  const tagHtml = (snap.explanation.tags || []).map(t =>
+    `<span class="tag ${t.type}">${t.label}</span>`
+  ).join('');
+  const retHtml = snap.returnVal
+    ? `<span class="return-badge ${snap.returnVal.hit ? 'return-hit' : 'return-miss'}">returns ${snap.returnVal.val}</span>`
+    : '';
+  el.innerHTML = `
+    <div class="step-title">${snap.explanation.title}${retHtml}</div>
+    <div class="step-body">${tagHtml} ${snap.explanation.body}</div>
+  `;
+}
+
+function render() {
+  const snap = snapshots[current];
+  renderDLL(snap);
+  renderMap(snap);
+  renderExplanation(snap);
+  renderOps();
+  document.getElementById('stepCounter').textContent = `Step ${current} / ${snapshots.length - 1}`;
+  document.getElementById('btnPrev').disabled = current === 0;
+  document.getElementById('btnNext').disabled = current === snapshots.length - 1;
+}
+
+document.getElementById('btnNext').onclick = () => { if (current < snapshots.length - 1) { current++; render(); } };
+document.getElementById('btnPrev').onclick = () => { if (current > 0) { current--; render(); } };
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') document.getElementById('btnNext').click();
+  if (e.key === 'ArrowLeft')  document.getElementById('btnPrev').click();
+});
+
+render();
+</script>
+</body>
+</html>

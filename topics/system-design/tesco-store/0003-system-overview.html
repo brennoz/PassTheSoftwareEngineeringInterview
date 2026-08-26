@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Bounded Context Overview</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.recall { border-color: #7c3aed; background: #f5f3ff; }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin: 1rem 0 2rem;
+            font-size: 0.85rem; font-family: monospace; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+  .legend-swatch { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0002-cicd-template.html">← File 2</a></div>
+
+<h1>Tesco Store System — Bounded Context Overview</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 3 of 12</div>
+
+<div class="callout recall">
+  <strong>What Tesco actually said (paraphrased, uncertain — from 2nd interview conversation)</strong>
+  There's a machine in each store, likely connected to the cashier terminals. They mentioned
+  heavy use of WebSockets. Infrastructure is dockerized, running on Kubernetes, hosted on
+  Azure. Backend services are Spring Boot microservices. That's the complete list of real
+  recalled hints — everything else in this file and the rest of the folder is a plausible
+  design built to be consistent with those hints, not a claim about Tesco's actual system.
+</div>
+
+<p>
+  This file sketches the shape of a hypothetical Tesco store system consistent with those
+  hints: a WebSocket-connected in-store machine implies a local compute layer near the
+  cashier terminals (not everything routing straight to the cloud); Docker/K8s/Azure implies
+  containerised services, likely split between a lightweight cluster in-store and a larger
+  one centrally; Spring Boot microservices implies bounded-context service boundaries rather
+  than one monolith.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Why local compute exists at all — the question that shapes everything else</h2>
+
+<p>
+  The most important design decision in this whole system, and the one worth stating out loud
+  first in an interview, is this: <strong>why does a shop with a good internet connection need
+  a local machine at all, instead of every cashier terminal just calling a central cloud API
+  directly?</strong> Three answers, and any one of them alone would justify it:
+</p>
+
+<ol>
+  <li><strong>Latency.</strong> A checkout scan-to-price-display round trip needs to feel
+  instant. A local hop is single-digit milliseconds; a round trip to a central region can be
+  50–150ms even on a good link, and queues form during peak trading (Christmas Eve, Boxing
+  Day) exactly when you can least afford slow tills.</li>
+  <li><strong>Availability under network partition.</strong> A supermarket cannot stop selling
+  because its WAN link to head office drops. Card payments and stock lookups need to keep
+  working, degraded if necessary, off a local cache — this is the strongest argument and the
+  one to lead with (file 0010 goes deep on this).</li>
+  <li><strong>Fan-out cost and blast radius.</strong> Thousands of stores hammering one central
+  API for every single scan is both expensive and a single point of failure for the entire
+  estate. Local compute turns "3,000 stores calling central per-scan" into "3,000 stores
+  syncing periodically" — a fundamentally cheaper and safer traffic shape.</li>
+</ol>
+
+<!-- ─────────────────────────── -->
+<h2>2. Bounded contexts</h2>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#dbeafe;border-color:#2563eb"></div>Store-edge (per store)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#dcfce7;border-color:#16a34a"></div>Central (Azure AKS, one region-pair)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border-color:#d97706"></div>External</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f3f4f6;border-color:#6b7280"></div>Physical devices</div>
+</div>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" font-family="Menlo,Consolas,monospace" font-size="11">
+  <rect width="1180" height="640" fill="#fafafa"/>
+
+  <!-- Cashier terminals -->
+  <rect x="15" y="200" width="140" height="220" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="85" y="222" text-anchor="middle" font-weight="bold" fill="#374151" font-size="12">Cashier</text>
+  <text x="85" y="236" text-anchor="middle" font-weight="bold" fill="#374151" font-size="12">Terminals</text>
+  <rect x="27" y="250" width="116" height="24" rx="3" fill="#e5e7eb" stroke="#6b7280"/>
+  <text x="85" y="266" text-anchor="middle" fill="#374151">Till 1</text>
+  <rect x="27" y="280" width="116" height="24" rx="3" fill="#e5e7eb" stroke="#6b7280"/>
+  <text x="85" y="296" text-anchor="middle" fill="#374151">Till 2</text>
+  <rect x="27" y="310" width="116" height="24" rx="3" fill="#e5e7eb" stroke="#6b7280"/>
+  <text x="85" y="326" text-anchor="middle" fill="#374151">Self-checkout ×N</text>
+  <text x="85" y="405" text-anchor="middle" fill="#4b5563" font-size="10">WebSocket client</text>
+
+  <!-- arrow terminals -> store edge -->
+  <path d="M158 300 L205 300" stroke="#1e3a8a" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="180" y="292" text-anchor="middle" fill="#1e3a8a" font-size="9">WS</text>
+
+  <!-- Store edge cluster -->
+  <rect x="210" y="60" width="420" height="500" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="420" y="85" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="13">Store-Edge Cluster (per store)</text>
+  <text x="420" y="102" text-anchor="middle" fill="#1e3a8a" font-size="10">K3s / Azure Arc-enabled Kubernetes — × ~3,000 stores</text>
+
+  <rect x="230" y="120" width="180" height="40" rx="5" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="320" y="136" text-anchor="middle" fill="#1e3a8a" font-weight="bold">POS Service</text>
+  <text x="320" y="150" text-anchor="middle" fill="#1e3a8a" font-size="9">basket, WS session mgmt</text>
+
+  <rect x="420" y="120" width="190" height="40" rx="5" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="515" y="136" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Pricing Service (local)</text>
+  <text x="515" y="150" text-anchor="middle" fill="#1e3a8a" font-size="9">cached price/promo table</text>
+
+  <rect x="230" y="175" width="180" height="40" rx="5" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="320" y="191" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Inventory Service (local)</text>
+  <text x="320" y="205" text-anchor="middle" fill="#1e3a8a" font-size="9">store stock count cache</text>
+
+  <rect x="420" y="175" width="190" height="40" rx="5" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="515" y="191" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Payment Service</text>
+  <text x="515" y="205" text-anchor="middle" fill="#1e3a8a" font-size="9">tokenises, calls gateway</text>
+
+  <rect x="230" y="230" width="380" height="40" rx="5" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="420" y="246" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Store-Sync Service</text>
+  <text x="420" y="260" text-anchor="middle" fill="#1e3a8a" font-size="9">outbox to central, offline queueing when WAN down (file 0007, 0010)</text>
+
+  <rect x="230" y="285" width="380" height="34" rx="5" fill="#e0e7ff" stroke="#4338ca" stroke-dasharray="3,2"/>
+  <text x="420" y="306" text-anchor="middle" fill="#3730a3" font-size="10">Local datastore: Postgres or SQLite (small footprint per store)</text>
+
+  <rect x="230" y="340" width="380" height="34" rx="5" fill="#e0e7ff" stroke="#4338ca" stroke-dasharray="3,2"/>
+  <text x="420" y="361" text-anchor="middle" fill="#3730a3" font-size="10">Local durable queue (outbox table or lightweight broker)</text>
+
+  <text x="420" y="405" text-anchor="middle" fill="#1e3a8a" font-size="10">Continues operating if the link below drops (file 0010)</text>
+
+  <!-- arrow store -> central (async, dashed) -->
+  <path d="M634 300 L710 300" stroke="#166534" stroke-width="2.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrowGreen)"/>
+  <text x="672" y="288" text-anchor="middle" fill="#166534" font-size="9">async</text>
+  <text x="672" y="315" text-anchor="middle" fill="#166534" font-size="8">Event Hubs/</text>
+  <text x="672" y="325" text-anchor="middle" fill="#166534" font-size="8">Service Bus</text>
+
+  <!-- Central Azure -->
+  <rect x="715" y="60" width="450" height="500" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="940" y="85" text-anchor="middle" font-weight="bold" fill="#14532d" font-size="13">Central (Azure AKS)</text>
+  <text x="940" y="102" text-anchor="middle" fill="#14532d" font-size="10">one region-pair, source of truth</text>
+
+  <rect x="735" y="120" width="190" height="40" rx="5" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="830" y="136" text-anchor="middle" fill="#14532d" font-weight="bold">Central Pricing</text>
+  <text x="830" y="150" text-anchor="middle" fill="#14532d" font-size="9">source of truth, publishes changes</text>
+
+  <rect x="935" y="120" width="210" height="40" rx="5" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="1040" y="136" text-anchor="middle" fill="#14532d" font-weight="bold">Promotions Service</text>
+  <text x="1040" y="150" text-anchor="middle" fill="#14532d" font-size="9">campaign rules engine</text>
+
+  <rect x="735" y="175" width="190" height="40" rx="5" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="830" y="191" text-anchor="middle" fill="#14532d" font-weight="bold">Inventory/Warehouse</text>
+  <text x="830" y="205" text-anchor="middle" fill="#14532d" font-size="9">replenishment, supplier feeds</text>
+
+  <rect x="935" y="175" width="210" height="40" rx="5" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="1040" y="191" text-anchor="middle" fill="#14532d" font-weight="bold">Loyalty / Customer</text>
+  <text x="1040" y="205" text-anchor="middle" fill="#14532d" font-size="9">Clubcard-style points ledger</text>
+
+  <rect x="735" y="230" width="410" height="40" rx="5" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="940" y="246" text-anchor="middle" fill="#14532d" font-weight="bold">Reporting / Analytics</text>
+  <text x="940" y="260" text-anchor="middle" fill="#14532d" font-size="9">consumes store-sync events, not on the hot path</text>
+
+  <rect x="735" y="285" width="410" height="34" rx="5" fill="#d1fae5" stroke="#047857" stroke-dasharray="3,2"/>
+  <text x="940" y="306" text-anchor="middle" fill="#065f46" font-size="10">Central datastore: Azure SQL / Cosmos DB (per-service, polyglot)</text>
+
+  <!-- external payment gateway -->
+  <rect x="735" y="500" width="410" height="45" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="940" y="518" text-anchor="middle" fill="#92400e" font-weight="bold">External: Card Payment Gateway</text>
+  <text x="940" y="533" text-anchor="middle" fill="#92400e" font-size="9">PCI-DSS boundary — file 0009</text>
+  <path d="M830 500 L640 260" stroke="#92400e" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrowAmber)"/>
+
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e3a8a"/></marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#166534"/></marker>
+    <marker id="arrowAmber" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#92400e"/></marker>
+  </defs>
+</svg>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Service responsibility table</h2>
+
+<table>
+  <tr><th>Service</th><th>Location</th><th>Owns</th><th>Talks to</th></tr>
+  <tr><td>POS Service</td><td>Store-edge</td><td>Basket state, WebSocket sessions per till</td><td>Pricing, Inventory, Payment (all local)</td></tr>
+  <tr><td>Pricing Service (local)</td><td>Store-edge</td><td>Read-through cache of current prices/promos for this store</td><td>Central Pricing (async pull/push, file 0007)</td></tr>
+  <tr><td>Inventory Service (local)</td><td>Store-edge</td><td>This store's stock counts, decremented on sale</td><td>Central Inventory/Warehouse (async, eventual)</td></tr>
+  <tr><td>Payment Service</td><td>Store-edge</td><td>Tokenisation, routes to external gateway</td><td>External Card Payment Gateway — never talks to the general store network unscoped (file 0009)</td></tr>
+  <tr><td>Store-Sync Service</td><td>Store-edge</td><td>Outbox pattern: durable local queue of events pending central sync</td><td>Central via Azure Service Bus/Event Hubs — the ONLY store-edge service allowed to depend on WAN connectivity being up</td></tr>
+  <tr><td>Central Pricing</td><td>Central (AKS)</td><td>Source of truth for prices/promos, publishes changes</td><td>Fans out to all stores' local Pricing Service</td></tr>
+  <tr><td>Central Inventory/Warehouse</td><td>Central (AKS)</td><td>Cross-store stock visibility, replenishment triggers</td><td>Ingests store-sync events, talks to supplier systems (out of scope)</td></tr>
+  <tr><td>Loyalty/Customer</td><td>Central (AKS)</td><td>Points ledger, customer profile</td><td>Queried by POS at checkout (with a local-cache fallback, same resilience story as pricing)</td></tr>
+  <tr><td>Reporting/Analytics</td><td>Central (AKS)</td><td>Sales/stock dashboards</td><td>Consumes store-sync events asynchronously — explicitly NOT on any store's hot checkout path</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>The boundary rule worth stating explicitly in the interview</strong>
+  Every store-edge service except Store-Sync must be able to keep functioning with zero
+  connectivity to central. That's a deliberate architectural rule, not an accident — it's
+  what makes the "why local compute" argument in Section 1 actually true rather than aspirational.
+  If Pricing Service's read path required a live central call, the WAN-outage story falls
+  apart. Naming this rule out loud is a strong signal — it shows the design decision was
+  followed through consistently, not just used to justify drawing an edge box.
+</div>
+
+<footer>
+  Tesco System Design Prep · File 3 of 12 · Next:
+  <a href="0004-store-edge-architecture.html">0004 — Store-Edge Architecture</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

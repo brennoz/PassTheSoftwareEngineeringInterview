@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Think About OOD — A Design Framework</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #555;
+    --border: #d0d0d0;
+    --accent: #1a56db;
+    --green: #1a6632;Problem given │ ├─ Step 1: Extract nouns │ ├─ Has stable identity over time? → Entity (has id) │ ├─ Defined purely by data, equality? → Value Object (record) │ └─ Connects 2 entities + has data? → Relationship entity (record with 2 ids + timestamp) │ ├─ Step 2: Choose model style │ ├─ Rules tightly bound to single entity? → Rich Domain Model │ └─ Rules span entities, need cross-queries? → Service Layer + Thin Records │ ├─ Step 3: Assign behavior │ ├─ Entity has lifecycle (states + transitions)? → State Pattern │ ├─ Algorithm varies at runtime? → Strategy Pattern │ ├─ One event → many side effects? → Observer Pattern │ ├─ Complex object construction? → Builder Pattern │ ├─ Steps fixed, subclass varies implementation? → Template Method │ └─ Multiple services, one entry point? → Facade Pattern │ ├─ Step 4: Persistence │ ├─ Each entity → Map<String, T> keyed by id │ ├─ Relationship → adjacency Map (both directions) │ └─ Secondary index → Map<String, List<T>>, updated on every save() │ └─ Step 5: Production ├─ In-memory → breaks on multi-pod → which shared store replaces it? ├─ Synchronized → breaks on multi-JVM → which DB-level locking? ├─ double/float for money → use BigDecimal └─ Missing idempotency? mutation without key = duplicate riskProblem given │ ├─ Step 1: Extract nouns │ ├─ Has stable identity over time? → Entity (has id) │ ├─ Defined purely by data, equality? → Value Object (record) │ └─ Connects 2 entities + has data? → Relationship entity (record with 2 ids + timestamp) │ ├─ Step 2: Choose model style │ ├─ Rules tightly bound to single entity? → Rich Domain Model │ └─ Rules span entities, need cross-queries? → Service Layer + Thin Records │ ├─ Step 3: Assign behavior │ ├─ Entity has lifecycle (states + transitions)? → State Pattern │ ├─ Algorithm varies at runtime? → Strategy Pattern │ ├─ One event → many side effects? → Observer Pattern │ ├─ Complex object construction? → Builder Pattern │ ├─ Steps fixed, subclass varies implementation? → Template Method │ └─ Multiple services, one entry point? → Facade Pattern │ ├─ Step 4: Persistence │ ├─ Each entity → Map<String, T> keyed by id │ ├─ Relationship → adjacency Map (both directions) │ └─ Secondary index → Map<String, List<T>>, updated on every save() │ └─ Step 5: Production ├─ In-memory → breaks on multi-pod → which shared store replaces it? ├─ Synchronized → breaks on multi-JVM → which DB-level locking? ├─ double/float for money → use BigDecimal └─ Missing idempotency? mutation without key = duplicate risk
+    --red: #9b1c1c;
+    --purple: #5521b5;
+    --bg-soft: #f8f8f6;
+    --bg-warn: #fffbeb;
+    --bg-note: #eff6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--ink);
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+    background: #fff;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 {
+    font-size: 1.3rem;
+    margin: 2.5rem 0 0.8rem;
+    padding-left: 0.8rem;
+    border-left: 4px solid var(--accent);
+  }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.4rem; color: var(--ink); }
+  p { margin: 0.7rem 0; }
+  ul, ol { padding-left: 1.6rem; margin: 0.6rem 0; }
+  li { margin: 0.3rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 0.84em;
+    background: #f0f0f0;
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 0.82em;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1.1rem 1.3rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0;
+    line-height: 1.5;
+  }
+  pre .c  { color: #6c7086; font-style: italic; }
+  pre .kw { color: #cba6f7; }
+  pre .ty { color: #89b4fa; }
+  pre .st { color: #a6e3a1; }
+  pre .co { color: #fab387; }
+  pre .an { color: #f38ba8; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th {
+    background: var(--bg-soft);
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border);
+    font-family: Georgia, serif;
+  }
+  td { padding: 0.5rem 0.8rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 2rem; font-family: Georgia, serif; }
+  .callout {
+    background: var(--bg-note);
+    border-left: 4px solid var(--accent);
+    padding: 0.9rem 1.1rem;
+    margin: 1.2rem 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout-warn {
+    background: var(--bg-warn);
+    border-left: 4px solid #d97706;
+  }
+  .callout-green {
+    background: #f0fdf4;
+    border-left: 4px solid #16a34a;
+  }
+  .callout-red {
+    background: #fef2f2;
+    border-left: 4px solid #dc2626;
+  }
+  .step {
+    display: flex;
+    gap: 1rem;
+    margin: 1.4rem 0;
+    align-items: flex-start;
+  }
+  .step-num {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--accent);
+    min-width: 2rem;
+    line-height: 1;
+    padding-top: 0.1rem;
+  }
+  .step-body { flex: 1; }
+  .vs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .vs-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+  }
+  .vs-card h4 { margin-bottom: 0.5rem; font-size: 0.95rem; }
+  .vs-card ul { margin: 0; }
+  .badge {
+    display: inline-block;
+    font-family: Georgia, serif;
+    font-size: 0.75rem;
+    padding: 0.1em 0.5em;
+    border-radius: 3px;
+    font-weight: bold;
+  }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-red   { background: #fee2e2; color: #991b1b; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+  .quiz-section h2 { border-color: #d97706; }
+  .question {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+    background: #fff;
+  }
+  .question p { font-weight: bold; margin-bottom: 0.6rem; }
+  .options { list-style: none; padding: 0; }
+  .options li {
+    padding: 0.45rem 0.7rem;
+    margin: 0.3rem 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .options li:hover { background: #f0f4ff; }
+  .options li.correct { background: #dcfce7; border-color: #16a34a; color: #166534; font-weight: bold; }
+  .options li.wrong   { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
+  .explanation {
+    display: none;
+    margin-top: 0.8rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--bg-soft);
+    border-radius: 4px;
+    font-size: 0.93rem;
+  }
+  /* ── Decision Tree ──────────────────────────────────── */
+  .dt-flow {
+    position: relative;
+    margin: 1.5rem 0;
+  }
+  .dt-flow::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+    transform: translateX(-50%);
+    z-index: 0;
+  }
+  .dt-start {
+    position: relative;
+    z-index: 1;
+    background: var(--ink);
+    color: #fff;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 0.6rem 1.4rem;
+    border-radius: 24px;
+    display: inline-block;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 0.5rem;
+    white-space: nowrap;
+  }
+  .dt-connector {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    color: var(--muted);
+    font-size: 1.3rem;
+    line-height: 1;
+    margin: 0.2rem 0;
+  }
+  .dt-card {
+    position: relative;
+    z-index: 1;
+    background: #fff;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    margin: 0.5rem 0;
+    overflow: hidden;
+  }
+  .dt-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--bg-soft);
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .dt-num {
+    background: var(--accent);
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.8rem;
+    font-family: Georgia, serif;
+    width: 1.5rem; height: 1.5rem;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .dt-card-title {
+    font-weight: bold;
+    font-size: 0.9rem;
+    font-family: Georgia, serif;
+    color: var(--ink);
+  }
+  .dt-rows {
+    padding: 0.4rem 0;
+  }
+  .dt-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 1rem;
+    font-size: 0.87rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .dt-row:last-child { border-bottom: none; }
+  .dt-cond {
+    flex: 1;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .dt-arrow {
+    color: #aaa;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .dt-out {
+    font-weight: bold;
+    font-size: 0.8rem;
+    padding: 0.18em 0.6em;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-family: Georgia, serif;
+    flex-shrink: 0;
+  }
+  .dt-out-blue   { background: #dbeafe; color: #1e40af; }
+  .dt-out-green  { background: #dcfce7; color: #166534; }
+  .dt-out-purple { background: #ede9fe; color: #5521b5; }
+  .dt-out-orange { background: #ffedd5; color: #9a3412; }
+  .dt-out-red    { background: #fee2e2; color: #991b1b; }
+  .dt-out-gray   { background: #f3f4f6; color: #374151; }
+  .toc { background: var(--bg-soft); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.5rem 0; }
+  .toc h4 { margin-bottom: 0.5rem; font-size: 0.95rem; }
+  .toc ol { margin: 0; padding-left: 1.3rem; }
+  .toc li { margin: 0.2rem 0; font-size: 0.9rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+  strong { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<h1>How to Think About OOD</h1>
+<p class="meta">Category: Concepts / OOD &nbsp;·&nbsp; Level: Medium &nbsp;·&nbsp; Read time: ~20 min</p>
+
+<div class="toc">
+  <h4>Contents</h4>
+  <ol>
+    <li><a href="#step1">Step 1 — Find the nouns (entities, value objects, relationships)</a></li>
+    <li><a href="#step2">Step 2 — Decide the model style</a></li>
+    <li><a href="#step3">Step 3 — Assign behavior with design patterns</a></li>
+    <li><a href="#step4">Step 4 — Think about persistence</a></li>
+    <li><a href="#step5">Step 5 — Think about production and scale</a></li>
+    <li><a href="#decision">The decision tree</a></li>
+    <li><a href="#quiz">Quiz</a></li>
+  </ol>
+</div>
+
+<p>Object-oriented design is not about picking the right pattern first. It is about asking the right questions in order — and letting the answers drive the structure. This lesson gives you a repeatable thinking process you can apply to any OOD problem, illustrated with two real implementations of the same system.</p>
+
+<div class="callout">
+  <strong>Running example:</strong> Twitter.
+  We built it twice:
+  <a href="../../../ood/twitter/0001-tweet-model-observer.html">q032 — Rich Domain / Observer</a> and
+  <a href="../../../ood/twitter/0002-twitter-service-layer.html">q035 — Service Layer / Thin Records</a>.
+  Both are correct OOD. They make different tradeoffs. This lesson explains how to choose.
+</div>
+
+<hr>
+
+<h2 id="step1">Step 1 — Find the nouns</h2>
+
+<p>Read the problem statement and underline every noun. Group them into three buckets:</p>
+
+<table>
+  <tr>
+    <th>Bucket</th>
+    <th>What it is</th>
+    <th>Java representation</th>
+    <th>Examples (Twitter)</th>
+  </tr>
+  <tr>
+    <td><strong>Entity</strong></td>
+    <td>Has identity that persists over time. Two objects with same data are <em>not</em> the same if they have different IDs.</td>
+    <td><code>class User</code>, has an <code>id</code></td>
+    <td>User, Tweet, Conversation</td>
+  </tr>
+  <tr>
+    <td><strong>Value Object</strong></td>
+    <td>Defined purely by its data. Two objects with same data <em>are</em> the same.</td>
+    <td>Java <code>record</code> (immutable)</td>
+    <td>MediaUrl, Location, Timestamp</td>
+  </tr>
+  <tr>
+    <td><strong>Relationship</strong></td>
+    <td>Connects two entities. Has its own data (timestamp, role). Queryable in both directions.</td>
+    <td><code>record Follow(String followerId, String followeeId, Instant at)</code></td>
+    <td>Follow, Like, Retweet, Block</td>
+  </tr>
+</table>
+
+<div class="callout-warn callout">
+  <strong>Common mistake:</strong> Treating a relationship as a field instead of an entity.
+  <br>
+  <code>class User { List&lt;User&gt; followers; }</code> — looks fine for one user.
+  Ask yourself: <em>Can I answer "who followed whom and when?" from this structure?</em>
+  If not, the relationship needs to be its own object.
+</div>
+
+<h3>Questions to ask at Step 1</h3>
+<ul>
+  <li>Does this noun have an ID that survives updates? → Entity</li>
+  <li>Are two instances interchangeable if their data is equal? → Value Object → use <code>record</code></li>
+  <li>Does this noun connect two other nouns and carry its own data? → Relationship entity</li>
+  <li>Is this noun only ever accessed through its parent? → Embed it, not a separate entity</li>
+</ul>
+
+<h3>Twitter example</h3>
+<div class="vs-grid">
+  <div class="vs-card">
+    <h4>Entities</h4>
+    <ul>
+      <li><code>User</code> — has id, identity matters</li>
+      <li><code>Tweet</code> — has id, immutable content</li>
+    </ul>
+  </div>
+  <div class="vs-card">
+    <h4>Relationships</h4>
+    <ul>
+      <li><code>Follow(followerId, followeeId, at)</code></li>
+      <li><code>Like(userId, tweetId, at)</code></li>
+      <li><em>These deserve their own class because they are queryable in both directions and carry a timestamp</em></li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="step2">Step 2 — Decide the model style</h2>
+
+<p>There are two fundamentally different ways to distribute behavior in an OOD system. You need to pick one early — mixing them is the most common source of confusion.</p>
+
+<div class="vs-grid">
+  <div class="vs-card">
+    <h4>Rich Domain Model <span class="badge badge-blue">DDD style</span></h4>
+    <ul>
+      <li>Entities own their behavior</li>
+      <li><code>user.follow(other)</code></li>
+      <li><code>tweet.addLike(userId)</code></li>
+      <li>Logic lives <em>inside</em> the object</li>
+      <li>Good when: rules tightly couple to entity state</li>
+    </ul>
+  </div>
+  <div class="vs-card">
+    <h4>Service Layer + Thin Records <span class="badge badge-green">Prod style</span></h4>
+    <ul>
+      <li>Entities are data containers only</li>
+      <li><code>socialGraph.follow(a, b)</code></li>
+      <li><code>likeService.like(userId, tweetId)</code></li>
+      <li>Logic lives in <em>service classes</em></li>
+      <li>Good when: rules span multiple entities or need cross-cutting queries</li>
+    </ul>
+  </div>
+</div>
+
+<table>
+  <tr>
+    <th>Question</th>
+    <th>Rich Domain</th>
+    <th>Service Layer</th>
+  </tr>
+  <tr>
+    <td>"Who follows Alice?" (reverse lookup)</td>
+    <td>Requires scanning all users for <code>alice ∈ user.following</code></td>
+    <td><code>socialGraph.getFollowers("alice")</code> — O(1)</td>
+  </tr>
+  <tr>
+    <td>Serialize to DB</td>
+    <td>Complex — need to extract embedded lists</td>
+    <td>Each record maps 1:1 to a DB table row</td>
+  </tr>
+  <tr>
+    <td>Cross-entity transaction</td>
+    <td>Entity must reach into other entities</td>
+    <td>Service calls both repos in one transaction</td>
+  </tr>
+  <tr>
+    <td>Testing in isolation</td>
+    <td>Easy — just create entity</td>
+    <td>Need to inject service dependencies</td>
+  </tr>
+  <tr>
+    <td>Adding a new query</td>
+    <td>New method on entity</td>
+    <td>New method on service/repo — entity unchanged</td>
+  </tr>
+</table>
+
+<div class="callout-green callout">
+  <strong>Rule of thumb for interviews:</strong>
+  If the relationship between two entities is <em>itself</em> a first-class concept with data (Follow has a timestamp, Like has a timestamp), model it as a relationship entity and use the Service Layer. That structure maps directly to a DB schema and scales to production.
+</div>
+
+<hr>
+
+<h2 id="step3">Step 3 — Assign behavior with design patterns</h2>
+
+<p>Once you know your entities and model style, assign behavior using patterns. The key is to name the pattern — not just write code that happens to have the same shape.</p>
+
+<table>
+  <tr>
+    <th>Pattern</th>
+    <th>Problem it solves</th>
+    <th>OOD signal</th>
+    <th>Example</th>
+  </tr>
+  <tr>
+    <td><strong>Strategy</strong></td>
+    <td>Algorithm that varies at runtime</td>
+    <td>Multiple ways to do the same thing</td>
+    <td><code>FineCalculationStrategy</code> — daily vs flat rate</td>
+  </tr>
+  <tr>
+    <td><strong>State</strong></td>
+    <td>Object behavior depends on internal state</td>
+    <td>Methods that throw "invalid in this state"</td>
+    <td><code>BookCopy</code>: AVAILABLE→RESERVED→BORROWED</td>
+  </tr>
+  <tr>
+    <td><strong>Observer</strong></td>
+    <td>Multiple objects react to one event</td>
+    <td>Fan-out: one action → N side effects</td>
+    <td>User posts tweet → all followers' feeds update</td>
+  </tr>
+  <tr>
+    <td><strong>Factory / Builder</strong></td>
+    <td>Complex object creation</td>
+    <td>Constructor with many optional params</td>
+    <td><code>TweetBuilder</code> with 280-char validation</td>
+  </tr>
+  <tr>
+    <td><strong>Command</strong></td>
+    <td>Encapsulate an operation as an object</td>
+    <td>Undo/redo, queue operations, audit log</td>
+    <td>Bank transfer: <code>DebitCommand</code> + <code>CreditCommand</code></td>
+  </tr>
+  <tr>
+    <td><strong>Template Method</strong></td>
+    <td>Algorithm skeleton, steps vary in subclasses</td>
+    <td>Same sequence, different implementations</td>
+    <td><code>Tweet.displayContent()</code> — different for Original/Reply/Retweet</td>
+  </tr>
+  <tr>
+    <td><strong>Decorator</strong></td>
+    <td>Add responsibilities without subclassing</td>
+    <td>Wrap an object to add behavior at runtime</td>
+    <td>LoggingRepository wraps real repo for audit</td>
+  </tr>
+  <tr>
+    <td><strong>Facade</strong></td>
+    <td>Simplify a complex subsystem</td>
+    <td>Many services, one entry point</td>
+    <td><code>TwitterService</code> — delegates to 4 sub-services</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>How to spot which pattern to use:</strong>
+  <ul>
+    <li>Object has a lifecycle / state machine → <strong>State</strong></li>
+    <li>One event triggers many side effects → <strong>Observer</strong></li>
+    <li>One algorithm, multiple implementations, swappable at runtime → <strong>Strategy</strong></li>
+    <li>Complex construction, optional fields, validation on build → <strong>Builder</strong></li>
+    <li>Multiple services behind one API → <strong>Facade</strong></li>
+    <li>Steps fixed, implementation per subclass → <strong>Template Method</strong></li>
+  </ul>
+</div>
+
+<h3>State Pattern — the most important for OOD interviews</h3>
+
+<p>Any entity with a lifecycle needs a State pattern. The invariant is:</p>
+
+<pre>
+<span class="c">// Entity delegates to state — state modifies entity</span>
+<span class="kw">class</span> <span class="ty">BookCopy</span> {
+    <span class="kw">private</span> <span class="ty">BookCopyState</span> state;
+
+    <span class="co">void</span> reserve() {
+        state.reserve(<span class="kw">this</span>);  <span class="c">// delegation: entity → state</span>
+    }
+}
+
+<span class="kw">class</span> <span class="ty">AvailableState</span> <span class="kw">implements</span> <span class="ty">BookCopyState</span> {
+    <span class="kw">public</span> <span class="co">void</span> reserve(<span class="ty">BookCopy</span> c) {
+        c.setState(<span class="kw">new</span> <span class="ty">ReservedState</span>());  <span class="c">// state modifies entity</span>
+    }
+}
+
+<span class="kw">class</span> <span class="ty">BorrowedState</span> <span class="kw">implements</span> <span class="ty">BookCopyState</span> {
+    <span class="kw">public</span> <span class="co">void</span> reserve(<span class="ty">BookCopy</span> c) {
+        <span class="kw">throw new</span> <span class="ty">IllegalStateException</span>(<span class="st">"Already borrowed"</span>);
+    }
+}
+</pre>
+
+<div class="callout-warn callout">
+  <strong>Common State Pattern bug:</strong> Setting state directly in the entity method bypasses the guard.
+  <br>
+  Wrong: <code>void reserve() { this.state = new ReservedState(); }</code>
+  — <code>BorrowedState.reserve()</code> (which throws) is never called.
+  <br>
+  Right: <code>void reserve() { state.reserve(this); }</code>
+</div>
+
+<hr>
+
+<h2 id="step4">Step 4 — Think about persistence</h2>
+
+<p>Every entity eventually needs to be stored. Design your objects so that mapping to a DB table is obvious, even in an in-memory simulation.</p>
+
+<table>
+  <tr>
+    <th>Object type</th>
+    <th>DB equivalent</th>
+    <th>In-memory equivalent</th>
+    <th>Key lesson</th>
+  </tr>
+  <tr>
+    <td>Entity</td>
+    <td>Table row (<code>users</code>)</td>
+    <td><code>Map&lt;String, User&gt;</code></td>
+    <td>ID is always the map key</td>
+  </tr>
+  <tr>
+    <td>Relationship entity</td>
+    <td>Join table (<code>follows</code>)</td>
+    <td><code>Map&lt;String, Set&lt;String&gt;&gt;</code> adjacency list</td>
+    <td>Store in both directions for O(1) reverse lookup</td>
+  </tr>
+  <tr>
+    <td>Secondary index</td>
+    <td><code>CREATE INDEX ON tweets(author_id)</code></td>
+    <td><code>Map&lt;String, List&lt;Tweet&gt;&gt; byAuthor</code></td>
+    <td>Keep in sync on every write — both maps updated together</td>
+  </tr>
+  <tr>
+    <td>Value Object</td>
+    <td>Column(s) in parent row</td>
+    <td>Field on parent record</td>
+    <td>No separate storage needed</td>
+  </tr>
+</table>
+
+<h3>Repository pattern</h3>
+
+<p>In-memory repositories simulate a database. Always build them with the same interface you'd expose over JPA — this makes migration from in-memory → JPA trivial.</p>
+
+<pre>
+<span class="kw">class</span> <span class="ty">TweetRepository</span> {
+    <span class="kw">private final</span> <span class="ty">Map</span>&lt;<span class="ty">String</span>, <span class="ty">Tweet</span>&gt;        byId     = <span class="kw">new</span> <span class="ty">HashMap</span>&lt;&gt;();
+    <span class="kw">private final</span> <span class="ty">Map</span>&lt;<span class="ty">String</span>, <span class="ty">List</span>&lt;<span class="ty">Tweet</span>&gt;&gt; byAuthor = <span class="kw">new</span> <span class="ty">HashMap</span>&lt;&gt;();
+
+    <span class="co">void</span> save(<span class="ty">Tweet</span> t) {
+        byId.put(t.id(), t);                                      <span class="c">// primary</span>
+        byAuthor.computeIfAbsent(t.authorId(), k -> <span class="kw">new</span> <span class="ty">ArrayList</span>&lt;&gt;()).add(t);  <span class="c">// secondary index</span>
+    }
+
+    <span class="ty">Optional</span>&lt;<span class="ty">Tweet</span>&gt; findById(<span class="ty">String</span> id)          { <span class="kw">return</span> <span class="ty">Optional</span>.ofNullable(byId.get(id)); }
+    <span class="ty">List</span>&lt;<span class="ty">Tweet</span>&gt;     findByAuthorId(<span class="ty">String</span> uid)    { <span class="kw">return</span> byAuthor.getOrDefault(uid, <span class="ty">List</span>.of()); }
+}
+</pre>
+
+<div class="callout-warn callout">
+  <strong>Common persistence bug:</strong> <code>computeIfAbsent(key, k -&gt; Set.of())</code>
+  <br><code>Set.of()</code> returns an unmodifiable set. Calling <code>.add()</code> on it throws <code>UnsupportedOperationException</code>.
+  <br>Always use <code>k -&gt; new HashSet&lt;&gt;()</code> or <code>k -&gt; new ArrayList&lt;&gt;()</code>.
+</div>
+
+<hr>
+
+<h2 id="step5">Step 5 — Think about production and scale</h2>
+
+<p>Every in-memory OOD solution breaks at scale. Knowing <em>exactly how it breaks</em> — and what replaces it — is what separates a junior answer from a senior one.</p>
+
+<h3>What breaks first on a multi-pod deployment</h3>
+
+<table>
+  <tr>
+    <th>In-memory structure</th>
+    <th>Why it breaks on multiple pods</th>
+    <th>Production replacement</th>
+    <th>AWS service</th>
+  </tr>
+  <tr>
+    <td><code>HashMap</code> (idempotency keys)</td>
+    <td>Pod A stores key, retry lands on Pod B — key not found → duplicate</td>
+    <td>PostgreSQL <code>UNIQUE</code> constraint on <code>idempotency_key</code></td>
+    <td>RDS Multi-AZ</td>
+  </tr>
+  <tr>
+    <td><code>Map&lt;String, Set&lt;String&gt;&gt;</code> (SocialGraph)</td>
+    <td>Follow on Pod A, timeline read on Pod B — follower missing</td>
+    <td>PostgreSQL <code>follows</code> table or adjacency in Neo4j</td>
+    <td>RDS / Neptune</td>
+  </tr>
+  <tr>
+    <td><code>List&lt;Tweet&gt;</code> (timeline in memory)</td>
+    <td>Timeline built per-pod from local data — incomplete</td>
+    <td>Redis Sorted Set (score = timestamp); populated on write</td>
+    <td>ElastiCache Redis</td>
+  </tr>
+  <tr>
+    <td>Like counter as <code>Set.size()</code></td>
+    <td>Concurrent likes on 2 pods → race → count wrong</td>
+    <td>Redis <code>INCR</code> (atomic) or DB <code>UPDATE ... SET count = count + 1</code></td>
+    <td>ElastiCache / RDS</td>
+  </tr>
+  <tr>
+    <td><code>synchronized</code> on service method</td>
+    <td>Only prevents race within one JVM — two pods share nothing</td>
+    <td>DB-level lock (<code>SELECT FOR UPDATE</code>), optimistic lock (<code>@Version</code>), Redis <code>SET NX</code></td>
+    <td>RDS / ElastiCache</td>
+  </tr>
+</table>
+
+<h3>Observer pattern at scale</h3>
+
+<p>The Observer pattern works in-process. In production, the equivalent is an event broker.</p>
+
+<table>
+  <tr>
+    <th>OOD concept</th>
+    <th>Production equivalent</th>
+    <th>AWS service</th>
+  </tr>
+  <tr>
+    <td><code>subject.addObserver(obs)</code></td>
+    <td>Consumer group subscribes to Kafka topic</td>
+    <td>MSK (Kafka), SQS, SNS</td>
+  </tr>
+  <tr>
+    <td><code>subject.notifyObservers(event)</code></td>
+    <td>Producer publishes event to topic</td>
+    <td>Kafka producer / SNS publish</td>
+  </tr>
+  <tr>
+    <td><code>observer.update()</code></td>
+    <td>Consumer polls and processes message</td>
+    <td>Lambda trigger / ECS consumer</td>
+  </tr>
+  <tr>
+    <td>Synchronous notification in-process</td>
+    <td>Async, durable, at-least-once delivery</td>
+    <td>Kafka with consumer groups</td>
+  </tr>
+</table>
+
+<h3>State Pattern at scale</h3>
+
+<p>A state machine in-memory loses state when the pod restarts. In production:</p>
+
+<ul>
+  <li>Store current state as a <strong>column in DB</strong>: <code>status VARCHAR</code> on the entity row</li>
+  <li>Use <code>UPDATE ... WHERE status = 'AVAILABLE'</code> for atomic transitions (optimistic concurrency)</li>
+  <li>Use AWS Step Functions for long-running state machines that span services</li>
+  <li>Never allow invalid transitions — enforce at DB level with a <code>CHECK</code> constraint too</li>
+</ul>
+
+<h3>Key financial / domain rules (always relevant)</h3>
+
+<div class="callout-red callout">
+  <strong>Never use <code>double</code> or <code>float</code> for money, odds, or fees.</strong>
+  <code>0.1 + 0.2 == 0.30000000000000004</code> in IEEE 754.
+  Use <code>BigDecimal</code>. Use <code>compareTo()</code> not <code>==</code> to compare.
+</div>
+
+<ul>
+  <li><strong>Idempotency:</strong> any mutation endpoint (POST /bets, POST /payments) must accept an idempotency key. Duplicate request = same result, not double execution.</li>
+  <li><strong>Optimistic locking:</strong> concurrent updates to the same entity (balance, like count) need <code>@Version</code> in JPA or a conditional write in DynamoDB.</li>
+  <li><strong>Audit trail:</strong> financial entities (ledger entries, bets) must be append-only. No UPDATE on posted rows.</li>
+</ul>
+
+<hr>
+
+<h2 id="decision">The decision tree</h2>
+
+<p>Apply this before writing any code:</p>
+
+<div class="dt-flow">
+
+  <div style="text-align:center; margin-bottom:0.3rem;">
+    <span class="dt-start">Problem given</span>
+  </div>
+  <div class="dt-connector">↓</div>
+
+  <!-- Step 1 -->
+  <div class="dt-card">
+    <div class="dt-card-header">
+      <span class="dt-num">1</span>
+      <span class="dt-card-title">Classify each noun — what kind of thing is it?</span>
+    </div>
+    <div class="dt-rows">
+      <div class="dt-row">
+        <span class="dt-cond">Has a stable identity that survives data changes?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-blue">Entity &nbsp;·&nbsp; has an <code>id</code> field</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Two instances are equal if their data is equal?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-green">Value Object &nbsp;·&nbsp; use Java <code>record</code></span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Connects two entities and carries its own data?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-purple">Relationship entity &nbsp;·&nbsp; <code>record(aId, bId, at)</code></span>
+      </div>
+    </div>
+  </div>
+  <div class="dt-connector">↓</div>
+
+  <!-- Step 2 -->
+  <div class="dt-card">
+    <div class="dt-card-header">
+      <span class="dt-num">2</span>
+      <span class="dt-card-title">Decide where behavior lives</span>
+    </div>
+    <div class="dt-rows">
+      <div class="dt-row">
+        <span class="dt-cond">Rules tightly bound to a single entity's own state?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-blue">Rich Domain Model &nbsp;·&nbsp; <code>entity.doX()</code></span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Rules span multiple entities, or need cross-queries?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-green">Service Layer &nbsp;·&nbsp; thin records + service classes</span>
+      </div>
+    </div>
+  </div>
+  <div class="dt-connector">↓</div>
+
+  <!-- Step 3 -->
+  <div class="dt-card">
+    <div class="dt-card-header">
+      <span class="dt-num">3</span>
+      <span class="dt-card-title">Pick the right design pattern for each behavior</span>
+    </div>
+    <div class="dt-rows">
+      <div class="dt-row">
+        <span class="dt-cond">Entity has a lifecycle with guarded transitions (throw if invalid)?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-purple">State Pattern</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Same operation, multiple swappable algorithms at runtime?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-blue">Strategy Pattern</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">One event triggers side effects in N other objects?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-orange">Observer Pattern</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Object has many optional fields, validation on build?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-green">Builder Pattern</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Same sequence of steps, subclass varies each step?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-gray">Template Method</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Many services hidden behind one clean entry point?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-gray">Facade Pattern</span>
+      </div>
+    </div>
+  </div>
+  <div class="dt-connector">↓</div>
+
+  <!-- Step 4 -->
+  <div class="dt-card">
+    <div class="dt-card-header">
+      <span class="dt-num">4</span>
+      <span class="dt-card-title">Map to persistence (even in-memory)</span>
+    </div>
+    <div class="dt-rows">
+      <div class="dt-row">
+        <span class="dt-cond">Each entity</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-blue"><code>Map&lt;String, T&gt;</code> keyed by id</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Each relationship (Follow, Like, Loan…)</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-purple">Adjacency maps in both directions</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Query "all tweets by author"?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-green">Secondary index &nbsp;·&nbsp; <code>Map&lt;String, List&lt;T&gt;&gt;</code></span>
+      </div>
+    </div>
+  </div>
+  <div class="dt-connector">↓</div>
+
+  <!-- Step 5 -->
+  <div class="dt-card">
+    <div class="dt-card-header">
+      <span class="dt-num">5</span>
+      <span class="dt-card-title">Production sanity checks — ask these before you finish</span>
+    </div>
+    <div class="dt-rows">
+      <div class="dt-row">
+        <span class="dt-cond">Any in-memory state (Map, List, counter)?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-red">Breaks on multi-pod &nbsp;→&nbsp; move to Redis / DB</span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Any <code>synchronized</code> method?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-red">Breaks on multi-JVM &nbsp;→&nbsp; use DB lock / <code>@Version</code></span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Money, odds, fees, interest in the domain?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-orange">Never <code>double</code> &nbsp;→&nbsp; use <code>BigDecimal</code></span>
+      </div>
+      <div class="dt-row">
+        <span class="dt-cond">Any POST/PUT that modifies state?</span>
+        <span class="dt-arrow">→</span>
+        <span class="dt-out dt-out-orange">Idempotency key required &nbsp;→&nbsp; duplicate = same result</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<hr>
+
+<h2 id="quiz" class="quiz-section">Quiz</h2>
+
+<div class="question" id="q1">
+  <p>Q1. You are designing a ride-sharing app. A <code>Trip</code> passes through states: REQUESTED → ACCEPTED → IN_PROGRESS → COMPLETED (or CANCELLED). Which pattern should control this lifecycle?</p>
+  <ul class="options" data-correct="2">
+    <li>Strategy — because behaviour varies per state</li>
+    <li>State — because the object has a lifecycle with transitions that guard invalid moves</li>
+    <li>Observer — because multiple services react to each trip event</li>
+    <li>Template Method — because each phase has a fixed set of steps</li>
+  </ul>
+  <div class="explanation">
+    <strong>State Pattern.</strong> The Trip entity has a finite lifecycle. Each state guards invalid transitions (e.g. CANCELLED cannot move to IN_PROGRESS). The delegation invariant: <code>trip.cancel()</code> → <code>state.cancel(trip)</code> → state either transitions or throws. Observer is also useful for notifying passengers/drivers, but the lifecycle management itself is State. At scale: the current state is stored as a <code>status</code> column; transitions use <code>UPDATE WHERE status = 'IN_PROGRESS'</code> to prevent concurrent race conditions.
+  </div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2. You build a loyalty points service. Each user has a <code>Map&lt;String, Integer&gt; pointsBalance</code> in memory. In production on 4 ECS pods, a user makes two purchases simultaneously — both pods read 100 points, both add 50, both write back 150 instead of 200. Which fix is correct?</p>
+  <ul class="options" data-correct="3">
+    <li>Add <code>synchronized</code> to the balance update method in the service class</li>
+    <li>Use <code>ConcurrentHashMap</code> instead of <code>HashMap</code></li>
+    <li>Replace in-memory balance with DB row + optimistic lock (<code>@Version</code>), or Redis <code>INCR</code></li>
+    <li>Use a thread-local copy of the balance per request</li>
+  </ul>
+  <div class="explanation">
+    <strong>DB optimistic lock or Redis INCR.</strong> <code>synchronized</code> and <code>ConcurrentHashMap</code> only protect within one JVM. With 4 pods, each pod has its own heap — synchronization is meaningless across them. The fix: store balance in PostgreSQL with <code>@Version</code> — if two pods try to commit concurrently, one gets an <code>OptimisticLockException</code> and retries. Alternative: Redis <code>INCR</code> is atomic at the Redis level — safe across all pods. AWS: ElastiCache for Redis INCR, or RDS Multi-AZ for optimistic locking.
+  </div>
+</div>
+
+<div class="question" id="q3">
+  <p>Q3. You are modelling a bank loan system. A <code>Loan</code> entity needs to support calculating interest. The bank offers two products: simple interest and compound interest, each a different formula. New products may be added. Which pattern is most appropriate?</p>
+  <ul class="options" data-correct="1">
+    <li>Strategy — inject an <code>InterestCalculationStrategy</code> into the service; each product is one strategy implementation</li>
+    <li>State — because the loan changes state when interest is applied</li>
+    <li>Template Method — because both strategies share the same sequence of steps</li>
+    <li>Decorator — because interest calculation wraps the base loan object</li>
+  </ul>
+  <div class="explanation">
+    <strong>Strategy.</strong> Multiple interchangeable algorithms (simple vs compound interest) that vary at runtime based on the loan product. Strategy: define <code>InterestCalculationStrategy</code> interface with <code>calculate(principal, rate, days)</code>; inject the right implementation when creating the loan. Open/Closed Principle: adding a new product = new strategy class, no changes to existing code. Template Method could work if the steps are strictly shared — but here the formulas are entirely different, so Strategy fits better. Always use <code>BigDecimal</code> for the calculation — never <code>double</code>.
+  </div>
+</div>
+
+<div class="question" id="q4">
+  <p>Q4. In your Twitter OOD, you model followers as <code>class User { List&lt;User&gt; following; }</code>. A product manager asks: "show me everyone who follows a given user, ordered by when they followed." Which statement is true?</p>
+  <ul class="options" data-correct="4">
+    <li>This is easy — just call <code>stream().filter()</code> on the following list of each user</li>
+    <li>Add a <code>List&lt;User&gt; followers</code> field to User — symmetric data solves it</li>
+    <li>Add a <code>Map&lt;User, Instant&gt; followerSince</code> map to User to capture timestamps</li>
+    <li>Replace the embedded list with an explicit <code>Follow(followerId, followeeId, followedAt)</code> entity stored in a dedicated repository queryable in both directions</li>
+  </ul>
+  <div class="explanation">
+    <strong>Explicit Follow entity.</strong> Option 1 requires scanning every user — O(N·M). Option 2 adds reverse data but still has no timestamp. Option 3 adds timestamp but data is embedded in User — breaks when you need to query "all follows for user X" across a large graph. The correct model: <code>Follow</code> is its own entity. In memory: two adjacency maps (<code>following</code> and <code>followers</code>). In production: a <code>follows</code> table with <code>(follower_id, followee_id, followed_at)</code> indexed in both directions. Query "followers ordered by followed_at" becomes a simple <code>SELECT ... WHERE followee_id = ? ORDER BY followed_at DESC</code>. At graph scale (Twitter): Neo4j or a dedicated social graph service backed by Aurora + ElastiCache.
+  </div>
+</div>
+
+<hr>
+
+<div class="footer">
+  <p><strong>Related lessons:</strong>
+    <a href="../../../ood/twitter/0001-tweet-model-observer.html">q032 — Observer / Rich Domain</a> ·
+    <a href="../../../ood/twitter/0002-twitter-service-layer.html">q035 — Service Layer / Thin Records</a> ·
+    <a href="../../../ood/library-system/0001-library-domain-model.html">q030 — State + Strategy (Library)</a>
+  </p>
+  <p style="margin-top: 0.8rem;">
+    <strong>Primary source:</strong>
+    <a href="https://martinfowler.com/bliki/AnemicDomainModel.html" target="_blank">Martin Fowler — Anemic Domain Model</a> ·
+    <a href="https://refactoring.guru/design-patterns" target="_blank">Refactoring.Guru — Design Patterns</a>
+  </p>
+  <p style="margin-top: 1rem; font-style: italic;">
+    Anything unclear? Ask your teacher agent for a deeper explanation on any section.
+  </p>
+</div>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('.options li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct, 10) - 1;
+    const expEl   = q.querySelector('.explanation');
+    let answered  = false;
+
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        opts[correct].classList.add('correct');
+        if (i !== correct) li.classList.add('wrong');
+        expEl.style.display = 'block';
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

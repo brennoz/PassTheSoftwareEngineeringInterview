@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Two Pointers</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+    --hi: #fef08a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.pass { border-color: var(--pass); }
+  .callout.warn { border-color: var(--warn); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .anim { font-family: 'Menlo','Consolas',monospace; font-size: 0.8rem;
+          background: #1e1e2e; color: #cdd6f4; border-radius: 6px;
+          padding: 1.2rem 1.4rem; line-height: 1.8; margin: 1rem 0 1.5rem;
+          overflow-x: auto; white-space: pre; }
+  .anim .hi  { background: var(--hi); color: #1a1a1a; font-weight: bold; padding: 0 2px; }
+  .anim .ok  { color: #a6e3a1; }
+  .anim .err { color: #f38ba8; }
+  .anim .dim { color: #6c7086; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Two Pointers</h1>
+<div class="meta">Category: Algo · Difficulty: Medium-Hard · Est. time: 15 min · Lesson 1 of N</div>
+
+<p>
+  Two Pointers is the pattern behind Team Formation (q018), 3Sum, Container With Most Water,
+  and dozens of other interview problems. The idea is simple: instead of a nested loop
+  (O(N²)), maintain two indices that converge — O(N) per pass, O(N log N) total after sorting.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Recognise a Two Pointers problem, set up the sorted + converging pointer skeleton in
+  under 2 minutes, and handle the duplicate-skipping step that separates medium from hard solutions.
+</div>
+
+<!-- ──────────────────────────── -->
+<h2>1. The three Two Pointers patterns</h2>
+
+<table>
+  <tr><th>Pattern</th><th>Pointers start</th><th>Move rule</th><th>Use when</th></tr>
+  <tr><td><strong>Opposite ends</strong></td><td>L=0, R=n-1</td><td>Move L right or R left based on comparison</td><td>Pairs summing to target, palindrome, container water</td></tr>
+  <tr><td><strong>Same direction (fast/slow)</strong></td><td>Both at 0</td><td>Fast advances every step; slow advances on condition</td><td>Remove duplicates in-place, cycle detection</td></tr>
+  <tr><td><strong>Three pointers</strong></td><td>Fix i, L=i+1, R=n-1</td><td>Inner pair converges; outer i advances</td><td>3Sum, 4Sum, triplet problems</td></tr>
+</table>
+
+<!-- ──────────────────────────── -->
+<h2>2. Opposite ends — step-by-step (Team Formation)</h2>
+
+<p>
+  You saw this in q018. Sort → fix target sum → L and R converge.
+</p>
+
+<div class="anim">Input:  skill = [3, 2, 1, 2]
+Sorted: [<span class="hi">1</span>, 2, 2, <span class="hi">3</span>]   L=0, R=3
+        target = 1+3 = 4
+
+Step 1: nums[L]+nums[R] = 1+3 = 4 == target ✓
+        efficiency += 1*3 = 3
+        L++, R--
+        [1, <span class="hi">2</span>, <span class="hi">2</span>, 3]   L=1, R=2
+
+Step 2: nums[L]+nums[R] = 2+2 = 4 == target ✓
+        efficiency += 2*2 = 4
+        L++, R--  → L > R, done
+
+<span class="ok">Result: 3 + 4 = 7</span></div>
+
+<!-- ──────────────────────────── -->
+<h2>3. Three pointers — 3Sum step-by-step</h2>
+
+<p>
+  Find all unique triplets in an unsorted array that sum to 0.
+  Key insight: fix one element with outer loop, use Two Pointers for the remaining two.
+</p>
+
+<div class="anim">Input:  [-1, 0, 1, 2, -1, -4]
+Sorted: [-4, -1, -1,  0,  1,  2]
+         0    1   2   3   4   5
+
+─── i=0, nums[i]=-4 ───────────────────────────────
+    [-4, <span class="hi">-1</span>, -1,  0,  1, <span class="hi"> 2</span>]   L=1, R=5
+    sum = -4 + -1 + 2 = -3 &lt; 0  → L++
+    [-4, -1, <span class="hi">-1</span>,  0,  1, <span class="hi"> 2</span>]   L=2, R=5
+    sum = -4 + -1 + 2 = -3 &lt; 0  → L++
+    [-4, -1, -1, <span class="hi"> 0</span>,  1, <span class="hi"> 2</span>]   L=3, R=5
+    sum = -4 +  0 + 2 = -2 &lt; 0  → L++
+    [-4, -1, -1,  0, <span class="hi"> 1</span>, <span class="hi"> 2</span>]   L=4, R=5
+    sum = -4 +  1 + 2 = -1 &lt; 0  → L++  → L==R, stop
+
+─── i=1, nums[i]=-1 ───────────────────────────────
+    [-4, -1, <span class="hi">-1</span>,  0,  1, <span class="hi"> 2</span>]   L=2, R=5
+    sum = -1 + -1 + 2 = 0  ✓  <span class="ok">→ add [-1,-1,2]</span>
+    L++, R--  skip duplicates on both sides
+    [-4, -1, -1, <span class="hi"> 0</span>, <span class="hi"> 1</span>,  2]   L=3, R=4
+    sum = -1 +  0 + 1 = 0  ✓  <span class="ok">→ add [-1,0,1]</span>
+    L++, R--  → L==R, stop
+
+─── i=2, nums[i]=-1 == nums[1] → <span class="err">SKIP</span> (duplicate) ───
+
+─── i=3, nums[i]=0 ────────────────────────────────
+    [-4, -1, -1,  0, <span class="hi"> 1</span>, <span class="hi"> 2</span>]   L=4, R=5
+    sum = 0 + 1 + 2 = 3 &gt; 0  → R--  → L==R, stop
+
+<span class="ok">Result: [[-1,-1,2], [-1,0,1]]</span></div>
+
+<!-- ──────────────────────────── -->
+<h2>4. The duplicate-skipping rule — why it matters</h2>
+
+<p>
+  3Sum asks for <em>unique</em> triplets. Without deduplication, <code>[-1,0,1]</code>
+  appears twice (once for each <code>-1</code>). Three skip rules, all required:
+</p>
+
+<pre>
+Arrays.sort(nums);
+List&lt;List&lt;Integer&gt;&gt; result = new ArrayList&lt;&gt;();
+
+for (int i = 0; i &lt; nums.length - 2; i++) {
+
+    // Skip 1: outer loop — same value as previous i
+    if (i &gt; 0 && nums[i] == nums[i - 1]) continue;
+
+    // Early termination: smallest possible sum already > 0
+    if (nums[i] &gt; 0) break;
+
+    int l = i + 1, r = nums.length - 1;
+    while (l &lt; r) {
+        int sum = nums[i] + nums[l] + nums[r];
+        if (sum == 0) {
+            result.add(List.of(nums[i], nums[l], nums[r]));
+            // Skip 2: left pointer — move past duplicates
+            while (l &lt; r && nums[l] == nums[l + 1]) l++;
+            // Skip 3: right pointer — move past duplicates
+            while (l &lt; r && nums[r] == nums[r - 1]) r--;
+            l++; r--;
+        } else if (sum &lt; 0) {
+            l++;   // sum too small — move left pointer right
+        } else {
+            r--;   // sum too large — move right pointer left
+        }
+    }
+}
+</pre>
+
+<div class="callout">
+  <strong>Complexity</strong>
+  Time: O(N log N) sort + O(N²) nested scan = <strong>O(N²)</strong>.
+  Space: O(1) ignoring output list — no auxiliary data structure.
+  Brute force 3-loop = O(N³). Two Pointers reduces one loop to O(N) convergence.
+</div>
+
+<!-- ──────────────────────────── -->
+<h2>5. When is Two Pointers the right pattern?</h2>
+
+<ul style="margin: 0.5rem 0 1.5rem 1.5rem; line-height: 2.2;">
+  <li>Problem involves <strong>pairs or triplets</strong> from one array</li>
+  <li>Constraint says array is sorted, or sorting is free (no ordering requirement on output)</li>
+  <li>Brute force is O(N²) or O(N³) — Two Pointers cuts one dimension</li>
+  <li>Problem asks for sum == target, closest sum, count of valid pairs</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Two Pointers does NOT work when</strong>
+  Order matters (you cannot sort), elements cannot be reused but you need to track which
+  were used (use a HashMap instead), or target changes dynamically (use Sliding Window).
+</div>
+
+<!-- ──────────────────────────── -->
+<h2>6. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. What is the time complexity of 3Sum using sort + Two Pointers?</p>
+    <ul class="options" data-correct="2">
+      <li>A) O(N log N) — sorting dominates</li>
+      <li>B) O(N²) — one outer loop × one inner convergence pass each</li>
+      <li>C) O(N³) — three nested loops</li>
+      <li>D) O(N log² N) — sorting repeated per outer iteration</li>
+    </ul>
+    <div class="explanation">Sort is O(N log N). The outer loop runs N times; the inner Two Pointers pass is O(N) per iteration (L and R together traverse at most N elements). Total: O(N log N + N²) = O(N²). The O(N log N) sort is dominated by the O(N²) scan.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Why must the array be sorted before applying opposite-ends Two Pointers?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Sorting removes duplicates, which simplifies the skip logic</li>
+      <li>B) Java's Arrays.sort is required by the problem constraints</li>
+      <li>C) Sorted order gives a deterministic move rule: sum too small → move L right; sum too large → move R left. Without sorting, moving either pointer could increase or decrease the sum unpredictably.</li>
+      <li>D) Sorting ensures that all valid pairs appear at adjacent indices</li>
+    </ul>
+    <div class="explanation">The entire correctness of Two Pointers rests on the monotonic property of sorted order. If sum &lt; target, the only way to increase it is to move L rightward (larger value). If sum &gt; target, move R leftward. Without sorting, these moves have no guaranteed direction — you'd need to check all combinations: O(N²).</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. In 3Sum, how do you skip duplicate triplets caused by the outer loop index <code>i</code>?</p>
+    <ul class="options" data-correct="1">
+      <li>A) <code>if (i &gt; 0 &amp;&amp; nums[i] == nums[i-1]) continue;</code> — skip if same value as previous outer element</li>
+      <li>B) <code>if (nums[i] == nums[i+1]) continue;</code> — skip if next element is the same</li>
+      <li>C) Use a HashSet to store seen values of nums[i] and skip if already seen</li>
+      <li>D) Sort descending so duplicates are never adjacent</li>
+    </ul>
+    <div class="explanation">Check nums[i] == nums[i-1] (not i+1). Checking the previous ensures you only process the FIRST occurrence of each value. Checking the next would skip the first occurrence and process the second — wrong. The guard i &gt; 0 prevents out-of-bounds on the first iteration.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. After finding a valid triplet in 3Sum, you add it to the result. What must happen next before continuing the inner while loop?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Break out of the inner loop — only one triplet possible per i</li>
+      <li>B) Move only L right by one: <code>l++</code></li>
+      <li>C) Move only R left by one: <code>r--</code></li>
+      <li>D) Move both L and R inward, then skip duplicates on both sides before the next iteration</li>
+    </ul>
+    <div class="explanation">A valid triplet is found. There may be more valid triplets for the same i (e.g. [-2,0,2] and [-2,1,1] both sum to 0). So both pointers must move inward. Then skip duplicates: while nums[l]==nums[l+1] l++; while nums[r]==nums[r-1] r--; then l++; r--. Skipping only one side leaves duplicate triplets in the result.</div>
+  </div>
+
+</div>
+
+<!-- ──────────────────────────── -->
+<h2>7. Primary source</h2>
+
+<p>
+  Work through
+  <a href="https://leetcode.com/problems/3sum/" target="_blank">LeetCode 15 — 3Sum</a>
+  after this lesson. It is the canonical Two Pointers hard problem and appears in
+  interviews across all major tech companies.
+</p>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Confused about when to use Two Pointers vs Sliding Window vs HashMap?
+  Those three patterns cover 80% of array interview problems — ask for a comparison.
+</div>
+
+<footer>
+  Lesson 01 · Two Pointers · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

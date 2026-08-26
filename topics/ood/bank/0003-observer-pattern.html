@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 03 — Observer Pattern (Account Notifications)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; } .kw-algo { color: #059669; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="0002-strategy-state.html">← Lesson 02: Strategy + State</a> &nbsp;|&nbsp;
+  <a href="INDEX.md">Index</a> &nbsp;|&nbsp;
+  Next: Lesson 04 →
+</div>
+
+<h1>Lesson 03 — Observer Pattern (Account Notifications)</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 15 min · Lesson 3 of N</div>
+
+<p>
+  Lessons 01 and 02 built the core account model. This lesson adds
+  <strong>event notifications</strong> — when something happens to an account,
+  interested parties (email system, fraud detector, audit logger) are told.
+  The mechanism is the <strong>Observer Pattern</strong>.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Add unlimited listeners to <code>BankAccount</code> at runtime without touching any
+  account code. Name the pattern, justify it, and explain the thread-safety gotcha
+  that every interviewer waits for.
+</div>
+
+<!-- ─────────────────────────────── -->
+<h2>1. The problem — hardcoded notifications</h2>
+
+<pre>
+// BAD — BankAccount knows about email AND fraud AND audit
+public final void deposit(BigDecimal amount) {
+    // ... balance update ...
+    emailService.send("Deposit of " + amount);      // coupled
+    fraudService.check(amount);                      // coupled
+    auditLogger.log("DEPOSIT", amount);              // coupled
+}
+</pre>
+
+<p>
+  Every new notification target (SMS, Slack, regulatory log) means editing
+  <code>BankAccount</code>. Open/Closed violated. Tests break. Circular dependencies grow.
+</p>
+
+<!-- ─────────────────────────────── -->
+<h2>2. Structure</h2>
+
+<div class="diagram">«interface»
+AccountEventListener
+  + onEvent(AccountEvent event): void
+        ▲               ▲               ▲
+        │               │               │
+EmailNotification  FraudDetection   AuditLogger
+  Listener           Listener         Listener
+        │               │               │
+        └───────────────┴───────────────┘
+                        registered in
+                  ┌─────────────────┐
+                  │   BankAccount   │  ← Subject
+                  │  (Observable)   │
+                  │ listeners: List │
+                  └─────────────────┘
+                  fires on: deposit / withdraw / close</div>
+
+<p>
+  <code>BankAccount</code> knows only about the <strong>interface</strong>,
+  never the concrete listeners. Adding a new listener = new class + one
+  <code>addListener()</code> call. Zero changes to <code>BankAccount</code>.
+</p>
+
+<!-- ─────────────────────────────── -->
+<h2>3. The event — what gets passed to listeners</h2>
+
+<pre>
+// <span class="kw-why">Why a dedicated event record: listeners get typed context, not raw primitives</span>
+// <span class="kw-why">Why record: immutable — listeners cannot mutate the event after the fact</span>
+public record AccountEvent(
+    EventType     type,
+    String        accountId,
+    BigDecimal    amount,      // null for CLOSE events
+    BigDecimal    balanceAfter,
+    Instant       occurredAt
+) {
+    public enum EventType { DEPOSIT, WITHDRAWAL, CLOSE }
+
+    public static AccountEvent deposit(String accountId, BigDecimal amount, BigDecimal balance) {
+        return new AccountEvent(EventType.DEPOSIT, accountId, amount, balance, Instant.now());
+    }
+    public static AccountEvent withdrawal(String accountId, BigDecimal amount, BigDecimal balance) {
+        return new AccountEvent(EventType.WITHDRAWAL, accountId, amount, balance, Instant.now());
+    }
+    public static AccountEvent close(String accountId) {
+        return new AccountEvent(EventType.CLOSE, accountId, null, null, Instant.now());
+    }
+}
+</pre>
+
+<!-- ─────────────────────────────── -->
+<h2>4. The listener interface</h2>
+
+<pre>
+// <span class="kw-pat">Pattern: Observer — all listeners implement this single method</span>
+// <span class="kw-why">Why a single onEvent() not separate onDeposit/onWithdrawal: fewer methods,
+// listeners filter by EventType themselves — extensible without interface changes</span>
+public interface AccountEventListener {
+    void onEvent(AccountEvent event);
+}
+</pre>
+
+<!-- ─────────────────────────────── -->
+<h2>5. BankAccount — the subject</h2>
+
+<pre>
+abstract class BankAccount {
+
+    // <span class="kw-why">Why CopyOnWriteArrayList: listeners may be added/removed while an event fires
+    // on another thread. Regular ArrayList → ConcurrentModificationException.</span>
+    private final List&lt;AccountEventListener&gt; listeners = new CopyOnWriteArrayList&lt;&gt;();
+
+    public void addListener(AccountEventListener listener)    { listeners.add(listener); }
+    public void removeListener(AccountEventListener listener) { listeners.remove(listener); }
+
+    // <span class="kw-pat">Fire-and-forget: BankAccount does not care what listeners do</span>
+    private void fireEvent(AccountEvent event) {
+        for (AccountEventListener listener : listeners) {
+            listener.onEvent(event);
+        }
+    }
+
+    public final void deposit(BigDecimal amount) {
+        requireStatus(AccountStatus.ACTIVE);
+        if (amount.compareTo(BigDecimal.ZERO) &lt;= 0) throw new IllegalArgumentException("Amount must be positive");
+        balance = balance.add(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.DEPOSIT, amount, balance, Instant.now()));
+        fireEvent(AccountEvent.deposit(accountId, amount, balance));  // ← after state change
+    }
+
+    public final void withdraw(BigDecimal amount) {
+        requireStatus(AccountStatus.ACTIVE);
+        if (amount.compareTo(BigDecimal.ZERO) &lt;= 0) throw new IllegalArgumentException("Amount must be positive");
+        validateWithdrawal(amount);
+        balance = balance.subtract(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.WITHDRAWAL, amount, balance, Instant.now()));
+        fireEvent(AccountEvent.withdrawal(accountId, amount, balance)); // ← after state change
+    }
+
+    public void close() {
+        this.status = AccountStatus.CLOSED;
+        fireEvent(AccountEvent.close(accountId));
+    }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Fire AFTER state change, not before</strong>
+  If a listener reads <code>getBalance()</code>, it should see the updated value.
+  Firing before the update means listeners see stale state.
+  This is a common bug interviewers plant in code-review questions.
+</div>
+
+<!-- ─────────────────────────────── -->
+<h2>6. Two concrete listeners</h2>
+
+<pre>
+public class EmailNotificationListener implements AccountEventListener {
+
+    @Override
+    public void onEvent(AccountEvent event) {
+        switch (event.type()) {
+            case DEPOSIT    -> System.out.printf("Email: £%.2f deposited. Balance: £%.2f%n",
+                                    event.amount(), event.balanceAfter());
+            case WITHDRAWAL -> System.out.printf("Email: £%.2f withdrawn. Balance: £%.2f%n",
+                                    event.amount(), event.balanceAfter());
+            case CLOSE      -> System.out.println("Email: Your account has been closed.");
+        }
+    }
+}
+</pre>
+
+<pre>
+// <span class="kw-why">Threshold is configurable — different accounts may have different risk levels</span>
+public class FraudDetectionListener implements AccountEventListener {
+
+    private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("10000.00");
+    private final BigDecimal threshold;
+
+    public FraudDetectionListener() { this(DEFAULT_THRESHOLD); }
+    public FraudDetectionListener(BigDecimal threshold) { this.threshold = threshold; }
+
+    @Override
+    public void onEvent(AccountEvent event) {
+        if (event.type() == AccountEvent.EventType.WITHDRAWAL
+                && event.amount().compareTo(threshold) > 0) {
+            System.out.printf("FRAUD ALERT: Large withdrawal of £%.2f on account %s%n",
+                    event.amount(), event.accountId());
+        }
+    }
+}
+</pre>
+
+<!-- ─────────────────────────────── -->
+<h2>7. Usage</h2>
+
+<pre>
+SavingsAccount account = new SavingsAccount(
+    "ACC-001",
+    new BigDecimal("5000.00"),
+    new BigDecimal("100.00"),
+    new BigDecimal("0.03"),
+    new SimpleInterestStrategy()
+);
+
+account.addListener(new EmailNotificationListener());
+account.addListener(new FraudDetectionListener());
+
+account.deposit(new BigDecimal("200.00"));
+// → Email: £200.00 deposited. Balance: £5200.00
+
+account.withdraw(new BigDecimal("15000.00"));
+// → FRAUD ALERT: Large withdrawal of £15000.00 on account ACC-001
+// → Email: £15000.00 withdrawn. Balance: £-9800.00  (if overdraft limit allows)
+</pre>
+
+<!-- ─────────────────────────────── -->
+<h2>8. Observer vs Strategy vs Template Method — one-line comparisons</h2>
+
+<table>
+  <tr><th>Pattern</th><th>Relationship</th><th>Purpose</th><th>In this design</th></tr>
+  <tr><td>Template Method</td><td>Inheritance</td><td>Fix algorithm skeleton; vary one step</td><td><code>withdraw()</code> + <code>validateWithdrawal()</code></td></tr>
+  <tr><td>Strategy</td><td>Composition (1:1)</td><td>Swap one algorithm at runtime</td><td><code>InterestCalculationStrategy</code> in SavingsAccount</td></tr>
+  <tr><td>Observer</td><td>Composition (1:N)</td><td>Notify many listeners of an event</td><td><code>AccountEventListener</code> list in BankAccount</td></tr>
+</table>
+
+<!-- ─────────────────────────────── -->
+<h2>9. Retrieval quiz</h2>
+
+<p>Answer from memory — no scrolling.</p>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. What does the Observer Pattern decouple?</p>
+    <ul class="options" data-correct="4">
+      <li>A) The algorithm from its data structure</li>
+      <li>B) The constructor from its dependencies</li>
+      <li>C) The interface from its implementation</li>
+      <li>D) The subject (event source) from its observers (event handlers)</li>
+    </ul>
+    <div class="explanation">The subject fires events without knowing who receives them. Observers register themselves. Neither side depends on the other's concrete type — only on the shared event interface.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Why use <code>CopyOnWriteArrayList</code> for the listener list instead of <code>ArrayList</code>?</p>
+    <ul class="options" data-correct="2">
+      <li>A) CopyOnWriteArrayList is faster for read-heavy workloads</li>
+      <li>B) A listener may be added or removed on another thread while fireEvent() is iterating — ArrayList throws ConcurrentModificationException</li>
+      <li>C) ArrayList does not support generic types in Java 21</li>
+      <li>D) CopyOnWriteArrayList prevents duplicate listeners from being registered</li>
+    </ul>
+    <div class="explanation">CopyOnWriteArrayList creates a fresh copy of the array on every write (add/remove). Iterators always read a stable snapshot, so concurrent modification during iteration is safe. Cost: writes are O(N) — acceptable when listeners are rarely changed but events fire frequently.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Should <code>fireEvent()</code> be called before or after the balance is updated? Why?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Before — so listeners can veto the operation before it commits</li>
+      <li>B) It does not matter — listeners receive the amount, not the balance</li>
+      <li>C) After — so listeners that call getBalance() see the updated value, not stale state</li>
+      <li>D) In a separate thread — so the account operation is not blocked by slow listeners</li>
+    </ul>
+    <div class="explanation">Fire after state change. A FraudDetectionListener or AuditLogger that reads getBalance() inside onEvent() must see the post-operation balance. Firing before the update gives listeners stale data — a classic planted bug in code-review questions.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. Observer uses 1:N composition; Strategy uses 1:1 composition. What does this mean practically when adding a new notification target (e.g. SMS)?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Create a new SmsNotificationListener class, call addListener() — zero changes to BankAccount</li>
+      <li>B) Add an smsService field to BankAccount and call it in deposit() and withdraw()</li>
+      <li>C) Extend BankAccount into SmsBankAccount and override the fire methods</li>
+      <li>D) Replace InterestCalculationStrategy with a combined strategy that also sends SMS</li>
+    </ul>
+    <div class="explanation">This is the payoff of Observer. New listener = new class only. BankAccount is open to new observers (Open principle) and closed to modification (Closed principle). Options B and C both violate Open/Closed.</div>
+  </div>
+
+</div>
+
+<!-- ─────────────────────────────── -->
+<h2>10. What to implement now</h2>
+
+<p>
+  Open <a href="../../../ood/src/main/java/com/interview/ood/q027_bank_notifications/MyAnswer.java">q027 MyAnswer.java</a>
+  and implement:
+</p>
+<ol style="margin: 1rem 0 1.5rem 1.5rem; line-height: 2;">
+  <li><code>AccountEvent</code> record with <code>EventType</code> enum and factory methods</li>
+  <li><code>AccountEventListener</code> interface</li>
+  <li><code>BankAccount</code> — add <code>listeners</code> list, <code>addListener()</code>, <code>removeListener()</code>, <code>fireEvent()</code></li>
+  <li>Call <code>fireEvent()</code> at end of <code>deposit()</code>, <code>withdraw()</code>, <code>close()</code></li>
+  <li><code>EmailNotificationListener</code></li>
+  <li><code>FraudDetectionListener</code> (configurable threshold, default 10,000)</li>
+</ol>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unclear why CopyOnWriteArrayList and not synchronized(listeners)?
+  Or when to prefer async notification (CompletableFuture) over sync?
+  Ask — the answer reveals the distributed system angle interviewers probe next.
+</div>
+
+<footer>
+  Lesson 03 · Observer Pattern · Bank Notifications ·
+  <a href="0002-strategy-state.html">← Lesson 02</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

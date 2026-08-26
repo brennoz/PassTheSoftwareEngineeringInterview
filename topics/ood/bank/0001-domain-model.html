@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Bank Domain Model</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #555;
+    --border: #ddd;
+    --bg-code: #f7f7f5;
+    --accent: #2563eb;
+    --pass: #16a34a;
+    --fail: #dc2626;
+    --warn: #d97706;
+    --bg: #fefefe;
+    --sidebar: #f3f4f6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Georgia', serif;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--ink);
+    background: var(--bg);
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+
+  /* Callout boxes */
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--sidebar);
+    padding: 0.9rem 1.2rem;
+    margin: 1.5rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout.warn  { border-color: var(--warn); }
+  .callout.pass  { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+
+  /* Code */
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem 1.4rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin: 1rem 0 1.5rem;
+    font-family: 'Menlo', 'Consolas', monospace;
+  }
+  code { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88em; background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+
+  /* Diagram */
+  .diagram {
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 0.78rem;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem 1.4rem;
+    line-height: 1.5;
+    margin: 1rem 0 1.5rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* Table */
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+
+  /* Quiz */
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li {
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 0.92rem;
+  }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+
+  /* Keyword highlight in comments */
+  .kw-why   { color: #9333ea; }
+  .kw-pat   { color: #0284c7; }
+  .kw-algo  { color: #059669; }
+
+  footer { margin-top: 4rem; border-top: 1px solid var(--border); padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="../lessons/">← All lessons</a> &nbsp;|&nbsp;
+  <a href="../reference/bank-cheat-sheet.html">Reference: Bank Cheat Sheet →</a>
+</div>
+
+<h1>Lesson 01 — Bank Domain Model</h1>
+<div class="meta">Category: OOD &nbsp;·&nbsp; Difficulty: Foundation &nbsp;·&nbsp; Est. time: 15 min &nbsp;·&nbsp; Lesson 1 of N</div>
+
+<p>
+  This lesson builds the <strong>core domain model</strong> for a bank system —
+  the entities, their relationships, and the inheritance hierarchy.
+  It is the skeleton every subsequent lesson hangs on.
+</p>
+
+<div class="callout pass">
+  <strong>Mission check</strong>
+  Goal: given "design a bank system" in an interview, produce a clean class diagram
+  and Java skeleton in &lt; 25 minutes. This lesson gives you the skeleton.
+</div>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>1. Entities at a glance</h2>
+
+<p>
+  Before writing a line of code, name the <em>things</em> in the domain.
+  An interviewer watches how you decompose the problem — good naming signals domain fluency.
+</p>
+
+<div class="diagram">Bank System — Core Entities
+
+  ┌──────────┐         ┌──────────────┐
+  │  Bank    │ 1──── N │   Branch     │
+  └──────────┘         └──────────────┘
+                              │ 1
+                              │ N
+                       ┌──────▼───────┐
+                       │  Customer    │
+                       └──────────────┘
+                              │ 1
+                              │ N
+                       ┌──────▼───────┐
+                       │   Account    │  ◄── abstract
+                       │  (abstract)  │
+                       └──────┬───────┘
+              ┌───────────────┼────────────────┐
+              │               │                │
+    ┌─────────▼───┐  ┌────────▼──────┐  ┌──────▼──────┐
+    │  Checking   │  │   Savings     │  │    Loan     │
+    │  Account    │  │   Account     │  │   Account   │
+    └─────────────┘  └───────────────┘  └─────────────┘
+              │               │
+              └───────┬───────┘
+                      │ generates
+               ┌──────▼───────┐
+               │ Transaction  │
+               └──────────────┘</div>
+
+<table>
+  <tr><th>Entity</th><th>Key responsibility</th><th>Interview signal</th></tr>
+  <tr><td><code>Bank</code></td><td>Owns branches, creates customers</td><td>Entry point / facade</td></tr>
+  <tr><td><code>Customer</code></td><td>Has identity, holds accounts</td><td>Aggregate root for KYC</td></tr>
+  <tr><td><code>Account</code></td><td>Holds balance, enforces invariants</td><td><em>This is where most design happens</em></td></tr>
+  <tr><td><code>Transaction</code></td><td>Immutable record of a balance change</td><td>Event sourcing hook; audit trail</td></tr>
+  <tr><td><code>Money</code></td><td>Value object — amount + currency</td><td>Never <code>double</code> — use <code>BigDecimal</code></td></tr>
+</table>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>2. The Account hierarchy — why abstract?</h2>
+
+<p>
+  <code>Account</code> is abstract because you never instantiate a "plain account" —
+  you always have a <em>checking</em>, <em>savings</em>, or <em>loan</em>.
+  This forces subclasses to implement type-specific behaviour while sharing common logic
+  (balance tracking, transaction history) in the base class.
+</p>
+
+<div class="callout">
+  <strong>Pattern: Template Method</strong>
+  <code>Account.withdraw()</code> handles common guards (balance check, amount validation).
+  Subclasses override <code>canWithdraw()</code> to inject type-specific rules
+  (e.g. CheckingAccount allows overdraft to a limit; SavingsAccount does not).
+</div>
+
+<pre>
+// <span class="kw-pat">Pattern: Template Method</span> — common algorithm skeleton in base class,
+// subclass hooks override the type-specific step
+public abstract class Account {
+
+    private final String id;
+    private final Customer owner;
+    private Money balance;
+    private final List&lt;Transaction&gt; history = new ArrayList&lt;&gt;();
+
+    // <span class="kw-why">Why BigDecimal: floating-point arithmetic loses cents at scale</span>
+    // Money is a Value Object — immutable, compared by value not reference
+    protected Account(String id, Customer owner, Money initialBalance) {
+        this.id      = id;
+        this.owner   = owner;
+        this.balance = initialBalance;
+    }
+
+    // Template Method — subclasses override canWithdraw()
+    public final synchronized void withdraw(Money amount) {
+        if (amount.isNegativeOrZero()) throw new IllegalArgumentException("Amount must be positive");
+        if (!canWithdraw(amount))       throw new InsufficientFundsException(id, amount, balance);
+        balance = balance.subtract(amount);
+        history.add(Transaction.debit(id, amount));
+    }
+
+    public final synchronized void deposit(Money amount) {
+        if (amount.isNegativeOrZero()) throw new IllegalArgumentException("Amount must be positive");
+        balance = balance.add(amount);
+        history.add(Transaction.credit(id, amount));
+    }
+
+    // Hook — subclasses decide the rule
+    protected abstract boolean canWithdraw(Money amount);
+
+    // <span class="kw-why">Why synchronized: balance is shared mutable state;
+    // concurrent withdraw calls → race condition → overdraft</span>
+    public synchronized Money getBalance() { return balance; }
+
+    public String getId()                  { return id; }
+    public List&lt;Transaction&gt; getHistory()  { return List.copyOf(history); }
+}
+</pre>
+
+<pre>
+// Checking: allows overdraft up to a configured limit
+public class CheckingAccount extends Account {
+
+    private final Money overdraftLimit;
+
+    public CheckingAccount(String id, Customer owner, Money initial, Money overdraftLimit) {
+        super(id, owner, initial);
+        this.overdraftLimit = overdraftLimit;
+    }
+
+    @Override
+    protected boolean canWithdraw(Money amount) {
+        // balance + overdraftLimit &gt;= amount
+        return getBalance().add(overdraftLimit).isGreaterThanOrEqualTo(amount);
+    }
+}
+</pre>
+
+<pre>
+// Savings: no overdraft — balance must cover withdrawal
+public class SavingsAccount extends Account {
+
+    public SavingsAccount(String id, Customer owner, Money initial) {
+        super(id, owner, initial);
+    }
+
+    @Override
+    protected boolean canWithdraw(Money amount) {
+        return getBalance().isGreaterThanOrEqualTo(amount);
+    }
+}
+</pre>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>3. Transaction — always immutable</h2>
+
+<p>
+  A <code>Transaction</code> is a <strong>value object</strong>: once created it never changes.
+  This is not just style — in banking, posted transactions are legally immutable
+  (the audit trail must survive). Use Java records (Java 16+).
+</p>
+
+<pre>
+// <span class="kw-why">Why record: immutable by default, equals/hashCode/toString auto-generated</span>
+// <span class="kw-why">Why Instant not LocalDateTime: UTC always; LocalDateTime is timezone-naive</span>
+public record Transaction(
+    String      id,
+    String      accountId,
+    TransactionType type,
+    Money       amount,
+    Instant     createdAt
+) {
+    public static Transaction debit(String accountId, Money amount) {
+        return new Transaction(UUID.randomUUID().toString(), accountId,
+                               TransactionType.DEBIT, amount, Instant.now());
+    }
+
+    public static Transaction credit(String accountId, Money amount) {
+        return new Transaction(UUID.randomUUID().toString(), accountId,
+                               TransactionType.CREDIT, amount, Instant.now());
+    }
+}
+
+public enum TransactionType { DEBIT, CREDIT }
+</pre>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>4. Money — value object</h2>
+
+<p>
+  <code>Money</code> is the most important value object in any financial system.
+  It wraps <code>BigDecimal</code> and <code>Currency</code> together so arithmetic is
+  always currency-aware. Interviewers will explicitly watch for this.
+</p>
+
+<pre>
+// <span class="kw-why">Why BigDecimal not double: 0.1 + 0.2 = 0.30000000000000004 in floating point</span>
+// A 1-cent error across 100M transactions = $1M discrepancy in ledger
+public record Money(BigDecimal amount, Currency currency) {
+
+    public Money {
+        Objects.requireNonNull(amount, "amount");
+        Objects.requireNonNull(currency, "currency");
+        if (amount.scale() &gt; currency.getDefaultFractionDigits())
+            throw new IllegalArgumentException("Too many decimal places for " + currency);
+    }
+
+    public Money add(Money other) {
+        assertSameCurrency(other);
+        return new Money(amount.add(other.amount), currency);
+    }
+
+    public Money subtract(Money other) {
+        assertSameCurrency(other);
+        return new Money(amount.subtract(other.amount), currency);
+    }
+
+    public boolean isGreaterThanOrEqualTo(Money other) {
+        assertSameCurrency(other);
+        return amount.compareTo(other.amount) &gt;= 0;
+    }
+
+    public boolean isNegativeOrZero() {
+        return amount.compareTo(BigDecimal.ZERO) &lt;= 0;
+    }
+
+    private void assertSameCurrency(Money other) {
+        if (!currency.equals(other.currency))
+            throw new CurrencyMismatchException(currency, other.currency);
+    }
+
+    // Factory method — idiomatic Java
+    public static Money of(String amount, String currencyCode) {
+        return new Money(new BigDecimal(amount), Currency.getInstance(currencyCode));
+    }
+}
+</pre>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>5. Customer — aggregate root</h2>
+
+<pre>
+public class Customer {
+
+    private final String id;
+    private final String name;
+    private final List&lt;Account&gt; accounts = new ArrayList&lt;&gt;();
+
+    public Customer(String id, String name) {
+        this.id   = id;
+        this.name = name;
+    }
+
+    public void addAccount(Account account) {
+        accounts.add(account);
+    }
+
+    public List&lt;Account&gt; getAccounts() { return List.copyOf(accounts); }
+    public String getId()              { return id; }
+    public String getName()            { return name; }
+}
+</pre>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>6. Transfer — the tricky operation</h2>
+
+<p>
+  Transfer is the first place interviewers probe thread safety.
+  Naive implementation: lock account A, lock account B, move money.
+  Problem: if two transfers run concurrently in opposite directions (<em>A→B</em> and <em>B→A</em>),
+  each thread acquires one lock and waits for the other — <strong>deadlock</strong>.
+</p>
+
+<div class="callout warn">
+  <strong>Deadlock scenario</strong>
+  Thread 1: lock(A) → waiting for lock(B)<br>
+  Thread 2: lock(B) → waiting for lock(A)<br>
+  Both wait forever.
+</div>
+
+<p>
+  Fix: always acquire locks in a <strong>consistent global order</strong>
+  (e.g. by account ID lexicographic order). Both threads agree on the order → no cycle.
+</p>
+
+<pre>
+// <span class="kw-why">Why ordered locking: prevents deadlock in concurrent transfers</span>
+// <span class="kw-algo">Algorithm: acquire both locks in consistent ID order → no circular wait</span>
+public class TransferService {
+
+    public void transfer(Account from, Account to, Money amount) {
+        // Determine lock order by account ID to avoid deadlock
+        Account first  = from.getId().compareTo(to.getId()) &lt; 0 ? from : to;
+        Account second = first == from ? to : from;
+
+        synchronized (first) {
+            synchronized (second) {
+                from.withdraw(amount);
+                to.deposit(amount);
+            }
+        }
+    }
+}
+</pre>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>7. What interviewers probe here</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>Why not <code>double</code> for balance?</td><td><code>BigDecimal</code> — floating point loses precision at scale</td></tr>
+  <tr><td>Why <code>synchronized</code> on withdraw/deposit?</td><td>Concurrent calls can produce race condition → overdraft</td></tr>
+  <tr><td>How do you prevent deadlock in transfer?</td><td>Acquire locks in consistent global order by account ID</td></tr>
+  <tr><td>Why is Transaction immutable?</td><td>Audit trail — posted transactions must not change; append-only ledger</td></tr>
+  <tr><td>What pattern is withdraw/canWithdraw?</td><td>Template Method — base handles guards, subclass hooks the rule</td></tr>
+  <tr><td>How do you add a new account type?</td><td>Extend <code>Account</code>, override <code>canWithdraw()</code> — no existing code changes</td></tr>
+</table>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>8. Retrieval quiz</h2>
+
+<p>Answer from memory — resist scrolling up. Effortful recall builds long-term retention.</p>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is <code>Account</code> declared abstract?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Java requires abstract for classes with synchronized methods</li>
+      <li>B) You never instantiate a plain "account" — always a specific subtype</li>
+      <li>C) Abstract classes run faster than concrete classes</li>
+      <li>D) To prevent the compiler from generating equals() automatically</li>
+    </ul>
+    <div class="explanation">You always have Checking, Savings, or Loan — never a generic Account. Abstract enforces that subclasses exist and implement the type-specific hook.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. What design pattern does <code>Account.withdraw()</code> + <code>canWithdraw()</code> implement?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Strategy Pattern</li>
+      <li>B) Observer Pattern</li>
+      <li>C) Factory Pattern</li>
+      <li>D) Template Method Pattern</li>
+    </ul>
+    <div class="explanation">Template Method: the base class defines the algorithm skeleton (validate, check, debit, record). Subclasses override the hook step (canWithdraw) without changing the skeleton.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Two concurrent transfers A→B and B→A. What is the risk and how do you fix it?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Deadlock — fix by acquiring both locks in a consistent global order (e.g. by account ID)</li>
+      <li>B) Race condition — fix by wrapping both operations in a database transaction</li>
+      <li>C) Starvation — fix by using a fair lock (ReentrantLock with fairness=true)</li>
+      <li>D) Memory leak — fix by releasing locks in a finally block</li>
+    </ul>
+    <div class="explanation">Deadlock: each thread holds one lock and waits for the other → circular wait → both blocked forever. Fix: all threads agree on the same lock acquisition order → no cycle possible.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. Why use <code>BigDecimal</code> for <code>Money.amount</code> instead of <code>double</code>?</p>
+    <ul class="options" data-correct="4">
+      <li>A) BigDecimal is a primitive type and therefore faster for arithmetic</li>
+      <li>B) double does not support currency-aware formatting</li>
+      <li>C) double cannot store negative values, so withdrawals would break</li>
+      <li>D) Floating-point arithmetic loses precision — 0.1 + 0.2 ≠ 0.3 in binary</li>
+    </ul>
+    <div class="explanation">IEEE 754 floating point cannot represent 0.1 exactly in binary. At scale (millions of transactions), rounding errors compound. BigDecimal uses arbitrary-precision decimal arithmetic — every cent is exact.</div>
+  </div>
+
+</div>
+
+<!-- ────────────────────────────────────────────── -->
+<h2>9. Primary source</h2>
+
+<p>
+  Read the <strong>Account</strong> and <strong>Money</strong> sections of
+  <a href="https://refactoring.guru/design-patterns/template-method" target="_blank">
+    Refactoring.Guru — Template Method
+  </a>
+  (free, 10 min). The Java examples there map directly to what you built here.
+</p>
+
+<h2>10. What to do next</h2>
+
+<ul>
+  <li>Open <a href="../ood/src/main/java/com/interview/ood/">ood/</a> and sketch your own <code>Account</code> hierarchy from memory — without looking at this lesson</li>
+  <li>Lesson 02 will add: <strong>Interest calculation (Strategy Pattern)</strong> and <strong>Account lifecycle states (State Pattern)</strong></li>
+  <li>Lesson 03 will add: <strong>Notification on deposit/withdrawal (Observer Pattern)</strong></li>
+</ul>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Anything unclear? Type your question. I'll explain it, give a different angle, or point
+  you at a better example. Don't move on until the <em>why</em> is clear — not just the what.
+</div>
+
+<footer>
+  Lesson 01 &nbsp;·&nbsp; Bank Domain Model &nbsp;·&nbsp;
+  <a href="../lessons/0002-interest-strategy-state.html">Next: Interest + State →</a>
+</footer>
+
+<script>
+  // Quiz interaction
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) {
+          li.classList.add('correct');
+        } else {
+          li.classList.add('wrong');
+          opts[correct].classList.add('reveal');
+        }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

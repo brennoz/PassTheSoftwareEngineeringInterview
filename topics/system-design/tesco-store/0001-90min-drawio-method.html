@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Round 3 — The 90-Minute Draw.io System Design Method</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout.recall { border-color: #7c3aed; background: #f5f3ff; }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .timebox { display: flex; align-items: baseline; gap: 0.75rem; margin: 0.4rem 0; }
+  .timebox .mins { font-family: monospace; font-weight: bold; color: var(--accent); min-width: 90px; flex-shrink: 0; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a></div>
+
+<h1>The 90-Minute Draw.io System Design Method</h1>
+<div class="meta">Tesco Interview Prep · Tier 1 — Transferable Method · File 1 of 12</div>
+
+<div class="callout recall">
+  <strong>What Tesco actually said (verbatim, from the interview invite)</strong>
+  "Interview [round]: System Design. Duration: 90 mins. You'll be given a problem statement
+  and will be asked to build an overview of a possible solution, using Draw.io. Once you have
+  shown and explained your overview, you may be asked to go into more detail and provide some
+  examples of CI/CD. Please feel free to ask lots of questions before trying to solve the
+  problem. Throughout your interview, we'll ask you about your solution and the steps you're
+  taking. We recommend having draw.io ready on your device before the interview begins."
+</div>
+
+<p>
+  Three facts fall out of that paragraph, and they should shape everything about how you
+  prepare:
+</p>
+
+<ol>
+  <li><strong>The problem statement is unknown.</strong> It might not be about a Tesco store
+  at all. Practicing one worked example (this folder's Tesco-store case study, files
+  0003–0012) builds fluency, but the actual skill being tested is the <em>method</em> in this
+  file — applicable to whatever you're actually given.</li>
+  <li><strong>The deliverable is a live diagram, not prose.</strong> You will be watched
+  drawing boxes and arrows in draw.io while thinking out loud. Fumbling the tool costs you
+  time you don't have; not having a mental shape vocabulary costs you more.</li>
+  <li><strong>"Ask lots of questions" is explicit, graded guidance, not politeness.</strong>
+  Jumping straight to a diagram without clarifying requirements is a known failure mode this
+  prompt is pre-warning you against.</li>
+</ol>
+
+<!-- ─────────────────────────── -->
+<h2>1. The 90-minute time budget</h2>
+
+<p>
+  Nobody hands you a stopwatch in the room, so you have to bring your own internal one. The
+  single biggest risk in a 90-minute live design round isn't a bad diagram — it's running out
+  of time before you've said anything about trade-offs, failure modes, or CI/CD, because you
+  spent 40 minutes perfecting box placement.
+</p>
+
+<div class="timebox"><span class="mins">0–10 min</span> Requirements clarification — ask questions BEFORE drawing anything (Section 2)</div>
+<div class="timebox"><span class="mins">10–15 min</span> Scale/capacity estimation out loud — turns vague requirements into concrete numbers that justify design choices later</div>
+<div class="timebox"><span class="mins">15–40 min</span> High-level design — the first full draw.io pass: every major box, every arrow, narrated as you draw</div>
+<div class="timebox"><span class="mins">40–70 min</span> Deep dive — interviewer picks 1–2 components and asks "go deeper here"; this is unscripted, driven by their questions</div>
+<div class="timebox"><span class="mins">70–85 min</span> CI/CD follow-up — guaranteed per the prompt; have a template ready (file 0002) rather than improvising</div>
+<div class="timebox"><span class="mins">85–90 min</span> Wrap-up — summarise trade-offs made, name what you'd do differently with more time</div>
+
+<div class="callout warn">
+  <strong>Why this isn't rigid</strong>
+  You will not control this clock — the interviewer drives phase 4 (deep dive) by what they
+  ask about. The point of memorising this budget isn't to enforce it minute-by-minute; it's
+  so that if you notice you're 50 minutes in and still on the high-level diagram, you know
+  you're behind and can say so out loud ("let me tighten this up so we have time for CI/CD")
+  rather than silently running out of runway. Noticing and naming a time problem is itself a
+  signal of seniority.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. The clarifying-question framework</h2>
+
+<p>
+  "Ask lots of questions" is the single most actionable sentence in the prompt. Most
+  candidates ask two or three questions and start drawing. A strong answer works through four
+  categories systematically — not because the interviewer expects you to recite categories,
+  but because each category changes the diagram in a real, defensible way.
+</p>
+
+<table>
+  <tr><th>Category</th><th>What you're really asking</th><th>Example questions</th></tr>
+  <tr>
+    <td><strong>Functional scope</strong></td>
+    <td>What must the system actually DO — and, just as important, what's explicitly out of scope?</td>
+    <td>"Are we designing just the in-store checkout flow, or also inventory and pricing sync back to a central system?" "Do returns/refunds need to be in scope?"</td>
+  </tr>
+  <tr>
+    <td><strong>Scale &amp; non-functional</strong></td>
+    <td>What load, latency, and availability numbers actually drive the design?</td>
+    <td>"Roughly how many stores / terminals per store are we designing for?" "What's an acceptable checkout latency — sub-second? A few seconds?" "Does the system need to keep working if the store loses internet?"</td>
+  </tr>
+  <tr>
+    <td><strong>Constraints &amp; existing systems</strong></td>
+    <td>What are you NOT free to redesign — existing infra, compliance, budget, team size?</td>
+    <td>"Is this greenfield, or do we need to integrate with an existing central inventory/pricing system?" "Any compliance constraints I should design around — PCI-DSS for card payments, for instance?"</td>
+  </tr>
+  <tr>
+    <td><strong>Edge cases &amp; failure tolerance</strong></td>
+    <td>What happens when things go wrong — and how much does that matter for THIS system?</td>
+    <td>"If a single till/terminal fails mid-transaction, what's acceptable — does the whole store stop, or just that till?" "Is eventual consistency acceptable for stock counts, or does it need to be exact in real time?"</td>
+  </tr>
+</table>
+
+<div class="callout pass">
+  <strong>Why this earns credit even when the answers are vague</strong>
+  Interviewers often answer clarifying questions with "use your judgement" — that's fine, and
+  expected. The credit isn't for extracting a precise spec; it's for demonstrating you know
+  which axes actually change a design (scope, scale, constraints, failure tolerance) before
+  committing pen to paper. State the assumption you're going with out loud
+  ("OK — I'll assume ~50 terminals per store and design for the store staying operational if
+  the WAN link drops, since that's the kind of thing a retail cashier system can't afford to
+  get wrong") and move on. A stated assumption is much stronger than either silent guessing or
+  interrogating for ten minutes without ever starting to design.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Draw.io shape vocabulary</h2>
+
+<p>
+  You will not have time to hunt through draw.io's shape library live. Decide your vocabulary
+  in advance and stick to it — consistency reads as competence even more than shape choice
+  does.
+</p>
+
+<table>
+  <tr><th>Element</th><th>Shape convention</th><th>When to use it</th></tr>
+  <tr><td>Client / actor</td><td>Stick figure or rounded rectangle, top-left</td><td>End user, cashier, external caller — where the flow starts</td></tr>
+  <tr><td>Load balancer</td><td>Small trapezoid or hexagon</td><td>In front of anything horizontally scaled</td></tr>
+  <tr><td>API Gateway / edge router</td><td>Rounded rectangle, distinct fill colour</td><td>Single entry point fronting multiple services — also where you'd note auth/rate-limiting</td></tr>
+  <tr><td>Service (stateless, synchronous)</td><td>Plain rectangle</td><td>A Spring Boot microservice or equivalent, one box per bounded context, not per class</td></tr>
+  <tr><td>Datastore</td><td>Cylinder</td><td>Label WHICH kind — "PostgreSQL", "Redis", "Cosmos DB" — a generic "DB" cylinder invites a "why this one?" you're not ready for</td></tr>
+  <tr><td>Cache</td><td>Cylinder, different colour, usually beside its service</td><td>Whenever you'd actually put one — don't draw it just to look thorough</td></tr>
+  <tr><td>Queue / message broker</td><td>Parallel lines / "pipe" shape</td><td>Any async boundary — this is also your visual cue to yourself to explain WHY it's async here</td></tr>
+  <tr><td>External system / third party</td><td>Rectangle with dashed border</td><td>Payment gateway, external supplier feed, anything outside your control</td></tr>
+  <tr><td>CDN / edge cache</td><td>Cloud shape</td><td>Static assets, or geographically distributed read paths</td></tr>
+  <tr><td>Async / event arrow</td><td>Dashed arrow</td><td>Distinguish from solid arrows (synchronous request/response) — this single visual distinction communicates a LOT about your design without extra narration</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Colour discipline</strong>
+  Pick 3–4 colours max and assign them to a meaning you state once early (e.g. blue = your
+  new services, grey = existing/external systems, amber = data stores). Re-use them
+  consistently. A diagram that develops its own colour logic as you go looks improvised; one
+  with a colour key you state up front looks planned even if you're building it live.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. The generic starting skeleton</h2>
+
+<p>
+  Regardless of the actual prompt, most system design answers start from the same shape. Draw
+  this first, then specialise it — it's faster than staring at a blank canvas trying to
+  invent structure from nothing.
+</p>
+
+<div class="diagram">Client(s)
+   │
+   ▼
+[Load Balancer / API Gateway]  ← auth, rate limiting live here
+   │
+   ├──► [Service A] ──► [Cache] ──► [Datastore A]
+   │
+   ├──► [Service B] ──► [Datastore B]
+   │         │
+   │         ▼ (async)
+   │      [Queue] ──► [Worker / downstream service]
+   │
+   └──► [Service C] ──► [External system, dashed border]
+
+Cross-cutting (usually drawn as a small side box, not wired to everything):
+   [Observability: logs/metrics/traces]
+   [CI/CD pipeline → deploys all the above]</div>
+
+<p>
+  The specialisation work is: how many services, what splits them (bounded contexts, not
+  arbitrary layers), which edges are synchronous vs async, and which store is SQL vs NoSQL vs
+  cache — and being able to justify each of those four choices out loud is most of the actual
+  interview.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>5. What "good" looks like vs what fails</h2>
+
+<table>
+  <tr><th>Strong signal</th><th>Weak signal</th></tr>
+  <tr><td>Asks clarifying questions before drawing, across multiple categories from Section 2</td><td>Starts drawing within the first minute</td></tr>
+  <tr><td>States assumptions explicitly when the interviewer won't pin down a requirement</td><td>Silently guesses, or gets stuck asking for a precise spec that won't come</td></tr>
+  <tr><td>Names WHY a component exists ("cache here because reads outnumber writes ~50:1") before drawing it</td><td>Draws a cache/queue/CDN because "systems like this usually have one," can't justify it when asked</td></tr>
+  <tr><td>Distinguishes sync vs async edges and explains the trade-off</td><td>Every arrow looks the same; no articulated reason for the boundary</td></tr>
+  <tr><td>Volunteers a failure mode unprompted ("if this service goes down, here's the blast radius")</td><td>Only discusses failure modes if directly asked</td></tr>
+  <tr><td>Notices and names time pressure, adjusts pace</td><td>Runs out of time still polishing the initial diagram</td></tr>
+  <tr><td>Has a ready CI/CD answer (file 0002) rather than improvising one live</td><td>Visibly caught off guard when CI/CD comes up, despite it being flagged in the prompt</td></tr>
+</table>
+
+<div class="callout fail">
+  <strong>The single most common failure mode</strong>
+  Treating "build an overview of a possible solution" as "build THE correct solution."
+  There is no single correct answer graded against a hidden key — the grading signal is
+  <em>how you think</em>: the questions you ask, the trade-offs you name, the way you adapt
+  when the interviewer redirects you into a deep-dive you didn't plan for. A merely-OK diagram
+  with excellent narrated reasoning beats a beautiful diagram delivered in silence.
+</div>
+
+<footer>
+  Tesco System Design Prep · File 1 of 12 · Next:
+  <a href="0002-cicd-template.html">0002 — CI/CD Template</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

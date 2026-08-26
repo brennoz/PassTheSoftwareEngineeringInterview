@@ -1,0 +1,157 @@
+package com.interview.ood.q027_bank_notifications;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+// Pattern: Observer — subject fires typed events; listeners react without subject knowing who they are
+interface AccountEventListener {
+    void onEvent(AccountEvent event);
+}
+
+// Why record: events are immutable value objects — listeners cannot mutate what already happened
+record AccountEvent(
+    EventType   type,
+    String      accountId,
+    BigDecimal  amount,
+    BigDecimal  balanceAfter,
+    Instant     occurredAt
+) {
+    enum EventType { DEPOSIT, WITHDRAWAL, CLOSE }
+
+    static AccountEvent deposit(String id, BigDecimal amount, BigDecimal balance) {
+        return new AccountEvent(EventType.DEPOSIT, id, amount, balance, Instant.now());
+    }
+    static AccountEvent withdrawal(String id, BigDecimal amount, BigDecimal balance) {
+        return new AccountEvent(EventType.WITHDRAWAL, id, amount, balance, Instant.now());
+    }
+    static AccountEvent close(String id) {
+        return new AccountEvent(EventType.CLOSE, id, null, null, Instant.now());
+    }
+}
+
+abstract class BankAccount {
+
+    protected final String accountId;
+    protected BigDecimal balance;
+    private AccountStatus status = AccountStatus.ACTIVE;
+    private final List<Transaction> transactions = new ArrayList<>();
+    // Why CopyOnWriteArrayList: listeners may be added/removed while fireEvent() iterates
+    private final List<AccountEventListener> listeners = new CopyOnWriteArrayList<>();
+
+    protected BankAccount(String accountId, BigDecimal initialBalance) {
+        this.accountId = accountId;
+        this.balance   = initialBalance.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void addListener(AccountEventListener l)    { listeners.add(l); }
+    public void removeListener(AccountEventListener l) { listeners.remove(l); }
+
+    // Fire after state change — listeners read updated balance via getBalance()
+    private void fireEvent(AccountEvent event) {
+        for (AccountEventListener l : listeners) l.onEvent(event);
+    }
+
+    public final void deposit(BigDecimal amount) {
+        requireActive();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Must be positive");
+        balance = balance.add(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.DEPOSIT, amount, balance, Instant.now()));
+        fireEvent(AccountEvent.deposit(accountId, amount, balance));
+    }
+
+    public final void withdraw(BigDecimal amount) {
+        requireActive();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Must be positive");
+        validateWithdrawal(amount);
+        balance = balance.subtract(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.WITHDRAWAL, amount, balance, Instant.now()));
+        fireEvent(AccountEvent.withdrawal(accountId, amount, balance));
+    }
+
+    public void close() {
+        this.status = AccountStatus.CLOSED;
+        fireEvent(AccountEvent.close(accountId));
+    }
+
+    protected abstract void validateWithdrawal(BigDecimal amount);
+
+    public BigDecimal getBalance() { return balance; }
+    public List<Transaction> getTransactionHistory() { return Collections.unmodifiableList(transactions); }
+
+    private void requireActive() {
+        if (status != AccountStatus.ACTIVE)
+            throw new IllegalStateException("Account is " + status);
+    }
+}
+
+enum AccountStatus { ACTIVE, FROZEN, CLOSED }
+
+record Transaction(Transaction.Type type, BigDecimal amount, BigDecimal balanceAfter, Instant timestamp) {
+    enum Type { DEPOSIT, WITHDRAWAL }
+}
+
+class SavingsAccount extends BankAccount {
+    private final BigDecimal minimumBalance;
+
+    public SavingsAccount(String id, BigDecimal initial, BigDecimal minimumBalance) {
+        super(id, initial);
+        this.minimumBalance = minimumBalance;
+    }
+
+    @Override
+    protected void validateWithdrawal(BigDecimal amount) {
+        if (balance.subtract(amount).compareTo(minimumBalance) < 0)
+            throw new IllegalStateException("Would breach minimum balance");
+    }
+}
+
+class CheckingAccount extends BankAccount {
+    private final BigDecimal overdraftLimit;
+
+    public CheckingAccount(String id, BigDecimal initial, BigDecimal overdraftLimit) {
+        super(id, initial);
+        this.overdraftLimit = overdraftLimit;
+    }
+
+    @Override
+    protected void validateWithdrawal(BigDecimal amount) {
+        if (balance.subtract(amount).compareTo(overdraftLimit.negate()) < 0)
+            throw new IllegalStateException("Exceeds overdraft limit");
+    }
+}
+
+class EmailNotificationListener implements AccountEventListener {
+    @Override
+    public void onEvent(AccountEvent event) {
+        switch (event.type()) {
+            case DEPOSIT    -> System.out.printf("Email: +£%.2f deposited. Balance: £%.2f%n",
+                                    event.amount(), event.balanceAfter());
+            case WITHDRAWAL -> System.out.printf("Email: -£%.2f withdrawn. Balance: £%.2f%n",
+                                    event.amount(), event.balanceAfter());
+            case CLOSE      -> System.out.println("Email: Your account has been closed.");
+        }
+    }
+}
+
+class FraudDetectionListener implements AccountEventListener {
+
+    private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("10000.00");
+    private final BigDecimal threshold;
+
+    public FraudDetectionListener()                        { this(DEFAULT_THRESHOLD); }
+    public FraudDetectionListener(BigDecimal threshold)    { this.threshold = threshold; }
+
+    @Override
+    public void onEvent(AccountEvent event) {
+        if (event.type() == AccountEvent.EventType.WITHDRAWAL
+                && event.amount().compareTo(threshold) > 0) {
+            System.out.printf("FRAUD ALERT: Large withdrawal £%.2f on account %s%n",
+                    event.amount(), event.accountId());
+        }
+    }
+}

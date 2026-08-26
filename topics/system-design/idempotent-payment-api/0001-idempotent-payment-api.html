@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Idempotent Payment API</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a></div>
+
+<h1>Lesson 01 — Idempotent Payment API</h1>
+<div class="meta">Category: System Design · Domain: Payments/Fintech · Difficulty: Medium-Hard · Est. time: 20 min</div>
+
+<p>
+  Networks fail. Clients retry. Without idempotency, a retry creates a second charge.
+  This lesson covers the complete server-side pattern for making a payment API safe to retry
+  without ever processing the same payment twice.
+</p>
+
+<div class="callout pass">
+  <strong>After this lesson you can:</strong>
+  Design an idempotency layer from scratch, handle the concurrent-duplicate race condition,
+  wire the Outbox Pattern for reliable event publishing, and explain every component to an interviewer.
+</div>
+
+<!-- ──────────── 1. WHY ──────────── -->
+<h2>1. The problem — why retries cause double charges</h2>
+
+<div class="diagram">Client                    API Server              DB
+  │                           │                       │
+  │── POST /payments ────────►│                       │
+  │   {amount: 100,           │── INSERT payment ────►│
+  │    idempotencyKey: "k1"}  │                       │
+  │                           │   ← 500 / timeout ────│  ← server crashed after write
+  │  [client sees no response]│                       │
+  │                           │
+  │── POST /payments ────────►│  ← RETRY
+  │   {amount: 100,           │── INSERT payment ────►│  ← DOUBLE CHARGE
+  │    idempotencyKey: "k1"}  │                       │</div>
+
+<p>
+  The client cannot tell if the first request succeeded or not.
+  If it retries without protection, the payment is processed twice.
+  <strong>Idempotency key</strong>: a client-generated unique token attached to every mutating request.
+  The server uses it to detect and suppress duplicates.
+</p>
+
+<!-- ──────────── 2. IDEMPOTENCY KEY ──────────── -->
+<h2>2. Idempotency key — rules</h2>
+
+<table>
+  <tr><th>Rule</th><th>Detail</th></tr>
+  <tr><td>Who generates it</td><td><strong>Client</strong> — UUID v4 before the first attempt. Never the server.</td></tr>
+  <tr><td>Scope</td><td>Per operation + per client. Same key = same payment. Different key = new payment.</td></tr>
+  <tr><td>Header</td><td><code>Idempotency-Key: &lt;uuid&gt;</code> — industry standard (Stripe, Adyen use this header)</td></tr>
+  <tr><td>Sent with</td><td>Every retry of the same request — identical payload + same key</td></tr>
+  <tr><td>Time-to-live</td><td>24 hours typical. After TTL, same key treated as a new request.</td></tr>
+  <tr><td>Missing key</td><td>Return 400 Bad Request — never process a payment without one</td></tr>
+</table>
+
+<!-- ──────────── 3. SERVER ALGORITHM ──────────── -->
+<h2>3. Server-side algorithm</h2>
+
+<div class="diagram">POST /payments
+  Idempotency-Key: k1
+         │
+         ▼
+  ┌─────────────────────────────────────────┐
+  │ 1. Validate request (amount, currency)  │
+  └─────────────┬───────────────────────────┘
+                │
+                ▼
+  ┌─────────────────────────────────────────┐
+  │ 2. Lookup idempotency key in DB         │
+  │    SELECT * FROM idempotency_records    │
+  │    WHERE key = 'k1' AND client_id = ?  │
+  └─────────────┬──────────────┬────────────┘
+                │              │
+           NOT FOUND        FOUND
+                │              │
+                ▼              ▼
+  ┌─────────────────┐   ┌────────────────────────┐
+  │ 3. INSERT key   │   │ status = PROCESSING?   │
+  │    status=PROC  │   │  → 409 Conflict        │
+  │    (unique idx) │   │ status = COMPLETED?    │
+  └──────┬──────────┘   │  → return cached result│
+         │              └────────────────────────┘
+         │ success
+         ▼
+  ┌─────────────────────────────────────────┐
+  │ 4. Execute payment (debit account)      │
+  │    + INSERT outbox event                │
+  │    [same DB transaction — atomic]       │
+  └─────────────┬───────────────────────────┘
+                │
+                ▼
+  ┌─────────────────────────────────────────┐
+  │ 5. UPDATE idempotency record            │
+  │    status = COMPLETED                   │
+  │    response_body = &lt;serialized result&gt;  │
+  └─────────────┬───────────────────────────┘
+                │
+                ▼
+         Return 201 Created</div>
+
+<!-- ──────────── 4. DB SCHEMA ──────────── -->
+<h2>4. Database schema</h2>
+
+<pre>
+-- Idempotency records table
+CREATE TABLE idempotency_records (
+    key         VARCHAR(64)   NOT NULL,
+    client_id   VARCHAR(64)   NOT NULL,
+    status      VARCHAR(16)   NOT NULL,   -- PROCESSING | COMPLETED | FAILED
+    request_hash VARCHAR(64)  NOT NULL,   -- SHA256 of request body
+    response    TEXT,                     -- serialised JSON of first response
+    expires_at  TIMESTAMPTZ   NOT NULL,
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    PRIMARY KEY (key, client_id)
+    -- unique constraint enforces exactly-once INSERT at DB level
+);
+
+-- Payments table
+CREATE TABLE payments (
+    id              UUID PRIMARY KEY,
+    idempotency_key VARCHAR(64)  NOT NULL,
+    amount          NUMERIC(19,4) NOT NULL,   -- never FLOAT
+    currency        CHAR(3)      NOT NULL,
+    status          VARCHAR(16)  NOT NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- Outbox table (Outbox Pattern — same transaction as payment)
+CREATE TABLE payment_outbox (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    payload     JSONB        NOT NULL,
+    published   BOOLEAN      NOT NULL DEFAULT false,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+</pre>
+
+<!-- ──────────── 5. RACE CONDITION ──────────── -->
+<h2>5. The concurrent duplicate race condition</h2>
+
+<p>
+  Two retries arrive simultaneously — both find the key absent at step 2, both try to INSERT.
+  Without protection, both proceed and the payment is charged twice.
+</p>
+
+<div class="callout warn">
+  <strong>Race window</strong>
+  Thread A: SELECT → not found → [context switch] → Thread B: SELECT → not found → both INSERT → double charge.
+</div>
+
+<h3>Fix: DB unique constraint + handle duplicate key exception</h3>
+
+<pre>
+-- The PRIMARY KEY (key, client_id) gives us a unique constraint for free.
+-- Two concurrent INSERTs: one wins, the other gets a unique violation.
+
+@Transactional
+public PaymentResult process(String idempotencyKey, String clientId, PaymentRequest req) {
+
+    try {
+        // Attempt to claim the slot — throws on duplicate
+        idempotencyRepo.insertProcessing(idempotencyKey, clientId, hash(req));
+
+    } catch (DataIntegrityViolationException e) {
+        // Another thread (or retry) already claimed this key
+        IdempotencyRecord record = idempotencyRepo.findByKey(idempotencyKey, clientId);
+
+        if (record.isProcessing()) {
+            // First request still in flight — tell client to retry later
+            throw new ConflictException("Payment is already being processed");
+        }
+        // First request completed — return stored result
+        return deserialize(record.getResponse());
+    }
+
+    // We own the key — execute the payment
+    PaymentResult result = paymentService.charge(req);
+
+    // Update record to COMPLETED + store response (same transaction)
+    idempotencyRepo.markCompleted(idempotencyKey, clientId, serialize(result));
+
+    return result;
+}
+</pre>
+
+<div class="callout">
+  <strong>Why unique constraint beats SELECT FOR UPDATE</strong>
+  <code>SELECT FOR UPDATE</code> locks the row — only works when the row exists.
+  On first insert there is no row to lock. Unique constraint on INSERT is the correct tool:
+  exactly one thread wins; the loser gets an exception to handle gracefully.
+</div>
+
+<!-- ──────────── 6. OUTBOX ──────────── -->
+<h2>6. Outbox Pattern — reliable event publishing</h2>
+
+<p>
+  After charging, you need to publish a <code>PaymentCompleted</code> event to Kafka/SNS
+  for downstream services (fraud detection, notifications, ledger).
+  Publishing after commit risks losing the event if the broker is down.
+  Publishing before commit risks publishing an event for a transaction that rolls back.
+</p>
+
+<div class="diagram">❌ Wrong — event lost if Kafka is down after commit:
+  BEGIN TX → charge account → COMMIT → publish to Kafka  ← can fail here
+
+❌ Wrong — ghost event if TX rolls back:
+  BEGIN TX → charge account → publish to Kafka ← event sent → ROLLBACK
+
+✅ Correct — Outbox Pattern:
+  BEGIN TX → charge account
+           → INSERT INTO payment_outbox (payload)  ← same transaction
+  COMMIT
+  [Outbox relay polls outbox table]
+  → publish to Kafka
+  → UPDATE payment_outbox SET published = true</div>
+
+<pre>
+-- Outbox relay (runs every 100ms, or triggered by DB LISTEN/NOTIFY)
+SELECT * FROM payment_outbox WHERE published = false ORDER BY created_at LIMIT 100;
+-- publish each to Kafka
+-- on ack: UPDATE payment_outbox SET published = true WHERE id = ?
+</pre>
+
+<div class="callout">
+  <strong>At-least-once + Kafka consumer deduplication</strong>
+  Outbox relay may publish the same event twice on crash/restart (before marking published=true).
+  Kafka consumers must deduplicate using the payment ID as the deduplication key.
+  Kafka idempotent producer (<code>enable.idempotence=true</code>) prevents producer-side duplicates.
+</div>
+
+<!-- ──────────── 7. REQUEST HASH ──────────── -->
+<h2>7. Request hash — guard against key reuse with different payload</h2>
+
+<p>
+  A misbehaving client might send the same idempotency key with a different amount.
+  Store a SHA-256 hash of the original request body. On retry, compare hashes.
+  If they differ → return 422 Unprocessable Entity ("Idempotency key already used for a different request").
+</p>
+
+<pre>
+String requestHash = sha256(objectMapper.writeValueAsString(request));
+
+if (existingRecord != null && !existingRecord.getRequestHash().equals(requestHash)) {
+    throw new UnprocessableEntityException(
+        "Idempotency key '" + key + "' was already used for a different request");
+}
+</pre>
+
+<!-- ──────────── 8. AWS ──────────── -->
+<h2>8. In AWS / Distributed environment</h2>
+
+<table>
+  <tr><th>Component</th><th>AWS equivalent</th><th>Key point</th></tr>
+  <tr><td>Idempotency store</td><td>DynamoDB with conditional write (<code>attribute_not_exists(pk)</code>)</td><td>Atomic "insert if not exists" across any number of nodes — no unique constraint needed</td></tr>
+  <tr><td>Payment DB</td><td>RDS Aurora PostgreSQL Multi-AZ</td><td>ACID transactions; unique constraint for idempotency still valid</td></tr>
+  <tr><td>Outbox relay</td><td>DynamoDB Streams → Lambda → SNS/SQS</td><td>Streams fire on INSERT; Lambda publishes to SNS; deduplication via SNS MessageDeduplicationId</td></tr>
+  <tr><td>Event bus</td><td>Amazon MSK (Kafka) or SQS FIFO</td><td>SQS FIFO: MessageGroupId per payment, MessageDeduplicationId = idempotency key → exactly-once delivery</td></tr>
+  <tr><td>API Gateway</td><td>ALB + ECS or API Gateway + Lambda</td><td>API Gateway has built-in request deduplication for Lambda (token-based) but not for arbitrary backends</td></tr>
+  <tr><td>Rate limiting</td><td>API Gateway usage plans or WAF rate rules</td><td>Limit retries per client to prevent thundering herd</td></tr>
+</table>
+
+<h3>DynamoDB conditional write (no SQL unique constraint)</h3>
+<pre>
+// Atomic "insert if not exists" — replaces the SQL unique constraint
+dynamoDB.putItem(PutItemRequest.builder()
+    .tableName("IdempotencyRecords")
+    .item(Map.of(
+        "pk",     AttributeValue.fromS(clientId + "#" + idempotencyKey),
+        "status", AttributeValue.fromS("PROCESSING"),
+        "ttl",    AttributeValue.fromN(String.valueOf(Instant.now().plusSeconds(86400).getEpochSecond()))
+    ))
+    .conditionExpression("attribute_not_exists(pk)")   // ← atomic check-and-set
+    .build());
+// ConditionalCheckFailedException = duplicate → handle same as DataIntegrityViolationException
+</pre>
+
+<h3>What breaks at scale without idempotency</h3>
+<ul style="margin: 0.5rem 0 1rem 1.5rem; line-height: 2;">
+  <li>Mobile clients on flaky connections retry aggressively → duplicate charges at scale</li>
+  <li>Load balancer health-check retries → payment service auto-retry → double debit</li>
+  <li>Kafka consumer at-least-once delivery → downstream ledger double-posts</li>
+  <li>Blue/green deploy mid-request → old pod dies, new pod retries the queued request</li>
+</ul>
+
+<!-- ──────────── QUIZ ──────────── -->
+<h2>9. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Who should generate the idempotency key — client or server?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Client — generated before the first attempt, sent with every retry of the same request</li>
+      <li>B) Server — generated after validating the request, returned to the client in the response</li>
+      <li>C) Either — it does not matter as long as it is unique</li>
+      <li>D) The API Gateway — it adds a correlation ID header automatically</li>
+    </ul>
+    <div class="explanation">The client must generate the key before the first attempt. If the server generated it, the client would need a round-trip before the first request — and the very first request could still be retried without a key. Client-generated UUID: the client knows the key before any network call happens, so every retry can include the same key from the start.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Two concurrent retries arrive simultaneously with the same key. The DB shows no existing record. What prevents a double charge?</p>
+    <ul class="options" data-correct="3">
+      <li>A) The server checks a Redis lock before inserting — only one request proceeds</li>
+      <li>B) The API Gateway deduplicates requests with the same header before they reach the service</li>
+      <li>C) A unique constraint (or DynamoDB conditional write) on the idempotency key — one INSERT wins, the other gets a duplicate key exception and returns the cached result</li>
+      <li>D) SELECT FOR UPDATE locks the idempotency record row before processing begins</li>
+    </ul>
+    <div class="explanation">SELECT FOR UPDATE only locks an existing row — on first insertion there is no row to lock. Redis lock adds a separate system to keep consistent. Unique constraint is atomic at the DB level: exactly one concurrent INSERT succeeds; the loser handles the exception. DynamoDB conditional write (attribute_not_exists) is the equivalent without SQL.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why store the payment event in an outbox table in the same transaction as the payment, rather than publishing directly to Kafka after commit?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Kafka does not support direct writes from a Spring Boot service</li>
+      <li>B) Publishing after commit: if Kafka is down, event is lost and the payment has no audit trail. Outbox: event is atomically saved with the payment — relay publishes when Kafka recovers</li>
+      <li>C) The outbox pattern is only needed when using SQS, not Kafka</li>
+      <li>D) Publishing before commit is always safe because Kafka has its own rollback mechanism</li>
+    </ul>
+    <div class="explanation">Dual-write problem: you cannot atomically commit to two separate systems (DB + Kafka) without a distributed transaction. Outbox solves this by writing only to the DB (one system), then a relay publishes to Kafka asynchronously. If Kafka is down: payment is safe in DB, outbox relay retries until Kafka recovers. No lost events, no ghost events.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. A client sends the same idempotency key but with a different request body (different amount). What should the server return?</p>
+    <ul class="options" data-correct="4">
+      <li>A) 200 OK — process the new amount, the key is reused legitimately</li>
+      <li>B) 409 Conflict — the key is already PROCESSING so the new request is rejected</li>
+      <li>C) 200 OK with the cached result from the first request, ignoring the new amount</li>
+      <li>D) 422 Unprocessable Entity — idempotency key was already used for a different request payload (detected via request hash mismatch)</li>
+    </ul>
+    <div class="explanation">Silently processing a different amount (A) is dangerous — client bug causes wrong charge. Returning the first result silently (C) is also wrong — the client thinks they charged a different amount but got the old result. The correct response is 422 with a clear error: "idempotency key already used for a different request." The request hash (SHA-256 of body) stored on first use enables this check.</div>
+  </div>
+
+</div>
+
+<footer>Lesson 01 · Idempotent Payment API · <a href="INDEX.md">← Index</a></footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Shopping Cart Offers Decorator</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 1.25rem 0 2rem; }
+  .question { margin: 1rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Shopping Cart Offers Decorator</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 25 min · Lesson 1 of N</div>
+
+<p>
+  This is the classic "Tesco basket" checkout kata: a shopping cart's total must change
+  when promotional offers are applied — Buy One Get One Free on a specific product, a
+  percentage-off voucher on the whole basket — and a customer's receipt can carry any
+  combination of these, applied in whatever order the retailer's rules say they should
+  stack. That's exactly the shape the <strong>Decorator Pattern</strong> exists for: wrap a
+  plain object in layers, each layer adding behaviour, without touching the object or the
+  other layers. First Decorator-pattern question in this project (State x3, Command,
+  Strategy, Specification, and Composite have all appeared before this).
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Given "design a shopping cart with offers," reach for Decorator instead of a
+  <code>List&lt;Offer&gt;</code> field on the cart, and explain precisely why construction
+  order (which decorator wraps which) is allowed to change the final total — and why that's
+  a feature of this design, not a bug.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. The tempting wrong shape, first</h2>
+
+<p>
+  The obvious first instinct: give <code>Cart</code> a <code>List&lt;Offer&gt;</code> field,
+  loop over it in <code>getTotal()</code>, and let each <code>Offer</code> adjust the running
+  total. It compiles, it's less code up front, and it works — right up until two offers need
+  to apply in a specific sequence relative to each other, or a caller wants "just BOGOF, no
+  voucher" for one customer and "voucher then BOGOF" for another.
+</p>
+
+<div class="callout warn">
+  <strong>Why the List&lt;Offer&gt; field falls over</strong>
+  A single internal loop has one fixed iteration order, controlled by <code>Cart</code>, not
+  by whoever is building a particular checkout. To express "apply BOGOF first, then take
+  10% off what's left" versus "take 10% off first, then apply BOGOF to the discounted
+  total" as two different scenarios, the ordering decision has to live outside
+  <code>Cart</code> entirely — in how the caller <em>composes</em> the pricing, not in a
+  list <code>Cart</code> iterates internally.
+</div>
+
+<p>
+  Decorator solves this by making each offer a wrapper around whatever
+  <code>PricedCart</code> it's given — which might be the plain cart, or might already be
+  another offer wrapped around the plain cart. Nesting constructor calls
+  (<code>new PercentageOffOffer(new BuyOneGetOneFreeOffer(cart, "Baked Beans"), ...)</code>)
+  becomes the mechanism for expressing "this order, not that one" — something a
+  <code>List&lt;Offer&gt;</code> field can't express as directly.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>2. Entities at a glance</h2>
+
+<div class="diagram">Shopping Cart Offers — Core Entities
+
+  PricedCart (interface)                 ← Decorator component
+    ├── BasicCart               (Concrete Component)
+    └── CartOfferDecorator      (abstract Decorator, wraps a PricedCart)
+          ├── BuyOneGetOneFreeOffer   (Concrete Decorator)
+          └── PercentageOffOffer      (Concrete Decorator)
+
+  CartItem   (productName, BigDecimal unitPrice, int quantity)</div>
+
+<table>
+  <tr><th>Entity</th><th>Key responsibility</th><th>Interview signal</th></tr>
+  <tr><td><code>PricedCart</code></td><td>getItems() / getTotal() — the shared contract every layer honours</td><td>No offer-specific methods here — keeps the interface stable as new offer types are added</td></tr>
+  <tr><td><code>BasicCart</code></td><td>Plain totals, zero offer awareness</td><td>Never edited when a new offer type is introduced — Open/Closed in practice</td></tr>
+  <tr><td><code>CartOfferDecorator</code></td><td>Holds the wrapped cart, forwards getItems() unchanged</td><td>Written once so every concrete offer doesn't re-implement pass-through</td></tr>
+  <tr><td><code>BuyOneGetOneFreeOffer</code></td><td>Subtracts free-unit value for one named product</td><td>Integer division on quantity — no rounding policy needed</td></tr>
+  <tr><td><code>PercentageOffOffer</code></td><td>Discounts whatever total the layer beneath already produced</td><td>The class that makes wrapping order visibly matter</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>3. TDD, red → green: BasicCart and the component interface</h2>
+
+<pre>
+// RED — nothing compiles yet
+@Test
+void basicCartTotalsAllLineItemsWithNoOffers() {
+    BasicCart cart = new BasicCart();
+    cart.addItem(new CartItem("Baked Beans", new BigDecimal("1.00"), 5));
+    cart.addItem(new CartItem("Bread", new BigDecimal("1.20"), 2));
+
+    assertEquals(0, cart.getTotal().compareTo(new BigDecimal("7.40")));
+}
+</pre>
+
+<pre>
+// GREEN
+public interface PricedCart {
+    List&lt;CartItem&gt; getItems();
+    BigDecimal getTotal();
+}
+
+public class BasicCart implements PricedCart {
+    private final List&lt;CartItem&gt; items = new ArrayList&lt;&gt;();
+
+    public void addItem(CartItem item) { items.add(item); }
+
+    @Override
+    public List&lt;CartItem&gt; getItems() { return Collections.unmodifiableList(items); }
+
+    @Override
+    public BigDecimal getTotal() {
+        return items.stream().map(CartItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}
+</pre>
+
+<div class="callout">
+  <strong>Why getItems() returns an unmodifiable view</strong>
+  Decorators need to inspect quantities (BOGOF has to count how many units of its target
+  product are in the basket) — so <code>getItems()</code> has to exist on the interface, not
+  just <code>getTotal()</code>. Returning the live, mutable list would let a decorator that's
+  only supposed to be computing a price accidentally mutate the basket, corrupting
+  <code>getTotal()</code> for every other decorator wrapped around the same cart.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q1">
+    <p>Q1. Why does <code>PricedCart</code> need a <code>getItems()</code> method at all,
+    given that the interface's whole purpose is pricing (<code>getTotal()</code>)?</p>
+    <ul class="options" data-correct="2">
+      <li>A) JUnit requires every interface under test to expose its internal state</li>
+      <li>B) BuyOneGetOneFreeOffer needs to find its target product's quantity, and it can only reach that data through the shared interface — however many decorator layers are wrapped in between</li>
+      <li>C) It doesn't — getItems() could be removed with no effect on any offer</li>
+      <li>D) BasicCart's getTotal() implementation internally calls getItems() so it must be public</li>
+    </ul>
+    <div class="explanation">Without getItems() on the interface, a decorator wrapping another decorator would have no way to inspect what's actually in the basket — it could only see whatever getTotal() the previous layer chose to report, which isn't enough information to compute a product-specific discount like BOGOF.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. CartOfferDecorator and BuyOneGetOneFreeOffer</h2>
+
+<pre>
+// <span class="kw-pat">Pattern: Decorator — the abstract base every concrete offer extends,
+// so "pass getItems() through unchanged" is written exactly once.</span>
+public abstract class CartOfferDecorator implements PricedCart {
+    protected final PricedCart wrapped;
+
+    protected CartOfferDecorator(PricedCart wrapped) { this.wrapped = wrapped; }
+
+    @Override
+    public List&lt;CartItem&gt; getItems() { return wrapped.getItems(); }
+}
+
+public class BuyOneGetOneFreeOffer extends CartOfferDecorator {
+    private final String targetProductName;
+
+    public BuyOneGetOneFreeOffer(PricedCart wrapped, String targetProductName) {
+        super(wrapped);
+        this.targetProductName = targetProductName;
+    }
+
+    @Override
+    public BigDecimal getTotal() {
+        BigDecimal total = wrapped.getTotal();
+        for (CartItem item : getItems()) {
+            if (item.getProductName().equals(targetProductName)) {
+                int freeUnits = item.getQuantity() / 2;
+                BigDecimal discount = item.getUnitPrice().multiply(BigDecimal.valueOf(freeUnits));
+                return total.subtract(discount);
+            }
+        }
+        return total;
+    }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Why integer division (quantity / 2), not quantity * 0.5</strong>
+  5 units of Baked Beans should give exactly 2 free units, not a fractional 2.5 that then
+  needs a rounding rule nobody specified. Integer division makes "how many free units" an
+  exact, unambiguous integer computation with no rounding-mode decision to get wrong later.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q2">
+    <p>Q2. <code>BuyOneGetOneFreeOffer.getTotal()</code> calls
+    <code>getItems()</code> (inherited from <code>CartOfferDecorator</code>) rather than
+    reaching into a concrete <code>BasicCart</code> directly. Why does that matter?</p>
+    <ul class="options" data-correct="1">
+      <li>A) It means this offer works correctly whether it's wrapping BasicCart directly or wrapping another decorator that's wrapping BasicCart — it never needs to know or care how deep the stack goes</li>
+      <li>B) Direct field access on BasicCart would be a compile error in Java</li>
+      <li>C) getItems() is faster than accessing a List field directly</li>
+      <li>D) It doesn't matter — casting to BasicCart would work identically in every case</li>
+    </ul>
+    <div class="explanation">If BuyOneGetOneFreeOffer cast its wrapped reference to BasicCart, it would break the moment another offer was wrapped in between it and the concrete cart — exactly the "stack offers in any order" requirement this whole exercise is built around. Depending only on the PricedCart interface is what makes arbitrary stacking possible.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>5. PercentageOffOffer — where wrapping order becomes visible</h2>
+
+<pre>
+public class PercentageOffOffer extends CartOfferDecorator {
+    private final BigDecimal percentage;
+
+    public PercentageOffOffer(PricedCart wrapped, BigDecimal percentage) {
+        super(wrapped);
+        this.percentage = percentage;
+    }
+
+    @Override
+    public BigDecimal getTotal() {
+        BigDecimal total = wrapped.getTotal();
+        BigDecimal discountFraction = percentage.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+        return total.multiply(BigDecimal.ONE.subtract(discountFraction));
+    }
+}
+</pre>
+
+<p>
+  The test that actually justifies Decorator over the rejected <code>List&lt;Offer&gt;</code>
+  design is this one — two offers, two different construction orders, two different totals:
+</p>
+
+<pre>
+@Test
+void wrappingOrderChangesTheFinalTotal() {
+    PricedCart bogofThenPercent = new PercentageOffOffer(
+            new BuyOneGetOneFreeOffer(cart, "Baked Beans"), new BigDecimal("10"));
+    PricedCart percentThenBogof = new BuyOneGetOneFreeOffer(
+            new PercentageOffOffer(cart, new BigDecimal("10")), "Baked Beans");
+
+    // BOGOF first (7.40 - 2.00 = 5.40), then 10% off: 5.40 * 0.90 = 4.86
+    assertEquals(0, bogofThenPercent.getTotal().compareTo(new BigDecimal("4.8600")));
+    // 10% off first (7.40 * 0.90 = 6.66), then BOGOF's flat 2.00 off: 6.66 - 2.00 = 4.66
+    assertEquals(0, percentThenBogof.getTotal().compareTo(new BigDecimal("4.66")));
+}
+</pre>
+
+<div class="callout">
+  <strong>Neither order is "wrong"</strong>
+  Whether a percentage voucher applies before or after a BOGOF discount is a real business
+  rule question (receipts genuinely differ between retailers and voucher terms) — Decorator
+  doesn't decide that for you, it just makes both orders equally easy to construct, and
+  makes the choice explicit at the call site instead of buried inside a loop.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q3">
+    <p>Q3. Why does <code>percentage.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)</code>
+    specify a scale and rounding mode, instead of a plain <code>percentage.divide(BigDecimal.valueOf(100))</code>?</p>
+    <ul class="options" data-correct="4">
+      <li>A) BigDecimal.divide() without arguments always returns zero</li>
+      <li>B) It's purely stylistic — both forms behave identically for every possible percentage</li>
+      <li>C) RoundingMode is required syntax in Java 21 and has no effect on the actual result</li>
+      <li>D) An unscaled divide() throws ArithmeticException the moment a caller passes a percentage that doesn't divide 100 into a terminating decimal (e.g. 33.33...%) — a real crash risk, not a hypothetical</li>
+    </ul>
+    <div class="explanation">BigDecimal.divide(BigDecimal) with no scale/rounding arguments throws ArithmeticException whenever the exact quotient has a non-terminating decimal expansion. A percentage like one-third off would hit that immediately in production; specifying a scale and rounding mode sidesteps the crash entirely.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>6. What interviewers are actually probing</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>Why Decorator over a List&lt;Offer&gt; field on Cart?</td><td>Decorator lets the caller choose and express stacking order via construction; a single internal loop has one fixed order</td></tr>
+  <tr><td>Why does the abstract CartOfferDecorator exist?</td><td>So "pass getItems() through unchanged" is written once, not copy-pasted into every concrete offer</td></tr>
+  <tr><td>Why integer division for BOGOF free units?</td><td>Avoids inventing a rounding policy for fractional free units nobody asked for</td></tr>
+  <tr><td>Why does wrapping order change the total, and is that a bug?</td><td>No — it's the intended behaviour; which order is "correct" is a business/voucher-terms question Decorator deliberately leaves to the caller</td></tr>
+  <tr><td>Why scale + RoundingMode on the percentage divide?</td><td>Unscaled BigDecimal.divide() throws on non-terminating decimals — a real percentage like 33.33...% would crash it</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unclear on why offers can't just live as a List field on Cart, or want to talk through
+  what a third offer type (e.g. "3 for 2") would need to look like? Ask before moving to the
+  question.
+</div>
+
+<footer>
+  Lesson 01 · Shopping Cart Offers Decorator · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

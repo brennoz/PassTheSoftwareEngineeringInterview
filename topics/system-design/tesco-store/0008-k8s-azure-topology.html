@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — K8s/Azure Infrastructure Topology</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin: 1rem 0 2rem;
+            font-size: 0.85rem; font-family: monospace; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+  .legend-swatch { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0007-store-central-sync.html">← File 7</a></div>
+
+<h1>K8s/Azure Infrastructure Topology</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 8 of 12</div>
+
+<p>
+  Zooming out from individual services to the full infra picture: central AKS, the store-edge
+  fleet, and — the genuinely hard part of this domain — how you deploy and observe
+  configuration across thousands of independently-running edge clusters without either a
+  central bottleneck or losing visibility into which store is running what.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Central AKS</h2>
+
+<table>
+  <tr><th>Concern</th><th>Choice</th><th>Why</th></tr>
+  <tr><td>Cluster topology</td><td>Multi-AZ within a region, one primary region + a warm secondary for DR</td><td>A single-AZ central outage would be a genuinely bad failure mode given every store's sync path depends on central being reachable eventually — file 0010 covers exactly how bad</td></tr>
+  <tr><td>Ingress</td><td>Azure Application Gateway Ingress Controller (or Azure Front Door if central serves any public-facing traffic too)</td><td>WAF capability at the edge of central, TLS termination, path-based routing to services</td></tr>
+  <tr><td>Namespace layout</td><td>One namespace per bounded context (pricing, inventory, promotions, loyalty, reporting)</td><td>Mirrors the service boundaries from file 0006 — RBAC and network policy naturally scope to the same boundary, no separate mental model needed</td></tr>
+  <tr><td>Autoscaling</td><td>HPA per service on CPU/custom metric (e.g. queue depth for consumers), cluster autoscaler for node pools</td><td>Central load is spikier than any single store (aggregates all 3,000 stores' sync traffic) — needs to breathe with trading patterns (Christmas Eve peak vs a quiet Tuesday)</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>2. Fleet topology diagram</h2>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#dcfce7;border-color:#16a34a"></div>Central AKS</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#fef9c3;border-color:#ca8a04"></div>Azure Arc control plane</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#dbeafe;border-color:#2563eb"></div>Store-edge K3s (× ~3,000)</div>
+</div>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 620" font-family="Menlo,Consolas,monospace" font-size="11">
+  <rect width="1180" height="620" fill="#fafafa"/>
+
+  <!-- Central AKS -->
+  <rect x="30" y="30" width="360" height="220" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="210" y="53" text-anchor="middle" font-weight="bold" fill="#14532d" font-size="13">Central AKS (region pair)</text>
+  <rect x="50" y="68" width="150" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="125" y="89" text-anchor="middle" fill="#14532d" font-size="10">pricing ns</text>
+  <rect x="210" y="68" width="150" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="285" y="89" text-anchor="middle" fill="#14532d" font-size="10">inventory ns</text>
+  <rect x="50" y="110" width="150" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="125" y="131" text-anchor="middle" fill="#14532d" font-size="10">promotions ns</text>
+  <rect x="210" y="110" width="150" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="285" y="131" text-anchor="middle" fill="#14532d" font-size="10">loyalty ns</text>
+  <rect x="50" y="152" width="310" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+  <text x="205" y="173" text-anchor="middle" fill="#14532d" font-size="10">reporting ns (consumes events, no hot path)</text>
+  <text x="210" y="205" text-anchor="middle" fill="#14532d" font-size="9">HPA per service · multi-AZ · warm DR region</text>
+  <text x="210" y="222" text-anchor="middle" fill="#14532d" font-size="9">App Gateway ingress · Service Bus for sync</text>
+  <text x="210" y="238" text-anchor="middle" fill="#14532d" font-size="9">source of Git repo state for fleet rollout</text>
+
+  <!-- Azure Arc control plane -->
+  <rect x="30" y="280" width="360" height="110" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="210" y="303" text-anchor="middle" font-weight="bold" fill="#713f12" font-size="13">Azure Arc control plane</text>
+  <text x="210" y="322" text-anchor="middle" fill="#713f12" font-size="9">registers every store's K3s cluster</text>
+  <text x="210" y="338" text-anchor="middle" fill="#713f12" font-size="9">policy + monitoring + Flux GitOps source</text>
+  <text x="210" y="354" text-anchor="middle" fill="#713f12" font-size="9">single pane of glass for ~3,000 clusters</text>
+  <text x="210" y="373" text-anchor="middle" fill="#713f12" font-size="9">(fleet config lives here, not pushed centrally)</text>
+
+  <path d="M210 250 L210 280" stroke="#713f12" stroke-width="2" marker-end="url(#arrowY)"/>
+
+  <!-- Ring rollout -->
+  <rect x="420" y="30" width="730" height="360" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="785" y="53" text-anchor="middle" font-weight="bold" fill="#334155" font-size="13">Rollout rings (Flux pulls per store, file 0002)</text>
+
+  <!-- Ring 1: canary -->
+  <rect x="445" y="75" width="200" height="290" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="545" y="98" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Ring 1: Canary</text>
+  <text x="545" y="114" text-anchor="middle" fill="#1e3a8a" font-size="9">~10 pilot stores</text>
+  <rect x="460" y="130" width="170" height="26" rx="3" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="545" y="147" text-anchor="middle" fill="#1e3a8a" font-size="9">Store #0412 (K3s)</text>
+  <rect x="460" y="160" width="170" height="26" rx="3" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="545" y="177" text-anchor="middle" fill="#1e3a8a" font-size="9">Store #1187 (K3s)</text>
+  <rect x="460" y="190" width="170" height="26" rx="3" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="545" y="207" text-anchor="middle" fill="#1e3a8a" font-size="9">... 8 more</text>
+  <text x="545" y="245" text-anchor="middle" fill="#1e3a8a" font-size="9">bake period,</text>
+  <text x="545" y="260" text-anchor="middle" fill="#1e3a8a" font-size="9">Azure Monitor</text>
+  <text x="545" y="275" text-anchor="middle" fill="#1e3a8a" font-size="9">watches error rate</text>
+
+  <path d="M645 220 L700 220" stroke="#334155" stroke-width="2" marker-end="url(#arrowS)"/>
+  <text x="672" y="212" text-anchor="middle" fill="#334155" font-size="9">promote</text>
+
+  <!-- Ring 2: region -->
+  <rect x="705" y="75" width="200" height="290" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="805" y="98" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Ring 2: Region</text>
+  <text x="805" y="114" text-anchor="middle" fill="#1e3a8a" font-size="9">~200 stores, one region</text>
+  <rect x="720" y="130" width="170" height="26" rx="3" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <text x="805" y="147" text-anchor="middle" fill="#1e3a8a" font-size="9">North-West stores</text>
+  <text x="805" y="245" text-anchor="middle" fill="#1e3a8a" font-size="9">bake period,</text>
+  <text x="805" y="260" text-anchor="middle" fill="#1e3a8a" font-size="9">same monitors</text>
+
+  <path d="M905 220 L960 220" stroke="#334155" stroke-width="2" marker-end="url(#arrowS)"/>
+  <text x="932" y="212" text-anchor="middle" fill="#334155" font-size="9">promote</text>
+
+  <!-- Ring 3: all -->
+  <rect x="965" y="75" width="165" height="290" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="1047" y="98" text-anchor="middle" fill="#1e3a8a" font-weight="bold">Ring 3: All</text>
+  <text x="1047" y="114" text-anchor="middle" fill="#1e3a8a" font-size="9">~3,000 stores</text>
+  <text x="1047" y="200" text-anchor="middle" fill="#1e3a8a" font-size="9">full fleet,</text>
+  <text x="1047" y="215" text-anchor="middle" fill="#1e3a8a" font-size="9">each store's</text>
+  <text x="1047" y="230" text-anchor="middle" fill="#1e3a8a" font-size="9">Flux agent pulls</text>
+  <text x="1047" y="245" text-anchor="middle" fill="#1e3a8a" font-size="9">independently</text>
+
+  <path d="M400 335 L440 335" stroke="#713f12" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowY)"/>
+  <text x="420" y="325" text-anchor="middle" fill="#713f12" font-size="8">config</text>
+
+  <defs>
+    <marker id="arrowY" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#713f12"/></marker>
+    <marker id="arrowS" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#334155"/></marker>
+  </defs>
+</svg>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Store connectivity — how a store actually reaches central</h2>
+
+<table>
+  <tr><th>Option</th><th>Trade-off</th></tr>
+  <tr><td>Azure ExpressRoute per store</td><td>Most reliable, private, predictable latency — but expensive per site at ~3,000 locations; the "gold standard" answer if cost weren't a constraint</td></tr>
+  <tr><td><strong>SD-WAN / site-to-site VPN over public internet, mTLS end to end</strong> (recommended default)</td><td>Pragmatic middle ground — standard broadband/leased line per store, encrypted tunnel, far cheaper at fleet scale, and the whole design already assumes WAN can be unreliable (file 0007, 0010), so it doesn't need ExpressRoute-grade guarantees to work correctly</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>The framing that ties this together</strong>
+  Because every store-edge service except Store-Sync is designed to tolerate WAN loss (file
+  0003's boundary rule), the connectivity choice becomes a cost/reliability trade-off rather
+  than a correctness requirement — a cheaper, less reliable link is an acceptable choice
+  specifically BECAUSE the architecture was already built to not depend on it being perfect.
+  That's worth saying explicitly: it shows the infra decision follows from the application
+  design, not the other way around.
+</div>
+
+<footer>
+  Tesco System Design Prep · File 8 of 12 · Next:
+  <a href="0009-payment-pci-dss.html">0009 — Payment/PCI-DSS</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

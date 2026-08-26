@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Prep — Java / Spring / AWS Quickfire (NatWest)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.7; color: var(--ink);
+    max-width: 860px; margin: 0 auto; padding: 3rem 2rem 6rem;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1.02rem; margin: 0; font-weight: bold; }
+  p  { margin: 0.5rem 0; }
+  ul, ol { padding-left: 1.5rem; margin: 0.4rem 0; }
+  li { margin: 0.25rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto;
+    margin: 0.5rem 0; line-height: 1.55;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.86rem; }
+  th { background: var(--bg-soft); text-align: left; padding: 0.4rem 0.7rem; border: 1px solid var(--border); }
+  td { padding: 0.4rem 0.7rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .callout { background: var(--bg-note); border-left: 4px solid var(--accent); padding: 0.9rem 1.1rem; margin: 1.2rem 0; border-radius: 0 4px 4px 0; }
+  .callout-warn { background: var(--bg-warn); border-left-color: #d97706; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+
+  /* ── Q&A card ── */
+  .qa { border: 1px solid var(--border); border-radius: 6px; margin: 0.9rem 0; overflow: hidden; }
+  .qa .q { background: var(--bg-soft); padding: 0.6rem 1rem; font-weight: bold; font-size: 0.98rem; }
+  .say { background: var(--bg-say); border-left: 4px solid var(--say-border); padding: 0.7rem 1rem; margin: 0; font-size: 0.94rem; }
+  .say .tag { font-family: 'Menlo', monospace; font-size: 0.7rem; font-weight: bold; color: var(--say-border); letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+  details { padding: 0.6rem 1rem; font-size: 0.9rem; border-top: 1px dashed var(--border); }
+  details summary { cursor: pointer; font-weight: bold; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.03em; font-family: 'Menlo', monospace; }
+  details summary:hover { color: var(--accent); }
+  details .body { margin-top: 0.5rem; }
+
+  .badge { display: inline-block; font-size: 0.76rem; padding: 0.1em 0.5em; border-radius: 3px; font-weight: bold; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e0e0e0; --muted: #aaa; --border: #444;
+      --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+      --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+    }
+    body { background: #1a1a1a; }
+    pre { background: #111 !important; }
+    table th { background: #2a2a2a; }
+    table tr:nth-child(even) { background: #222; }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e0e0e0; --muted: #aaa; --border: #444;
+    --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+    --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+  }
+  :root[data-theme="light"] {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+</style>
+</head>
+<body>
+
+<h1>Interview Prep — Java / Spring / AWS Quickfire</h1>
+<p class="meta">
+  <span class="badge badge-blue">NatWest</span>
+  <span class="badge badge-amber">1st technical round</span>
+  &nbsp;·&nbsp; Format: quickfire, 30–45 sec per answer, expand only if pushed
+</p>
+
+<div class="callout">
+  <strong>Framing reminder:</strong> lead every answer with Java. Do not describe yourself as tech-agnostic — the previous rejection was explicitly on this point. If a question touches another language or a "which tool would you pick" fork, land the answer on the Java/Spring-first option and mention alternatives only as a footnote if asked.
+</div>
+
+<div class="callout callout-warn">
+  <strong>Style reminder:</strong> a recent candidate was rejected for being "too long-winded... stylistically not right." Every card below has a <strong>SAY THIS</strong> box — that is the actual spoken answer, 1–3 sentences. The <code>▸ if pushed</code> details are for follow-ups only. Do not open the details box out loud unless they ask "can you go deeper."
+</div>
+
+<hr>
+
+<h2 id="core">Java Core</h2>
+
+<div class="qa">
+  <div class="q">What's the difference between a primitive and an object reference in Java?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A primitive (<code>int</code>, <code>boolean</code>, <code>long</code>...) holds its value directly on the stack — fixed size, no identity, compared with <code>==</code> by value. An object reference holds a pointer to heap memory; the variable itself is the reference, and <code>==</code> compares reference identity, not content, which is why we use <code>.equals()</code> for objects.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Autoboxing (<code>Integer</code> caching -128 to 127) is the classic gotcha — <code>Integer a = 200; Integer b = 200; a == b</code> is <code>false</code> outside the cache range. Wrapper types also mean null is a valid "value" for a boxed primitive, which primitives can never be — a common NPE source when a DB column is nullable and mapped to an <code>int</code> instead of <code>Integer</code>.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">ArrayList vs LinkedList?</div>
+  <div class="say"><span class="tag">SAY THIS</span>ArrayList is backed by a resizable array — O(1) random access, O(n) insert/remove in the middle because elements shift. LinkedList is a doubly-linked list — O(1) insert/remove once you have the node, O(n) to get there by index. I default to ArrayList; LinkedList only wins with heavy head/tail churn and no random access need.</div>
+  <details><summary>▸ if pushed</summary><div class="body">ArrayList's resize is amortized O(1) (grows by 50%, copies old array). LinkedList's per-node overhead (two pointers + object header, ~40 bytes extra per element) plus poor cache locality means in practice ArrayList often outperforms LinkedList even for insert-heavy workloads at moderate size — CPU cache misses dominate over the theoretical shift cost. <code>ArrayDeque</code> beats LinkedList for stack/queue use cases entirely.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's a functional interface?</div>
+  <div class="say"><span class="tag">SAY THIS</span>An interface with exactly one abstract method — that single-method shape is what lets a lambda or method reference be assigned to it. <code>@FunctionalInterface</code> is optional but documents intent and makes the compiler enforce the single-method rule. <code>Runnable</code>, <code>Comparator</code>, and the whole <code>java.util.function</code> package (<code>Function</code>, <code>Predicate</code>, <code>Supplier</code>, <code>Consumer</code>) are examples.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Default and static methods don't count against the single-abstract-method rule — an interface can have many default methods and still be functional as long as only one method is unimplemented. <code>Function.andThen</code>/<code>compose</code> and <code>Predicate.and</code>/<code>or</code>/<code>negate</code> are default methods that let you chain functional interfaces without extra boilerplate.</div></details>
+</div>
+
+<hr>
+
+<h2 id="concurrency">Multithreading &amp; Concurrency</h2>
+
+<div class="qa">
+  <div class="q">Callable vs Runnable?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Both represent a unit of work to hand to a thread or executor. <code>Runnable.run()</code> returns void and can't throw checked exceptions. <code>Callable&lt;V&gt;.call()</code> returns a value and can throw checked exceptions — that's why <code>ExecutorService.submit(Callable)</code> gives you a <code>Future&lt;V&gt;</code> you can actually get a result from, versus <code>submit(Runnable)</code> which gives you a <code>Future&lt;?&gt;</code> that's only useful for knowing when it's done.</div>
+  <details><summary>▸ if pushed</summary><div class="body">In a Spring Boot service, <code>@Async</code> methods returning <code>CompletableFuture&lt;T&gt;</code> have mostly replaced raw <code>Callable</code> submission for business logic — but <code>Callable</code> is still what you reach for with a plain <code>ExecutorService</code> when you need the checked-exception propagation without wrapping in a <code>RuntimeException</code>.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's the Lock interface?</div>
+  <div class="say"><span class="tag">SAY THIS</span><code>java.util.concurrent.locks.Lock</code> is an explicit alternative to <code>synchronized</code> — <code>ReentrantLock</code> is the main implementation. It gives you things <code>synchronized</code> can't: <code>tryLock()</code> with a timeout instead of blocking forever, interruptible locking, and fairness policies. You must manually <code>unlock()</code> in a <code>finally</code> block, which is the main risk versus <code>synchronized</code>'s automatic release.</div>
+  <details><summary>▸ if pushed</summary><div class="body"><code>ReadWriteLock</code> (via <code>ReentrantReadWriteLock</code>) lets multiple readers hold the lock concurrently while writers get exclusive access — useful for a cache that's read-heavy. In a banking context I'd reach for optimistic locking (<code>@Version</code> on a JPA entity) over explicit Locks for balance updates, since Locks are per-JVM and don't help across multiple pod replicas — that needs a DB-level or Redis-level lock instead.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's a CompletableFuture?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A <code>Future</code> that supports composition and callbacks instead of just blocking <code>get()</code>. You can chain with <code>thenApply</code>/<code>thenCompose</code> for sequential async steps, fan out and join with <code>allOf</code>, and handle errors with <code>exceptionally</code> or <code>handle</code> — all without manually managing threads.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Common pitfall: default <code>thenApply</code>/<code>thenAccept</code> run on the same thread that completed the previous stage, which can be a shared <code>ForkJoinPool.commonPool()</code> thread — a slow callback there starves unrelated parallel streams elsewhere in the JVM. Use the <code>Async</code> variants with an explicit <code>Executor</code> for anything non-trivial. <code>get()</code> throws checked <code>ExecutionException</code>; <code>join()</code> throws unchecked <code>CompletionException</code> — <code>join()</code> is usually cleaner inside lambdas.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's an Observable?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Depends on context — classic GoF Observer pattern is one-to-many: subjects notify registered observers on state change. In reactive programming (RxJava, or Project Reactor's <code>Mono</code>/<code>Flux</code> in Spring WebFlux), an Observable is an async stream of 0..N values over time that you subscribe to, with operators like <code>map</code>/<code>filter</code>/<code>flatMap</code> composed declaratively — same shape as a Java Stream but push-based and async instead of pull-based and synchronous.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Spring's own idiom is <code>Mono&lt;T&gt;</code> (0 or 1 value) and <code>Flux&lt;T&gt;</code> (0..N values) rather than RxJava's <code>Observable</code>/<code>Single</code> directly, though they're conceptually the same reactive-streams contract underneath (backpressure included). I'd mention I've used <code>CompletableFuture</code> more than full reactive pipelines day-to-day, and would ramp on WebFlux specifics if the role needs it.</div></details>
+</div>
+
+<hr>
+
+<h2 id="spring">Spring</h2>
+
+<div class="qa">
+  <div class="q">What's the context in Spring?</div>
+  <div class="say"><span class="tag">SAY THIS</span>The <code>ApplicationContext</code> is Spring's IoC container — it reads configuration (annotations, XML, or Java config), instantiates beans, wires their dependencies, manages their lifecycle, and publishes application events. When people say "the Spring context" they mean this container and everything it's holding.</div>
+  <details><summary>▸ if pushed</summary><div class="body"><code>@SpringBootTest</code> boots a real (sliced or full) context for integration tests — expensive, which is why unit tests with Mockito that don't load any context are preferred for fast feedback. Context refresh order matters for <code>@PostConstruct</code>/bean lifecycle bugs — a bean depending on another that isn't fully initialized yet is a classic circular-dependency or ordering issue.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Mock vs Spy bean?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A Mockito <code>@Mock</code> is a fully fake object — every method returns a default/stubbed value unless you tell it otherwise. A <code>@Spy</code> wraps a real object — real methods actually run unless you explicitly stub them with <code>doReturn().when()</code>. Spring's <code>@MockBean</code>/<code>@SpyBean</code> do the same thing but also replace the bean inside the Spring context for that test.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Spy is riskier because it can trigger real side effects (a real DB call, a real HTTP call) if you forget to stub a method that gets invoked — I default to full mocks unless I specifically need to verify interaction with real logic on part of the object. <code>@MockBean</code> triggers a context reload if used inconsistently across test classes, which slows the suite — worth being consistent about which tests need it.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Prototype bean vs singleton bean?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Singleton (Spring's default scope) means one shared instance per container — reused everywhere it's injected. Prototype means a new instance is created every time the bean is requested/injected. Singleton is the right default for stateless services; prototype is for anything that holds per-use mutable state.</div>
+  <details><summary>▸ if pushed</summary><div class="body">The gotcha: injecting a prototype bean into a singleton via field injection only resolves it once, at the singleton's construction — you get the same prototype instance forever, defeating the point. Fix is a <code>ObjectProvider&lt;T&gt;</code>/<code>ObjectFactory&lt;T&gt;</code> or a lookup-method injection so a fresh instance is fetched on every call.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What is @ControllerAdvice?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A cross-cutting exception handler for <code>@Controller</code>/<code>@RestController</code> classes — instead of try/catch in every endpoint, you centralize error handling in one class with <code>@ExceptionHandler</code> methods per exception type, mapping domain exceptions to consistent HTTP status codes and error response bodies.</div>
+  <details><summary>▸ if pushed</summary><div class="body">In a banking API this is where I'd map, say, <code>InsufficientFundsException</code> → 422, <code>OptimisticLockingFailureException</code> → 409 with a retry hint, and a catch-all handler that logs the full exception server-side but returns a generic message to the client — never leaking stack traces or internal exception messages externally, which matters for PCI-DSS-adjacent APIs.</div></details>
+</div>
+
+<hr>
+
+<h2 id="testing">Testing / TDD</h2>
+
+<div class="qa">
+  <div class="q">JUnit annotations — what does @ExtendWith do?</div>
+  <div class="say"><span class="tag">SAY THIS</span><code>@ExtendWith</code> is JUnit 5's extension mechanism — it registers a class that hooks into the test lifecycle. <code>@ExtendWith(MockitoExtension.class)</code> is the common one — it initializes <code>@Mock</code> fields automatically, replacing JUnit 4's <code>MockitoJUnitRunner</code>. Other core annotations: <code>@Test</code>, <code>@BeforeEach</code>/<code>@AfterEach</code> (per-test setup/teardown), <code>@BeforeAll</code>/<code>@AfterAll</code> (static, once per class), <code>@ParameterizedTest</code> with <code>@ValueSource</code>/<code>@CsvSource</code>/<code>@MethodSource</code> for data-driven tests.</div>
+  <details><summary>▸ if pushed</summary><div class="body"><code>@ExtendWith</code> composes — you can stack multiple extensions (e.g. Mockito + a custom clock-freezing extension) rather than being locked into one Runner like JUnit 4. <code>@Nested</code> lets you group related tests in an inner class for readability, sharing outer setup.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">How would you efficiently test a method that validates a string?</div>
+  <div class="say"><span class="tag">SAY THIS</span><code>@ParameterizedTest</code> with <code>@CsvSource</code> or <code>@MethodSource</code> — one test method, many input/expected-output rows, instead of copy-pasting a test per case. I'd cover: valid input, empty string, null, whitespace-only, max-length boundary, one-over-max-length, and any format-specific edge case (e.g. a sort code needing exactly 6 digits).</div>
+  <details><summary>▸ if pushed</summary><div class="body">Per this course's own test-count convention: 2–4 focused tests, not 8 — group boundary cases into one parameterized test rather than one test method per case, keep the happy path and one meaningful failure path separate and named clearly. I'd explicitly avoid asserting internal implementation details (e.g. exact regex used) — assert behavior (accepted/rejected), not mechanism.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Talk to me about TDD.</div>
+  <div class="say"><span class="tag">SAY THIS</span>Red-green-refactor: write a failing test that describes the behavior you want, write the minimum code to pass it, then refactor with the safety net of a passing test. For a bank, TDD's real value isn't ceremony — it's that a ledger or payment method has one shot to be correct, and a test written first forces you to define "correct" before you're tempted to special-case your way to green.</div>
+  <details><summary>▸ if pushed</summary><div class="body">I'd distinguish unit tests (fast, Mockito-only, no real infra) from integration tests (Testcontainers/real DB) — unit tests dominate the pyramid for fast feedback in CI, integration tests cover the seams (a real JPA query, a real Kafka round-trip) where mocks would hide a bug. For money-handling code specifically I'd always test rounding/precision behavior explicitly, since that's where <code>BigDecimal</code> misuse hides.</div></details>
+</div>
+
+<hr>
+
+<h2 id="streams">Streams</h2>
+
+<div class="qa">
+  <div class="q">map vs flatMap?</div>
+  <div class="say"><span class="tag">SAY THIS</span><code>map</code> transforms each element one-to-one, so <code>Stream&lt;List&lt;T&gt;&gt;.map(x -> x)</code> stays a stream of lists. <code>flatMap</code> transforms each element into its own stream and flattens all of them into one — so mapping a list of orders to their line items with <code>flatMap</code> gives you one flat <code>Stream&lt;LineItem&gt;</code> instead of a <code>Stream&lt;List&lt;LineItem&gt;&gt;</code>.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Same distinction shows up in <code>Optional</code> — <code>Optional.map</code> on a function returning another <code>Optional</code> gives you a nested <code>Optional&lt;Optional&lt;T&gt;&gt;</code>; <code>flatMap</code> unwraps one level, which is exactly why chained lookups (find account → find owner → find address, each returning <code>Optional</code>) use <code>flatMap</code> to stay flat instead of nesting.</div></details>
+</div>
+
+<hr>
+
+<h2 id="aws">AWS / Cloud</h2>
+
+<div class="qa">
+  <div class="q">How would you access S3 from a Java service?</div>
+  <div class="say"><span class="tag">SAY THIS</span>AWS SDK v2 (<code>software.amazon.awssdk:s3</code>) — inject an <code>S3Client</code> bean, call <code>putObject</code>/<code>getObject</code>/<code>listObjectsV2</code>. Credentials should never be hardcoded — in production the pod/EC2 instance gets an IAM role (via IRSA on EKS or an instance profile on EC2), and the SDK's default credential chain picks that up automatically. For giving a client temporary direct access without proxying through your service, I'd generate a presigned URL with a short expiry instead of exposing the bucket.</div>
+  <details><summary>▸ if pushed</summary><div class="body">For large files, multipart upload (<code>S3TransferManager</code>) instead of a single <code>putObject</code> call. Bucket policies should deny public access by default (S3 Block Public Access) with access scoped via IAM role + bucket policy, not bucket ACLs, which AWS itself now recommends against for new buckets.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's a VPC?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Virtual Private Cloud — your own logically isolated network inside AWS, with its own IP address range, route tables, and gateways. Everything else (subnets, EC2 instances, EKS nodes, RDS) lives inside a VPC, which is what gives you network-level isolation between, say, your prod environment and anyone else's on AWS.</div>
+  <details><summary>▸ if pushed</summary><div class="body">A VPC spans a region but is split into subnets per Availability Zone for fault tolerance. Peering or Transit Gateway connects separate VPCs (e.g. a shared-services VPC talking to an app VPC) without traffic going over the public internet.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's a subnet?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A subdivision of a VPC's IP range, tied to a single Availability Zone. Public subnets have a route to an Internet Gateway (for anything that needs a public IP — a load balancer, a bastion). Private subnets route out through a NAT Gateway instead — no inbound internet access, which is where app servers and databases should live.</div>
+  <details><summary>▸ if pushed</summary><div class="body">In an EKS setup, worker nodes typically sit in private subnets; only the load balancer (ALB/NLB) sits in a public subnet, terminating TLS and forwarding into the private network — minimizes what's directly internet-reachable.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Different types of EC2 instances?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Instance families are optimized for different resource ratios: general purpose (<code>t3</code>/<code>m5</code> — balanced CPU/memory), compute-optimized (<code>c5</code> — CPU-heavy workloads), memory-optimized (<code>r5</code> — in-memory caches, large JVM heaps), storage-optimized (<code>i3</code> — high IOPS, local NVMe). Purchase models matter too: On-Demand (pay per use), Reserved/Savings Plans (committed discount), Spot (cheap but interruptible — good for CI runners, bad for prod ledger services).</div>
+  <details><summary>▸ if pushed</summary><div class="body"><code>t3</code>/<code>t4g</code> are burstable — cheap baseline CPU with credits that spike, can throttle hard if you sustain high CPU (a bad fit for a consistently loaded prod service, fine for low-traffic internal tools). <code>t4g</code>/<code>m6g</code> (Graviton, ARM) are typically 20% cheaper for the same performance if your Docker images are built multi-arch.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Security groups vs Network ACLs?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Security groups are stateful and attached to instances/ENIs — if you allow inbound traffic, the response is automatically allowed out, and you can only write "allow" rules. Network ACLs are stateless and attached to a subnet — you need explicit rules for both directions, and you can write both "allow" and "deny" rules. I default to security groups for per-service access control; NACLs are for coarse subnet-level blocking, like explicitly denying a known-bad IP range.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Because NACLs are stateless and evaluated in rule-number order (lowest first, first match wins), misconfiguring one can silently block return traffic that a security group would have allowed automatically — a classic "service works from one subnet but not another" debugging trap.</div></details>
+</div>
+
+<hr>
+
+<h2 id="banking">If NatWest-specific angles come up</h2>
+
+<p style="font-size:0.9rem; color:var(--muted)">Not explicitly asked, but likely follow-ups given the domain — worth having the one-liner ready.</p>
+
+<div class="qa">
+  <div class="q">Why not use double for monetary values?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Floating point can't represent most decimal fractions exactly in binary — <code>0.1 + 0.2 != 0.3</code> — which silently loses cents at scale. <code>BigDecimal</code> with an explicit scale and rounding mode is the standard for money, always constructed from a String or unscaled long, never from a double literal.</div>
+</div>
+
+<div class="qa">
+  <div class="q">How do you prevent a double-charge on a payment retry?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Idempotency key — client generates a unique key per logical operation, sent with the request. Server checks a table/cache for that key before processing; if seen before, returns the original result instead of processing again. Usually backed by a unique DB constraint so even a race between two concurrent retries can't both succeed.</div>
+</div>
+
+<div class="qa">
+  <div class="q">How do you stop two concurrent requests from causing an account overdraft?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Optimistic locking with <code>@Version</code> on the account entity — the second concurrent write fails with <code>OptimisticLockingFailureException</code> because the version it read is stale, and the caller retries or fails cleanly. Pessimistic row locks are the alternative but hold DB connections longer under contention — I'd default to optimistic unless the domain shows very high contention on the same row.</div>
+</div>
+
+<hr>
+
+<div class="footer">
+  <p><strong>Related:</strong>
+    <a href="0001-completable-future.html">CompletableFuture</a> ·
+    <a href="0002-lambdas.html">Lambdas / Functional Interfaces</a> ·
+    <a href="0003-streams.html">Streams</a> ·
+    <a href="../kubernetes/0001-natwest-interview-prep.html">Kubernetes Quickfire</a> ·
+    <a href="0006-natwest-round2-exercises.html">Round 2 Coding Exercises</a> ·
+    <a href="0007-natwest-library-borrowing.html">Round 2 — Library Borrowing (TDD/OOD)</a>
+  </p>
+  <p style="margin-top:0.8rem; font-style:italic">Cram doc — SAY THIS is what you say out loud. Only open "if pushed" if they ask you to go deeper.</p>
+</div>
+
+</body>
+</html>

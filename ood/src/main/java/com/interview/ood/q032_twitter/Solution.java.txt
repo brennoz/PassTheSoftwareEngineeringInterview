@@ -1,0 +1,186 @@
+// REFERENCE SOLUTION — do not compile alongside MyAnswer.java
+package com.interview.ood.q032_twitter;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+// ─── Tweet hierarchy ─────────────────────────────────────────────────────────
+
+// Pattern: polymorphism — each tweet type encapsulates its own displayContent(); no switch anywhere
+public abstract class Tweet {
+
+    private final String id;
+    private final User   author;
+    private final Instant createdAt;
+    private int          likeCount;
+
+    protected Tweet(User author) {
+        this.id        = UUID.randomUUID().toString();
+        this.author    = author;
+        this.createdAt = Instant.now();
+    }
+
+    public abstract String displayContent();
+
+    public void like()   { likeCount++; }
+    public void unlike() { if (likeCount > 0) likeCount--; }
+
+    public String  getId()        { return id; }
+    public User    getAuthor()    { return author; }
+    public Instant getCreatedAt() { return createdAt; }
+    public int     getLikeCount() { return likeCount; }
+}
+
+class OriginalTweet extends Tweet {
+    private final String       content;
+    private final List<String> hashtags;
+    private final String       mediaUrl;
+
+    OriginalTweet(User author, String content, List<String> hashtags, String mediaUrl) {
+        super(author);
+        this.content  = content;
+        this.hashtags = List.copyOf(hashtags);
+        this.mediaUrl = mediaUrl;
+    }
+
+    @Override public String displayContent() { return content; }
+    public List<String> getHashtags()        { return hashtags; }
+    public String       getMediaUrl()        { return mediaUrl; }
+}
+
+class Retweet extends Tweet {
+    private final Tweet sourceTweet;
+
+    Retweet(User author, Tweet sourceTweet) {
+        super(author);
+        this.sourceTweet = sourceTweet;
+    }
+
+    // Why: content belongs to source — Retweet is attribution, not a new creation
+    @Override public String displayContent() {
+        return "RT @" + sourceTweet.getAuthor().getUsername()
+             + ": " + sourceTweet.displayContent();
+    }
+
+    public Tweet getSourceTweet() { return sourceTweet; }
+}
+
+class Reply extends Tweet {
+    private final String content;
+    private final Tweet  parentTweet;
+
+    Reply(User author, String content, Tweet parentTweet) {
+        super(author);
+        this.content     = content;
+        this.parentTweet = parentTweet;
+    }
+
+    @Override public String displayContent() {
+        return "@" + parentTweet.getAuthor().getUsername() + " " + content;
+    }
+
+    public Tweet getParentTweet() { return parentTweet; }
+}
+
+// ─── Builder ─────────────────────────────────────────────────────────────────
+
+// Pattern: Builder — optional hashtags/media without telescoping constructors; validates at build time
+class TweetBuilder {
+
+    private final User         author;
+    private final String       content;
+    private final List<String> hashtags = new ArrayList<>();
+    private String             mediaUrl;
+
+    TweetBuilder(User author, String content) {
+        if (content == null || content.isBlank())
+            throw new IllegalArgumentException("Tweet content cannot be blank");
+        if (content.length() > 280)
+            throw new IllegalArgumentException("Tweet exceeds 280 characters");
+        this.author  = author;
+        this.content = content;
+    }
+
+    TweetBuilder hashtag(String tag) { hashtags.add(tag); return this; }
+    TweetBuilder media(String url)   { this.mediaUrl = url; return this; }
+
+    OriginalTweet build() {
+        return new OriginalTweet(author, content, hashtags, mediaUrl);
+    }
+}
+
+// ─── Observer ────────────────────────────────────────────────────────────────
+
+interface FeedObserver {
+    void onTweetPosted(Tweet tweet);
+}
+
+// Why LinkedList as Deque: O(1) prepend (newest-first) + O(1) tail removal when capped
+class Feed implements FeedObserver {
+
+    private static final int MAX_FEED_SIZE = 200;
+
+    private final Deque<Tweet> timeline = new LinkedList<>();
+
+    @Override
+    public void onTweetPosted(Tweet tweet) {
+        timeline.addFirst(tweet);
+        if (timeline.size() > MAX_FEED_SIZE) timeline.removeLast();
+    }
+
+    public List<Tweet> getTimeline() { return List.copyOf(timeline); }
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+public class User {
+
+    private final String               id;
+    private final String               username;
+    // Why CopyOnWriteArrayList: post() iterates observers; follow/unfollow modify — no CME
+    private final List<FeedObserver>   observers = new CopyOnWriteArrayList<>();
+    private final Feed                 feed      = new Feed();
+
+    public User(String id, String username) {
+        this.id       = id;
+        this.username = username;
+    }
+
+    public void follow(User target) {
+        target.addObserver(this.feed);
+    }
+
+    public void unfollow(User target) {
+        target.removeObserver(this.feed);
+    }
+
+    public Tweet post(String content) {
+        Tweet tweet = new TweetBuilder(this, content).build();
+        notifyObservers(tweet);
+        return tweet;
+    }
+
+    public Retweet retweet(Tweet source) {
+        Retweet rt = new Retweet(this, source);
+        notifyObservers(rt);
+        return rt;
+    }
+
+    public Reply reply(Tweet parent, String content) {
+        Reply reply = new Reply(this, content, parent);
+        notifyObservers(reply);
+        return reply;
+    }
+
+    void addObserver(FeedObserver o)    { observers.add(o); }
+    void removeObserver(FeedObserver o) { observers.remove(o); }
+
+    private void notifyObservers(Tweet tweet) {
+        observers.forEach(o -> o.onTweetPosted(tweet));
+    }
+
+    public Feed   getFeed()     { return feed; }
+    public String getId()       { return id; }
+    public String getUsername() { return username; }
+}

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Gateway OOD — Builder, State Machine, Strategy</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.75; color: var(--ink);
+    max-width: 860px; margin: 0 auto; padding: 3rem 2rem 6rem;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 0.8rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1rem; margin: 1.4rem 0 0.4rem; font-weight: bold; }
+  p  { margin: 0.7rem 0; }
+  ul, ol { padding-left: 1.6rem; margin: 0.6rem 0; }
+  li { margin: 0.3rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.8em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 1rem 1.2rem; border-radius: 6px; overflow-x: auto;
+    margin: 0.8rem 0; line-height: 1.5;
+  }
+  pre .c  { color: #6c7086; font-style: italic; }
+  pre .kw { color: #cba6f7; }
+  pre .ty { color: #89b4fa; }
+  pre .st { color: #a6e3a1; }
+  pre .co { color: #fab387; }
+  pre .an { color: #f38ba8; }
+  pre .nu { color: #f9e2af; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th { background: var(--bg-soft); text-align: left; padding: 0.5rem 0.8rem; border: 1px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 2rem; }
+  .callout { background: var(--bg-note); border-left: 4px solid var(--accent); padding: 0.9rem 1.1rem; margin: 1.2rem 0; border-radius: 0 4px 4px 0; }
+  .callout-warn { background: var(--bg-warn); border-left-color: #d97706; }
+  .callout-green { background: #f0fdf4; border-left-color: #16a34a; }
+  .callout-red { background: #fef2f2; border-left-color: #dc2626; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+  /* ── State machine diagram ── */
+  .state-diagram {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.8em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 1.2rem 1.4rem; border-radius: 6px;
+    margin: 1rem 0; line-height: 1.8; white-space: pre;
+  }
+
+  /* ── Pattern tag ── */
+  .tag {
+    display: inline-block; font-size: 0.72rem; font-family: 'Menlo', monospace;
+    background: #dbeafe; color: #1e40af; border-radius: 3px;
+    padding: 0.1em 0.5em; margin-left: 0.4em; vertical-align: middle;
+  }
+  .tag-orange { background: #ffedd5; color: #9a3412; }
+  .tag-green  { background: #dcfce7; color: #166534; }
+  .tag-purple { background: #ede9fe; color: #6d28d9; }
+
+  /* ── Quiz ── */
+  .quiz-section { margin-top: 3rem; padding-top: 1.5rem; border-top: 2px solid var(--border); }
+  .question { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.2rem; margin-bottom: 1.2rem; }
+  .question p { margin-bottom: 0.6rem; font-weight: bold; }
+  .options { list-style: none; padding: 0; }
+  .options li {
+    padding: 0.45rem 0.9rem; margin: 0.3rem 0;
+    border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .options li:hover { background: #e0e7ff; }
+  .options li.correct  { background: #dcfce7; border-color: #16a34a; }
+  .options li.wrong    { background: #fef2f2; border-color: #dc2626; }
+  .explanation { display: none; margin-top: 0.8rem; padding: 0.7rem 0.9rem; background: #f0fdf4; border-left: 3px solid #16a34a; border-radius: 0 4px 4px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>Payment Gateway OOD</h1>
+<p class="meta">Patterns: Builder · State Machine · Strategy (Value Object) · Service Layer</p>
+<p class="meta">Domain: Fintech / UK card payments (Opayo / Sage Pay style)</p>
+
+<hr>
+
+<h2>Why this design matters</h2>
+<p>
+  A payment gateway integration sits at the money boundary of your system.
+  Three properties are non-negotiable here:
+</p>
+<ul>
+  <li><strong>Precision</strong> — monetary amounts use <code>BigDecimal</code>, never <code>double</code>. One floating-point rounding error is a regulatory incident.</li>
+  <li><strong>Valid state transitions</strong> — a payment must follow a strict lifecycle (Authorise → Capture → Settle). Accepting a capture on a voided payment is a financial loss.</li>
+  <li><strong>Immutable audit trail</strong> — every status change is recorded. You cannot delete or update posted entries.</li>
+</ul>
+
+<hr>
+
+<h2>Value Object: <code>Money</code> <span class="tag tag-green">Value Object</span></h2>
+<p>
+  <strong>What:</strong> an immutable pair of <code>(BigDecimal amount, Currency currency)</code>.<br>
+  <strong>Why:</strong> grouping them prevents "£10 treated as $10" bugs. Immutability means arithmetic always produces a new <code>Money</code>, preventing accidental mutation of a transaction record.
+</p>
+<pre>
+<span class="kw">public record</span> <span class="ty">Money</span>(<span class="ty">BigDecimal</span> amount, <span class="ty">Currency</span> currency) {
+
+    <span class="kw">public</span> <span class="ty">Money</span> {
+        <span class="ty">Objects</span>.requireNonNull(amount);
+        <span class="ty">Objects</span>.requireNonNull(currency);
+        <span class="kw">if</span> (amount.compareTo(<span class="ty">BigDecimal</span>.ZERO) &lt; <span class="nu">0</span>)
+            <span class="kw">throw new</span> <span class="ty">IllegalArgumentException</span>(<span class="st">"Amount must be non-negative"</span>);
+    }
+
+    <span class="kw">public</span> <span class="ty">Money</span> add(<span class="ty">Money</span> other) {
+        assertSameCurrency(other);
+        <span class="kw">return new</span> <span class="ty">Money</span>(amount.add(other.amount), currency);
+    }
+
+    <span class="kw">public</span> <span class="ty">Money</span> subtract(<span class="ty">Money</span> other) {
+        assertSameCurrency(other);
+        <span class="ty">BigDecimal</span> result = amount.subtract(other.amount);
+        <span class="kw">if</span> (result.compareTo(<span class="ty">BigDecimal</span>.ZERO) &lt; <span class="nu">0</span>)
+            <span class="kw">throw new</span> <span class="ty">IllegalArgumentException</span>(<span class="st">"Insufficient amount"</span>);
+        <span class="kw">return new</span> <span class="ty">Money</span>(result, currency);
+    }
+
+    <span class="kw">private void</span> assertSameCurrency(<span class="ty">Money</span> other) {
+        <span class="kw">if</span> (!currency.equals(other.currency))
+            <span class="kw">throw new</span> <span class="ty">IllegalArgumentException</span>(<span class="st">"Currency mismatch"</span>);
+    }
+}
+</pre>
+
+<div class="callout callout-warn">
+  <strong>Never use <code>double</code> for money.</strong>
+  <code>0.1 + 0.2 == 0.30000000000000004</code> in floating point. In fintech, that's a <strong>£0.000000000000004 rounding error per transaction</strong> — multiplied by millions of transactions and audited by the FCA.
+</div>
+
+<hr>
+
+<h2>Builder Pattern: <code>PaymentRequest</code> <span class="tag">Builder</span></h2>
+<p>
+  <strong>When to use Builder:</strong> when an object has &gt;4 fields and several are optional, telescoping constructors become unreadable. Builder also gives you a validation hook before construction.
+</p>
+<p>
+  A payment request in Opayo style includes: card token (PAN never stored), amount, merchant ID, merchant reference (idempotency key), description, optional 3DS challenge flag.
+</p>
+<pre>
+<span class="kw">public record</span> <span class="ty">PaymentRequest</span>(
+        <span class="ty">String</span>  cardToken,
+        <span class="ty">Money</span>   amount,
+        <span class="ty">String</span>  merchantId,
+        <span class="ty">String</span>  merchantReference,  <span class="c">// idempotency key</span>
+        <span class="ty">String</span>  description,
+        <span class="kw">boolean</span> require3ds
+) {
+    <span class="kw">public static</span> <span class="ty">Builder</span> builder() { <span class="kw">return new</span> <span class="ty">Builder</span>(); }
+
+    <span class="kw">public static final class</span> <span class="ty">Builder</span> {
+        <span class="kw">private</span> <span class="ty">String</span>  cardToken, merchantId, merchantReference, description;
+        <span class="kw">private</span> <span class="ty">Money</span>   amount;
+        <span class="kw">private boolean</span> require3ds = <span class="kw">false</span>;
+
+        <span class="kw">public</span> <span class="ty">Builder</span> cardToken(<span class="ty">String</span> t)            { cardToken = t;          <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="ty">Builder</span> amount(<span class="ty">Money</span> m)              { amount = m;             <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="ty">Builder</span> merchantId(<span class="ty">String</span> id)         { merchantId = id;        <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="ty">Builder</span> merchantReference(<span class="ty">String</span> ref) { merchantReference = ref; <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="ty">Builder</span> description(<span class="ty">String</span> d)         { description = d;        <span class="kw">return this</span>; }
+        <span class="kw">public</span> <span class="ty">Builder</span> require3ds()                  { require3ds = <span class="kw">true</span>;     <span class="kw">return this</span>; }
+
+        <span class="kw">public</span> <span class="ty">PaymentRequest</span> build() {
+            <span class="ty">Objects</span>.requireNonNull(cardToken,          <span class="st">"cardToken required"</span>);
+            <span class="ty">Objects</span>.requireNonNull(amount,             <span class="st">"amount required"</span>);
+            <span class="ty">Objects</span>.requireNonNull(merchantId,         <span class="st">"merchantId required"</span>);
+            <span class="ty">Objects</span>.requireNonNull(merchantReference,  <span class="st">"merchantReference required"</span>);
+            <span class="kw">return new</span> <span class="ty">PaymentRequest</span>(cardToken, amount, merchantId, merchantReference, description, require3ds);
+        }
+    }
+}
+</pre>
+
+<div class="callout">
+  <strong>merchantReference = idempotency key.</strong>
+  If the client retries the same payment (network timeout), the gateway checks this reference first. If a transaction with that reference already exists, return the existing result — don't charge twice. This is the most common fintech interview probe.
+</div>
+
+<hr>
+
+<h2>State Machine: <code>PaymentStatus</code> <span class="tag tag-orange">State Machine</span></h2>
+<p>
+  Payment lifecycle has strict one-way transitions. Encode the valid transitions in the enum itself so no external caller can put a payment into an invalid state.
+</p>
+
+<div class="state-diagram">INITIATED ──authorise──▶ AUTHORISED ──capture──▶ CAPTURED ──settle──▶ SETTLED
+                │                    │
+                ▼                    ▼
+              FAILED               VOIDED
+
+CAPTURED ──refund──▶ REFUNDED</div>
+
+<pre>
+<span class="kw">public enum</span> <span class="ty">PaymentStatus</span> {
+    INITIATED {
+        <span class="an">@Override</span> <span class="kw">public boolean</span> canTransitionTo(<span class="ty">PaymentStatus</span> next) {
+            <span class="kw">return</span> next == AUTHORISED || next == FAILED;
+        }
+    },
+    AUTHORISED {
+        <span class="an">@Override</span> <span class="kw">public boolean</span> canTransitionTo(<span class="ty">PaymentStatus</span> next) {
+            <span class="kw">return</span> next == CAPTURED || next == VOIDED;
+        }
+    },
+    CAPTURED {
+        <span class="an">@Override</span> <span class="kw">public boolean</span> canTransitionTo(<span class="ty">PaymentStatus</span> next) {
+            <span class="kw">return</span> next == SETTLED || next == REFUNDED;
+        }
+    },
+    SETTLED, VOIDED, REFUNDED, FAILED;
+
+    <span class="kw">public boolean</span> canTransitionTo(<span class="ty">PaymentStatus</span> next) { <span class="kw">return false</span>; } <span class="c">// terminal</span>
+
+    <span class="kw">public void</span> assertCanTransitionTo(<span class="ty">PaymentStatus</span> next) {
+        <span class="kw">if</span> (!canTransitionTo(next))
+            <span class="kw">throw new</span> <span class="ty">IllegalStateException</span>(
+                <span class="st">"Cannot transition from "</span> + <span class="kw">this</span> + <span class="st">" to "</span> + next);
+    }
+}
+</pre>
+
+<div class="callout callout-warn">
+  <strong>Why encode transitions in the enum?</strong>
+  If transition logic lives in the service, every developer can accidentally add a new path ("let me just set VOIDED directly"). Embedding guards in the enum makes invalid transitions <em>impossible to compile into the codebase quietly</em> — the check is always there.
+</div>
+
+<hr>
+
+<h2>Gateway Interface: <code>PaymentGateway</code> <span class="tag tag-purple">Strategy</span></h2>
+<p>
+  The actual card network call (Visa/Mastercard) is behind an interface. In production this calls Opayo's REST API. In tests, a <code>StubPaymentGateway</code> returns pre-configured responses.
+  This is the Strategy pattern — the caller doesn't care <em>which</em> gateway handles the request.
+</p>
+<pre>
+<span class="kw">public interface</span> <span class="ty">PaymentGateway</span> {
+    <span class="ty">GatewayResponse</span> authorise(<span class="ty">PaymentRequest</span> request);
+    <span class="ty">GatewayResponse</span> capture(<span class="ty">String</span> gatewayTransactionId);
+    <span class="ty">GatewayResponse</span> voidPayment(<span class="ty">String</span> gatewayTransactionId);
+    <span class="ty">GatewayResponse</span> refund(<span class="ty">String</span> gatewayTransactionId, <span class="ty">Money</span> amount);
+}
+
+<span class="kw">public record</span> <span class="ty">GatewayResponse</span>(
+        <span class="ty">String</span> gatewayTransactionId,
+        <span class="kw">boolean</span> success,
+        <span class="ty">String</span> message
+) {}
+</pre>
+
+<hr>
+
+<h2>Service Layer: <code>PaymentService</code></h2>
+<p>
+  Service owns all state transitions. It delegates the actual card network call to <code>PaymentGateway</code>, then advances the payment's status. If the gateway returns failure, status → FAILED.
+</p>
+<pre>
+<span class="kw">public class</span> <span class="ty">PaymentService</span> {
+    <span class="kw">private final</span> <span class="ty">PaymentGateway</span> gateway;
+    <span class="kw">private final</span> <span class="ty">PaymentRepository</span> repo;
+
+    <span class="kw">public</span> <span class="ty">Payment</span> initiate(<span class="ty">PaymentRequest</span> request) {
+        <span class="ty">Payment</span> payment = <span class="kw">new</span> <span class="ty">Payment</span>(<span class="ty">UUID</span>.randomUUID().toString(), request, <span class="ty">PaymentStatus</span>.INITIATED);
+        repo.save(payment);
+        <span class="kw">return</span> payment;
+    }
+
+    <span class="kw">public</span> <span class="ty">Payment</span> authorise(<span class="ty">String</span> paymentId) {
+        <span class="ty">Payment</span> payment = findOrThrow(paymentId);
+        payment.status().assertCanTransitionTo(<span class="ty">PaymentStatus</span>.AUTHORISED);
+        <span class="ty">GatewayResponse</span> resp = gateway.authorise(payment.request());
+        <span class="ty">PaymentStatus</span> next = resp.success() ? <span class="ty">PaymentStatus</span>.AUTHORISED : <span class="ty">PaymentStatus</span>.FAILED;
+        <span class="kw">return</span> repo.updateStatus(paymentId, next, resp.gatewayTransactionId());
+    }
+
+    <span class="c">// capture / void / refund follow same pattern</span>
+}
+</pre>
+
+<div class="callout callout-green">
+  <strong>Why service layer (not rich domain)?</strong>
+  <code>Payment</code> is a thin record. Status-transition logic lives in <code>PaymentStatus</code> (the enum). Network calls live in <code>PaymentGateway</code>. This separation makes each piece unit-testable in isolation — you can test state machine logic without any gateway, and gateway behaviour with a stub, never touching the database.
+</div>
+
+<hr>
+
+<h2>Repository pattern</h2>
+<pre>
+<span class="kw">public class</span> <span class="ty">InMemoryPaymentRepository</span> <span class="kw">implements</span> <span class="ty">PaymentRepository</span> {
+    <span class="kw">private final</span> <span class="ty">Map</span>&lt;<span class="ty">String</span>, <span class="ty">Payment</span>&gt; store = <span class="kw">new</span> <span class="ty">HashMap</span>&lt;&gt;();
+
+    <span class="kw">public void</span> save(<span class="ty">Payment</span> p)   { store.put(p.id(), p); }
+    <span class="kw">public</span> <span class="ty">Optional</span>&lt;<span class="ty">Payment</span>&gt; findById(<span class="ty">String</span> id) {
+        <span class="kw">return</span> <span class="ty">Optional</span>.ofNullable(store.get(id));
+    }
+    <span class="kw">public</span> <span class="ty">Payment</span> updateStatus(<span class="ty">String</span> id, <span class="ty">PaymentStatus</span> status, <span class="ty">String</span> gatewayTxId) {
+        <span class="ty">Payment</span> existing = findOrThrow(id);
+        <span class="ty">Payment</span> updated = existing.withStatus(status).withGatewayTxId(gatewayTxId);
+        store.put(id, updated);
+        <span class="kw">return</span> updated;
+    }
+}
+</pre>
+
+<hr>
+
+<h2>In AWS / Distributed Environment</h2>
+<table>
+  <thead><tr><th>Component</th><th>AWS equivalent</th><th>What breaks at scale</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>PaymentRepository</code> (in-memory)</td>
+      <td>RDS Aurora Multi-AZ (PostgreSQL)</td>
+      <td>In-memory map is per-instance — two pods can't see each other's payments. Lost on restart.</td>
+    </tr>
+    <tr>
+      <td>Idempotency key check (merchantReference)</td>
+      <td>DynamoDB conditional write (<code>attribute_not_exists</code>) or ElastiCache Redis SET NX</td>
+      <td>Two concurrent retries hit two pods simultaneously — both pass the in-memory idempotency check → double charge.</td>
+    </tr>
+    <tr>
+      <td><code>PaymentGateway</code> (HTTP call)</td>
+      <td>API Gateway → Lambda or ECS; AWS Secrets Manager for API key</td>
+      <td>No timeout/circuit breaker → gateway slowness cascades to caller threads → thread pool exhaustion.</td>
+    </tr>
+    <tr>
+      <td>Status change audit</td>
+      <td>DynamoDB Streams → Lambda → S3 (WORM via Object Lock)</td>
+      <td>In-memory repo has no event history — FCA audit trail requirement unmet.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Common Pitfalls (interview watch-outs)</h2>
+<ul>
+  <li><strong><code>double</code> for amount</strong> — always <code>BigDecimal</code>; PCI-DSS requires exact amounts in audit logs</li>
+  <li><strong>Storing raw PAN</strong> — card number must be tokenised by the gateway; never persisted in your DB (PCI-DSS scope)</li>
+  <li><strong>Missing idempotency check</strong> — retry without checking <code>merchantReference</code> → double charge</li>
+  <li><strong>Transition guard in service only</strong> — if guard is in service but state transitions can also happen via background jobs or events, the guard is bypassable</li>
+  <li><strong>Mutable <code>Payment</code> record</strong> — if <code>setStatus()</code> exists, concurrent threads can corrupt state; produce new instances on update</li>
+</ul>
+
+<hr>
+
+<!-- Quiz -->
+<div class="quiz-section">
+<h2>Quiz</h2>
+
+<div class="question" id="q1">
+  <p>Q1: A client retries a payment request because the first response timed out. The payment was already authorised. What prevents a double charge?</p>
+  <ul class="options" data-correct="2">
+    <li>The state machine — INITIATED can only transition to AUTHORISED once</li>
+    <li>The <code>PaymentGateway</code> interface — it is a no-op on retry</li>
+    <li>The <code>merchantReference</code> idempotency key — service checks for an existing payment with that reference before calling the gateway</li>
+    <li>The <code>PaymentRepository</code> — <code>save()</code> throws if the ID already exists</li>
+  </ul>
+  <div class="explanation">The state machine only prevents the same payment object from being authorised twice, but a retry creates a <em>new</em> payment object. The idempotency key (<code>merchantReference</code>) lets the service detect that this request was already processed and return the existing result instead of calling the gateway again.</div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2: Why should <code>canTransitionTo()</code> logic live inside the <code>PaymentStatus</code> enum rather than in <code>PaymentService</code>?</p>
+  <ul class="options" data-correct="3">
+    <li>Enums are faster than service method calls at runtime</li>
+    <li>It allows the service to avoid <code>switch</code> statements</li>
+    <li>It co-locates the state machine contract with the state definition, making it impossible to bypass by adding a new code path in a service</li>
+    <li>Enum methods are automatically thread-safe</li>
+  </ul>
+  <div class="explanation">If guard logic is in the service, any developer adding a new endpoint or background job can bypass it. Placing <code>canTransitionTo()</code> in the enum means the check is inseparable from the status value itself — you cannot advance state without going through the guard.</div>
+</div>
+
+<div class="question" id="q3">
+  <p>Q3: You need to add a new payment method (Apple Pay token). What changes in the design?</p>
+  <ul class="options" data-correct="1">
+    <li>A new <code>PaymentGateway</code> implementation for Apple Pay; <code>PaymentRequest</code> might add a <code>paymentMethodType</code> field; no other classes change</li>
+    <li>A new subclass of <code>PaymentRequest</code> and a new <code>PaymentService</code> subclass</li>
+    <li>A new enum constant in <code>PaymentStatus</code> for APPLE_PAY_PENDING</li>
+    <li>The state machine must be duplicated for Apple Pay flows</li>
+  </ul>
+  <div class="explanation">Strategy pattern: the <code>PaymentGateway</code> interface absorbs new payment methods without changing the service, repository, or state machine. The service calls <code>gateway.authorise(request)</code> regardless of method type — the gateway implementation handles the specifics. This is Open/Closed principle: open for extension (new gateway), closed for modification (existing service unchanged).</div>
+</div>
+
+</div>
+
+<script>
+document.querySelectorAll('.question').forEach(q => {
+  const opts = q.querySelectorAll('.options li');
+  const correct = parseInt(q.querySelector('.options').dataset.correct, 10) - 1;
+  const explanation = q.querySelector('.explanation');
+  opts.forEach((li, i) => {
+    li.addEventListener('click', () => {
+      opts.forEach(o => o.classList.remove('correct', 'wrong'));
+      li.classList.add(i === correct ? 'correct' : 'wrong');
+      opts[correct].classList.add('correct');
+      explanation.style.display = 'block';
+    });
+  });
+});
+</script>
+
+</body>
+</html>

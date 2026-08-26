@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 02 — Strategy Pattern (Interest) + Account State</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn  { border-color: var(--warn); }
+  .callout.pass  { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem;
+                    font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; } .kw-algo { color: #059669; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="0001-bank-domain-model.html">← Lesson 01: Domain Model</a> &nbsp;|&nbsp;
+  <a href="../lessons/">All lessons</a> &nbsp;|&nbsp;
+  Next: Lesson 03 (Observer) →
+</div>
+
+<h1>Lesson 02 — Strategy Pattern (Interest) + Account State</h1>
+<div class="meta">Category: OOD &nbsp;·&nbsp; Difficulty: Foundation &nbsp;·&nbsp; Est. time: 15 min &nbsp;·&nbsp; Lesson 2 of N</div>
+
+<p>
+  Lesson 01 built the domain skeleton. This lesson adds two new design moves:
+  the <strong>Strategy Pattern</strong> for swappable interest calculation,
+  and a <strong>state guard</strong> that prevents operations on closed accounts.
+  Both appear directly in the q026 question requirements.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Add interest to <code>SavingsAccount</code> by injecting a strategy — and swap the algorithm
+  at runtime without touching account code. Prevent operations on closed accounts with a clean state check.
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>1. The problem Strategy solves</h2>
+
+<p>
+  Naïve approach: put the interest formula inside <code>SavingsAccount</code>.
+</p>
+
+<pre>
+// BAD — algorithm hardcoded into account
+public void applyInterest(int periods) {
+    // What if we want compound instead? Edit this class. Now it violates Open/Closed.
+    BigDecimal interest = balance.multiply(annualRate).multiply(BigDecimal.valueOf(periods));
+    deposit(interest);
+}
+</pre>
+
+<p>
+  Problem: every time the bank changes its interest model (simple → compound → tiered),
+  you modify <code>SavingsAccount</code>. Open/Closed Principle violated.
+  Tests break. Regression risk.
+</p>
+
+<div class="callout">
+  <strong>Pattern: Strategy</strong>
+  Extract the varying behaviour (the algorithm) into its own interface.
+  The context class (<code>SavingsAccount</code>) holds a reference to the interface
+  and delegates — it never knows which algorithm is running.
+  Swap strategies at construction time or at runtime via a setter.
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>2. Structure</h2>
+
+<div class="diagram">«interface»
+InterestCalculationStrategy
+  + calculate(balance, annualRate, periods): BigDecimal
+        ▲                    ▲
+        │                    │
+SimpleInterestStrategy   CompoundInterestStrategy
+  I = P × r × t          I = P × (1+r)^t − P
+        │                    │
+        └─────────┬───────────┘
+                  │ injected into
+           ┌──────▼──────┐
+           │SavingsAccount│  ← context; never touches formula directly
+           └─────────────┘</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>3. The interface + two implementations</h2>
+
+<pre>
+// <span class="kw-pat">Pattern: Strategy — algorithm extracted to interface; context delegates</span>
+public interface InterestCalculationStrategy {
+    BigDecimal calculate(BigDecimal balance, BigDecimal annualRate, int periods);
+}
+</pre>
+
+<pre>
+// <span class="kw-algo">Algorithm: Simple Interest — I = P * r * t (linear, no compounding)</span>
+// <span class="kw-why">Why HALF_UP: banker's rounding is the regulatory default for financial calculations</span>
+public class SimpleInterestStrategy implements InterestCalculationStrategy {
+
+    @Override
+    public BigDecimal calculate(BigDecimal balance, BigDecimal annualRate, int periods) {
+        return balance.multiply(annualRate)
+                      .multiply(BigDecimal.valueOf(periods))
+                      .setScale(2, RoundingMode.HALF_UP);
+    }
+}
+</pre>
+
+<pre>
+// <span class="kw-algo">Algorithm: Compound Interest — I = P * (1+r)^t - P (exponential; interest earns interest)</span>
+// <span class="kw-why">Why MathContext.DECIMAL128: pow() on BigDecimal needs explicit precision — default throws ArithmeticException</span>
+public class CompoundInterestStrategy implements InterestCalculationStrategy {
+
+    @Override
+    public BigDecimal calculate(BigDecimal balance, BigDecimal annualRate, int periods) {
+        BigDecimal factor = BigDecimal.ONE.add(annualRate)
+                                         .pow(periods, MathContext.DECIMAL128);
+        return balance.multiply(factor)
+                      .subtract(balance)
+                      .setScale(2, RoundingMode.HALF_UP);
+    }
+}
+</pre>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>4. SavingsAccount — delegate to strategy</h2>
+
+<pre>
+class SavingsAccount extends BankAccount {
+
+    private final BigDecimal minimumBalance;
+    private final BigDecimal annualRate;
+    // <span class="kw-pat">Strategy held by interface type, not concrete type — dependency inversion</span>
+    private InterestCalculationStrategy strategy;
+
+    public SavingsAccount(BigDecimal initialBalance,
+                          BigDecimal minimumBalance,
+                          BigDecimal annualRate,
+                          InterestCalculationStrategy strategy) {
+        super(initialBalance);
+        this.minimumBalance = minimumBalance;
+        this.annualRate     = annualRate;
+        this.strategy       = strategy;
+    }
+
+    @Override
+    protected void validateWithdrawal(BigDecimal amount) {
+        BigDecimal balanceAfter = balance.subtract(amount);
+        if (balanceAfter.compareTo(minimumBalance) < 0)
+            throw new IllegalStateException(
+                "Withdrawal would breach minimum balance of " + minimumBalance);
+    }
+
+    public void applyInterest(int periods) {
+        // <span class="kw-pat">Delegation — SavingsAccount has no idea which formula runs</span>
+        BigDecimal interest = strategy.calculate(balance, annualRate, periods);
+        deposit(interest);
+    }
+
+    // <span class="kw-why">Setter allows runtime strategy swap — e.g. promotional compound rate for 1 month</span>
+    public void setStrategy(InterestCalculationStrategy strategy) {
+        this.strategy = strategy;
+    }
+}
+</pre>
+
+<p>
+  Key: <code>strategy</code> is typed as <code>InterestCalculationStrategy</code> (the interface),
+  not as <code>SimpleInterestStrategy</code>. This is <strong>Dependency Inversion</strong> —
+  depend on the abstraction, not the concrete class.
+</p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>5. Account state — ACTIVE / FROZEN / CLOSED</h2>
+
+<p>
+  The question says: <em>"closed accounts must reject all operations."</em>
+  The simplest correct implementation is an <strong>enum + guard</strong>.
+  A full State Pattern (with separate state classes) is overkill here — name it correctly
+  if you use it, but don't over-engineer.
+</p>
+
+<div class="callout warn">
+  <strong>Interview trap</strong>
+  Using a <code>boolean closed</code> field works for two states, but fails as soon as you
+  need FROZEN (reads OK, writes rejected) or DORMANT. Use an enum from the start.
+</div>
+
+<pre>
+public enum AccountStatus { ACTIVE, FROZEN, CLOSED }
+</pre>
+
+<pre>
+abstract class BankAccount {
+
+    protected BigDecimal balance;
+    private AccountStatus status = AccountStatus.ACTIVE;   // default
+    private final List&lt;Transaction&gt; transactions = new ArrayList&lt;&gt;();
+
+    // ...
+
+    public final void deposit(BigDecimal amount) {
+        requireStatus(AccountStatus.ACTIVE);   // guard
+        if (amount.compareTo(BigDecimal.ZERO) &lt;= 0)
+            throw new IllegalArgumentException("Amount must be positive");
+        balance = balance.add(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.DEPOSIT, amount, balance, Instant.now()));
+    }
+
+    public final void withdraw(BigDecimal amount) {
+        requireStatus(AccountStatus.ACTIVE);   // guard
+        if (amount.compareTo(BigDecimal.ZERO) &lt;= 0)
+            throw new IllegalArgumentException("Amount must be positive");
+        validateWithdrawal(amount);
+        balance = balance.subtract(amount).setScale(2, RoundingMode.HALF_UP);
+        transactions.add(new Transaction(Transaction.Type.WITHDRAWAL, amount, balance, Instant.now()));
+    }
+
+    public void close() { this.status = AccountStatus.CLOSED; }
+
+    public void freeze() { this.status = AccountStatus.FROZEN; }
+
+    // <span class="kw-why">Centralised guard — one place to change when new rules added</span>
+    private void requireStatus(AccountStatus required) {
+        if (status != required)
+            throw new IllegalStateException("Account is " + status + ", expected " + required);
+    }
+
+    protected abstract void validateWithdrawal(BigDecimal amount);
+}
+</pre>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>6. SOLID checklist for this design</h2>
+
+<table>
+  <tr><th>Principle</th><th>How it's applied here</th></tr>
+  <tr><td><strong>S</strong>ingle Responsibility</td><td><code>InterestCalculationStrategy</code> owns only the formula. <code>SavingsAccount</code> owns only account rules.</td></tr>
+  <tr><td><strong>O</strong>pen/Closed</td><td>Add a new interest model by implementing the interface — no existing class touched.</td></tr>
+  <tr><td><strong>L</strong>iskov Substitution</td><td><code>SavingsAccount</code> and <code>CheckingAccount</code> are substitutable wherever <code>BankAccount</code> is expected.</td></tr>
+  <tr><td><strong>I</strong>nterface Segregation</td><td><code>InterestCalculationStrategy</code> has one method — not polluted with unrelated concerns.</td></tr>
+  <tr><td><strong>D</strong>ependency Inversion</td><td><code>SavingsAccount</code> depends on the interface, not the concrete strategy class.</td></tr>
+</table>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>7. Strategy vs Template Method — when to use which</h2>
+
+<table>
+  <tr><th></th><th>Template Method</th><th>Strategy</th></tr>
+  <tr><td>Mechanism</td><td>Inheritance — subclass overrides hook</td><td>Composition — context holds interface reference</td></tr>
+  <tr><td>Algorithm swap</td><td>At compile time (fixed per subclass)</td><td>At runtime (setter or constructor)</td></tr>
+  <tr><td>Use when</td><td>Algorithm skeleton is fixed; only one step varies</td><td>Entire algorithm is swappable</td></tr>
+  <tr><td>In this design</td><td><code>BankAccount.withdraw()</code> + <code>validateWithdrawal()</code> hook</td><td><code>SavingsAccount.applyInterest()</code> delegates to strategy</td></tr>
+</table>
+
+<p>
+  Both patterns appear in q026 — knowing when to name one vs the other is an interview differentiator.
+</p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>8. What to implement now</h2>
+
+<p>
+  Open <a href="../ood/src/main/java/com/interview/ood/q026_bank_account_system/MyAnswer.java">MyAnswer.java</a>
+  and add:
+</p>
+<ol style="margin: 1rem 0 1.5rem 1.5rem; line-height: 2;">
+  <li>Add <code>AccountStatus</code> enum (three values)</li>
+  <li>Add <code>status</code> field to <code>BankAccount</code>, default <code>ACTIVE</code></li>
+  <li>Add <code>requireStatus()</code> guard called at top of <code>deposit()</code> and <code>withdraw()</code></li>
+  <li>Add <code>close()</code> method</li>
+  <li>Update <code>SavingsAccount</code>: add <code>minimumBalance</code>, <code>annualRate</code>, <code>strategy</code> fields</li>
+  <li>Implement <code>applyInterest(int periods)</code> by delegating to strategy</li>
+</ol>
+
+<p>
+  The three strategy classes are already provided as source files in the same package —
+  you can reference them directly:
+  <code>InterestCalculationStrategy</code>, <code>SimpleInterestStrategy</code>, <code>CompoundInterestStrategy</code>.
+</p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>9. Retrieval quiz</h2>
+
+<p>Answer from memory — no scrolling.</p>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Strategy Pattern and Template Method Pattern both handle variable behaviour. What is the key structural difference?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Template Method uses interfaces; Strategy uses abstract classes</li>
+      <li>B) Template Method is for sorting algorithms; Strategy is for financial algorithms</li>
+      <li>C) Strategy uses composition (held reference); Template Method uses inheritance (subclass override)</li>
+      <li>D) There is no structural difference — they solve identical problems</li>
+    </ul>
+    <div class="explanation">Strategy: the context holds an interface reference and delegates — composition. Template Method: the base class defines the skeleton and subclasses override one step — inheritance. Prefer composition; it allows runtime swaps that inheritance cannot.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Which SOLID principle does the Strategy Pattern most directly enforce?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Liskov Substitution Principle</li>
+      <li>B) Open/Closed Principle</li>
+      <li>C) Single Responsibility Principle</li>
+      <li>D) Interface Segregation Principle</li>
+    </ul>
+    <div class="explanation">Open/Closed: the system is open to new interest algorithms (add a new class implementing the interface) but closed to modification (SavingsAccount never changes). You extend behaviour without editing existing code.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why use an <code>AccountStatus</code> enum instead of a <code>boolean closed</code> field?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Enum scales to multiple states (ACTIVE / FROZEN / CLOSED) without adding new fields or conditionals</li>
+      <li>B) Booleans cannot be used as fields in abstract classes</li>
+      <li>C) Enums are faster than booleans at runtime due to JVM optimisation</li>
+      <li>D) Spring requires enum types for all entity status fields</li>
+    </ul>
+    <div class="explanation">A boolean covers two states. The moment you need FROZEN (reads allowed, writes rejected), you need a second boolean, which creates illegal combinations. An enum is mutually exclusive, self-documenting, and trivially extensible.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. <code>SavingsAccount</code> holds <code>InterestCalculationStrategy strategy</code> typed as the interface, not as <code>SimpleInterestStrategy</code>. Which SOLID principle does this express?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Single Responsibility Principle — each class does one thing</li>
+      <li>B) Liskov Substitution Principle — subclasses replace base classes</li>
+      <li>C) Open/Closed Principle — closed to algorithm modification</li>
+      <li>D) Dependency Inversion Principle — depend on abstractions, not concretions</li>
+    </ul>
+    <div class="explanation">Dependency Inversion: high-level module (SavingsAccount) depends on the abstraction (the interface), not the concrete implementation. This is what makes the strategy swappable — SavingsAccount has zero knowledge of SimpleInterestStrategy or CompoundInterestStrategy.</div>
+  </div>
+
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2>10. Primary source</h2>
+
+<p>
+  Read <a href="https://refactoring.guru/design-patterns/strategy" target="_blank">
+    Refactoring.Guru — Strategy Pattern
+  </a> (free, ~10 min). Focus on the UML and the Java example — the structure maps
+  directly to <code>InterestCalculationStrategy</code> above.
+</p>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Confused about when to pick Strategy vs Template Method? Or why DECIMAL128 in <code>pow()</code>?
+  Ask — don't move on until the <em>why</em> is clear.
+</div>
+
+<footer>
+  Lesson 02 &nbsp;·&nbsp; Strategy + State &nbsp;·&nbsp;
+  <a href="0001-bank-domain-model.html">← Lesson 01</a> &nbsp;|&nbsp;
+  Next: Lesson 03 — Observer Pattern (notifications) →
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) {
+          li.classList.add('correct');
+        } else {
+          li.classList.add('wrong');
+          opts[correct].classList.add('reveal');
+        }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Comment System Design</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Comment System Design</h1>
+<div class="meta">Category: System Design · Difficulty: Medium · Est. time: 20 min · Lesson 1 of N</div>
+
+<p>
+  Comment systems appear everywhere — YouTube, Reddit, Hacker News, blog platforms.
+  They look simple but hide five hard problems: <strong>hierarchical storage</strong>,
+  <strong>stable pagination</strong>, <strong>atomic like counters</strong>,
+  <strong>read-heavy caching</strong>, and <strong>reply notifications</strong> at scale.
+  This lesson covers each one with the tradeoff an interviewer expects you to articulate.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Given "design a comment system", produce a complete component diagram, justify every
+  data model and storage choice, and explain what breaks at 10× load — in under 25 minutes.
+</div>
+
+<!-- ───────────────────────────── -->
+<h2>1. Functional requirements (scope first)</h2>
+
+<p>Always state scope before touching components. Interviewers reward this habit.</p>
+
+<table>
+  <tr><th>In scope</th><th>Out of scope (state explicitly)</th></tr>
+  <tr><td>Post a comment on a resource (video, article, post)</td><td>Real-time live updates (WebSocket)</td></tr>
+  <tr><td>Reply to a comment (one level of nesting minimum)</td><td>Comment editing history / diffs</td></tr>
+  <tr><td>Like / dislike a comment</td><td>Markdown rendering (client concern)</td></tr>
+  <tr><td>Fetch comments with pagination</td><td>Full-text search across comments</td></tr>
+  <tr><td>Notify author when their comment receives a reply</td><td>Cross-platform push (covered in Notification System)</td></tr>
+  <tr><td>Soft-delete (hide but retain for audit)</td><td></td></tr>
+</table>
+
+<p><strong>Scale assumptions to state:</strong> 100M DAUs, 10M comments/day written, 1B comment reads/day. Read:write ≈ 100:1. Comments per post follow a power law — top 1% of posts get 80% of comments.</p>
+
+<!-- ───────────────────────────── -->
+<h2>2. Data model — the hard part</h2>
+
+<p>Nested comments are a tree. How you store a tree in a relational DB is the first decision interviewers probe.</p>
+
+<h3>Option A: Adjacency List</h3>
+<pre>
+CREATE TABLE comments (
+    id          BIGINT PRIMARY KEY,
+    post_id     BIGINT NOT NULL,
+    parent_id   BIGINT REFERENCES comments(id),  -- NULL = top-level
+    author_id   BIGINT NOT NULL,
+    body        TEXT NOT NULL,
+    like_count  BIGINT DEFAULT 0,
+    deleted     BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_comments_post_parent ON comments (post_id, parent_id, created_at);
+</pre>
+
+<table>
+  <tr><th></th><th>Adjacency List</th><th>Closure Table</th></tr>
+  <tr><td>Write cost</td><td>O(1) — insert one row</td><td>O(depth) — insert ancestor rows</td></tr>
+  <tr><td>Read all descendants</td><td>Recursive CTE (slow for deep trees)</td><td>Single JOIN — O(1)</td></tr>
+  <tr><td>Move subtree</td><td>Update one parent_id</td><td>Delete + re-insert ancestor rows</td></tr>
+  <tr><td>Best for</td><td>Shallow nesting (Reddit: 2–3 levels max)</td><td>Deep nesting (file systems, org charts)</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Recommendation for interview</strong>
+  Adjacency List + depth limit (e.g. max 3 levels). Most comment systems cap nesting.
+  Mention Closure Table as the alternative for deep trees. Shows you know both.
+</div>
+
+<!-- ───────────────────────────── -->
+<h2>3. Read path — pagination</h2>
+
+<p>Top-level comments for a post. 10K comments on a viral video. How to page through?</p>
+
+<h3>Why NOT offset pagination</h3>
+<pre>
+-- BAD
+SELECT * FROM comments WHERE post_id = 42 ORDER BY created_at LIMIT 20 OFFSET 200;
+-- Problem 1: skips 200 rows on every DB node — O(N) work
+-- Problem 2: new comment inserted at offset 50 → page 2 shows duplicate row
+</pre>
+
+<h3>Cursor-based pagination</h3>
+<pre>
+-- First page
+SELECT * FROM comments
+WHERE post_id = 42
+ORDER BY created_at ASC, id ASC
+LIMIT 21;   -- fetch 21, return 20 — 21st proves there's a next page
+
+-- Next page: client sends back cursor = {created_at: '2026-01-15T10:23:00Z', id: 9001}
+SELECT * FROM comments
+WHERE post_id = 42
+  AND (created_at, id) > ('2026-01-15T10:23:00Z', 9001)
+ORDER BY created_at ASC, id ASC
+LIMIT 21;
+</pre>
+
+<p>
+  Cursor encodes position in the sorted order. New inserts don't shift positions.
+  No skipped or duplicated rows. The compound <code>(created_at, id)</code> cursor
+  handles the edge case where two comments arrive at the exact same millisecond.
+</p>
+
+<!-- ───────────────────────────── -->
+<h2>4. Like counter — the race condition</h2>
+
+<pre>
+-- BAD: read-modify-write in application code
+long likes = commentRepo.findById(id).getLikeCount();   // read
+commentRepo.update(id, likes + 1);                      // write — race!
+-- Two concurrent requests both read 100, both write 101. One increment lost.
+</pre>
+
+<pre>
+-- GOOD option 1: DB atomic increment
+UPDATE comments SET like_count = like_count + 1 WHERE id = ?;
+-- Serialised at DB level. Safe but hits DB on every like — expensive at scale.
+
+-- GOOD option 2: Redis atomic counter + async flush
+INCR comment:like:{commentId}          -- O(1), single-threaded Redis command
+-- Background job flushes Redis counters → DB every 30s
+-- Tradeoff: count may be slightly stale between flushes
+</pre>
+
+<div class="callout warn">
+  <strong>Interview trap</strong>
+  Using <code>like_count + 1</code> in application code on a multi-replica service is a race
+  condition that interviewers plant in code-review questions. Name it: optimistic lock or
+  Redis INCR — never application-level read-modify-write.
+</div>
+
+<!-- ───────────────────────────── -->
+<h2>5. Caching strategy</h2>
+
+<p>
+  Read:write = 100:1. The top 1% of posts generate 80% of reads.
+  Cache those threads aggressively.
+</p>
+
+<div class="diagram">Write path:
+  Client → API → DB (write)
+                → Redis DEL comment:page:{postId}:*   ← invalidate cache
+
+Read path:
+  Client → API → Redis GET comment:page:{postId}:{cursor}
+                    HIT  → return cached page (TTL 60s)
+                    MISS → DB SELECT → Redis SET → return
+
+Cache key: comment:page:{postId}:{encodedCursor}
+TTL: 60 seconds (comments are mostly read-heavy, staleness acceptable)</div>
+
+<p>
+  Cache-Aside pattern. On write, invalidate all cached pages for that post (wildcard delete on Redis key prefix).
+  On read, populate cache on miss. TTL of 60s means a write is visible within 1 minute even if invalidation fails.
+</p>
+
+<!-- ───────────────────────────── -->
+<h2>6. Notifications — reply fan-out</h2>
+
+<p>
+  When Alice replies to Bob's comment, Bob gets notified.
+  At scale (celebrity post with 10K top-level comments), a single reply
+  could trigger 10K notifications if you notify the whole thread.
+  Scope it: notify only the direct parent comment's author.
+</p>
+
+<div class="diagram">Reply posted
+    │
+    ▼
+Comment Service → publishes ReplyEvent to Kafka topic: comment-events
+                                │
+                    ┌───────────▼───────────┐
+                    │  Notification Service │
+                    │  (Kafka consumer)     │
+                    │  - look up parent     │
+                    │    author preference  │
+                    │  - send email / push  │
+                    └───────────────────────┘</div>
+
+<p>
+  Kafka decouples Comment Service from Notification Service. If notification is slow or down,
+  comments still post. Kafka retains the event for retry.
+</p>
+
+<!-- ───────────────────────────── -->
+<h2>7. Component diagram</h2>
+
+<div class="diagram">Client
+  │
+  ▼
+API Gateway (rate limiting, auth)
+  │
+  ├──── Comment Service ──────────────────────────────────┐
+  │       │  writes to PostgreSQL (comments table)        │
+  │       │  invalidates Redis on write                   │
+  │       │  publishes ReplyEvent → Kafka                 │
+  │       │                                               │
+  │       └── reads from Redis (cache-aside)              │
+  │                  └── miss → PostgreSQL                │
+  │                                                       │
+  ├──── Like Service                                      │
+  │       │  Redis INCR comment:like:{id}                 │
+  │       └── async flush → PostgreSQL (every 30s)        │
+  │                                                       │
+  └──── Notification Service ◄── Kafka consumer ──────────┘
+           sends email/push on ReplyEvent</div>
+
+<!-- ───────────────────────────── -->
+<h2>8. AWS / Distributed environment</h2>
+
+<table>
+  <tr><th>Component</th><th>AWS service</th><th>What breaks without it</th></tr>
+  <tr><td>PostgreSQL</td><td>RDS Aurora PostgreSQL Multi-AZ</td><td>Single-AZ: primary failure → minutes of downtime</td></tr>
+  <tr><td>Redis cache</td><td>ElastiCache Redis (cluster mode)</td><td>Single-node: cache is per-instance on ECS → inconsistent reads</td></tr>
+  <tr><td>Kafka</td><td>Amazon MSK</td><td>In-process event bus → lost events on pod restart</td></tr>
+  <tr><td>API Gateway</td><td>ALB + ECS Fargate</td><td>Single EC2: SPOF, no auto-scaling</td></tr>
+  <tr><td>Like counter flush</td><td>EventBridge Scheduler + Lambda</td><td>In-process scheduler → stops if pod restarts mid-flush</td></tr>
+  <tr><td>Media (avatar, attachments)</td><td>S3 + CloudFront</td><td>Serving from EC2 → no CDN, high egress cost</td></tr>
+</table>
+
+<p><strong>Distributed failure modes to mention:</strong></p>
+<ul style="margin: 0.5rem 0 1.5rem 1.5rem; line-height: 2;">
+  <li>Redis down → fall through to DB; spike in DB load → add circuit breaker</li>
+  <li>Kafka consumer lag → notifications delayed, not lost (Kafka retains events)</li>
+  <li>Like counter flush fails → Redis and DB temporarily diverge; TTL on Redis key self-heals</li>
+  <li>DB write succeeds but Kafka publish fails → use Outbox Pattern (atomic write + event)</li>
+</ul>
+
+<!-- ───────────────────────────── -->
+<h2>9. Retrieval quiz</h2>
+
+<p>Answer from memory — no scrolling.</p>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is cursor-based pagination preferred over OFFSET for comments?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Cursor pagination requires fewer database indexes</li>
+      <li>B) OFFSET pagination only works with MongoDB, not PostgreSQL</li>
+      <li>C) Cursor pagination is simpler to implement on the client</li>
+      <li>D) OFFSET skips N rows on every query (expensive) and causes duplicates when new rows are inserted mid-page</li>
+    </ul>
+    <div class="explanation">OFFSET forces the DB to scan and discard N rows — O(N) cost that grows with page depth. Worse, a new comment inserted before your current offset shifts all subsequent rows, causing a row to appear on two consecutive pages. Cursor encodes a stable position in sorted order: no skips, no duplicates, O(log N) via index seek.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Why use Redis INCR for like counters instead of <code>UPDATE comments SET like_count = like_count + 1</code>?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Redis INCR is more accurate than a SQL UPDATE</li>
+      <li>B) At high like velocity, DB UPDATE on the same row creates lock contention; Redis INCR is atomic, single-threaded, and O(1) — no locking needed</li>
+      <li>C) PostgreSQL does not support atomic increments on BIGINT columns</li>
+      <li>D) Redis INCR automatically syncs the counter to the DB every second</li>
+    </ul>
+    <div class="explanation">Both SQL UPDATE and Redis INCR are atomic at their respective level. The difference is throughput. A DB row UPDATE acquires a row-level lock; 10,000 concurrent likes on a viral comment → 10,000 serialised lock acquisitions → bottleneck. Redis INCR is lock-free (single-threaded event loop) and handles millions of ops/sec. Async flush to DB every 30s trades perfect consistency for throughput.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. A reply is posted. Kafka publish to <code>comment-events</code> fails, but the DB write succeeded. What pattern prevents the reply event from being permanently lost?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Retry the Kafka publish in a catch block with exponential backoff</li>
+      <li>B) Write the event to a dead-letter queue in SQS, then replay manually</li>
+      <li>C) Outbox Pattern — write the event row to an outbox table in the same DB transaction as the comment; a separate poller publishes to Kafka and marks it sent</li>
+      <li>D) Two-phase commit between the DB and Kafka broker</li>
+    </ul>
+    <div class="explanation">A catch-block retry still risks failure after the DB commits. 2PC with Kafka is not supported and introduces latency. The Outbox Pattern atomically co-locates the event with the business data in one DB transaction — if the comment lands, so does the outbox row. A poller (or Debezium CDC) publishes it reliably. This is the canonical distributed system answer for "DB write succeeded but event lost".</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. The comment cache is invalidated on write using a wildcard Redis key delete. What is the risk on a high-write post and how do you mitigate it?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Cache stampede — many readers hit the DB simultaneously after invalidation; mitigate with probabilistic early expiry or a distributed lock on cache population</li>
+      <li>B) Redis keyspace notifications are not supported for wildcard deletes</li>
+      <li>C) Wildcard deletes are O(N²) in Redis cluster mode and will crash the node</li>
+      <li>D) Write-through cache avoids this entirely — always write to cache and DB together</li>
+    </ul>
+    <div class="explanation">Cache stampede (thundering herd): invalidation clears the cache, then 1,000 concurrent readers all miss, all query the DB simultaneously, overloading it. Mitigations: (1) probabilistic early expiry — randomly refresh a small percentage of requests before TTL expires; (2) request coalescing — only one request rebuilds the cache while others wait; (3) short TTL instead of explicit invalidation — accept 60s of stale data. Write-through doesn't help here because it pre-populates one key, not all paginated pages.</div>
+  </div>
+
+</div>
+
+<!-- ───────────────────────────── -->
+<h2>10. Primary source</h2>
+
+<p>
+  Read <a href="https://systemdesign.one/url-shortener-system-design/" target="_blank">
+    System Design One — Comment System patterns
+  </a> and chapter 11 of <em>Designing Data-Intensive Applications</em> (Kleppmann) on
+  stream processing for the notification fan-out model.
+</p>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unsure when to pick adjacency list vs closure table? Or how Debezium + Outbox work together?
+  Ask — these are the follow-up probes interviewers use to separate strong from exceptional candidates.
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- AI ENGINEERING EXTENSION                          -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div style="margin-top:3rem; border-top: 3px solid #7c3aed; padding-top: 1.5rem;">
+
+<h2 style="color: #7c3aed; border-color: #7c3aed;">🤖 AI Engineering Extension — Comment Moderation</h2>
+
+<p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+  <em>Triggers: content moderation · spam detection. Classic implementation above is always the baseline.
+  This section shows where an LLM integration changes the architecture.</em>
+</p>
+
+<h3>Where AI fits</h3>
+<p>
+  The write path. Before a comment is persisted to PostgreSQL, it passes through a
+  <strong>Moderation Service</strong> that classifies it as safe / toxic / spam.
+  Rule-based blocklists (regex, keyword lists) are fast but brittle —
+  they miss context ("I want to kill this bug"), new slang, and multilingual abuse.
+  An LLM classifier handles semantics a blocklist cannot.
+</p>
+
+<h3>Pattern — Classifier + Human-in-the-Loop</h3>
+
+<div class="diagram">Comment write request
+    │
+    ▼
+Moderation Service
+    │
+    ├─ STEP 1: Rule-based pre-filter (blocklist, regex)
+    │      High-confidence block → reject immediately (free, &lt;1ms)
+    │
+    └─ STEP 2: LLM classifier (only if pre-filter passes)
+           │  → score: [safe, toxic, spam, uncertain]
+           │
+           ├─ score &gt; 0.95 safe    → write to DB, publish event
+           ├─ score &gt; 0.85 toxic   → auto-reject, log for audit
+           ├─ score &gt; 0.80 spam    → auto-reject, flag account
+           └─ uncertain (0.4-0.80) → quarantine → Human Review Queue
+                                         │
+                                    human reviewer
+                                    approves / rejects</div>
+
+<h3>Architecture delta</h3>
+<p>New components added to the classic diagram:</p>
+<ul style="margin: 0.5rem 0 1.5rem 1.5rem; line-height: 2.2;">
+  <li><strong>Moderation Service</strong> — sits on the write path between API and DB</li>
+  <li><strong>LLM Classifier API</strong> — Bedrock / Comprehend / external endpoint</li>
+  <li><strong>Moderation Queue (SQS)</strong> — async call so comment write is not blocked on slow LLM</li>
+  <li><strong>Human Review Queue (SQS + UI)</strong> — uncertain cases routed to moderators</li>
+  <li><strong>Quarantine table</strong> — holds comments pending human decision (soft-hold, not rejected)</li>
+  <li><strong>Prompt cache</strong> — identical system prompts cached at Bedrock level, reduces latency + cost</li>
+</ul>
+
+<h3>Tradeoffs</h3>
+
+<table>
+  <tr><th>Approach</th><th>Latency</th><th>Cost</th><th>Accuracy</th><th>Risk</th></tr>
+  <tr><td>Blocklist only</td><td>&lt;1ms</td><td>~$0</td><td>Low — misses context, new slang</td><td>False negatives at scale</td></tr>
+  <tr><td>LLM classifier (sync)</td><td>50–200ms</td><td>$0.001–0.01/call</td><td>High</td><td>Latency on write path; hallucination on edge cases</td></tr>
+  <tr><td>LLM classifier (async)</td><td>0ms added to write</td><td>$0.001–0.01/call</td><td>High</td><td>Comment visible briefly before moderation; eventual consistency</td></tr>
+  <tr><td>Hybrid (blocklist → LLM)</td><td>&lt;1ms or 50–200ms</td><td>Low (LLM only when needed)</td><td>High</td><td>Best balance — blocklist handles obvious cases free</td></tr>
+</table>
+
+<div class="callout warn" style="border-color: #7c3aed;">
+  <strong>Interview angle</strong>
+  Sync LLM on write path adds 50–200ms latency. At 10M comments/day that's real cost.
+  Interviewers probe: "what if the LLM is down?" → circuit breaker → fall through to
+  blocklist-only → queue for retroactive LLM scan. Never block the write path on an external API
+  without a fallback.
+</div>
+
+<h3>AWS / managed services</h3>
+<table>
+  <tr><th>Component</th><th>AWS option</th><th>Notes</th></tr>
+  <tr><td>LLM classifier</td><td>Amazon Comprehend (Toxicity Detection)</td><td>No training needed, built-in, $0.0001/unit</td></tr>
+  <tr><td>Custom classifier</td><td>Amazon Bedrock (Claude / Llama via prompt)</td><td>Better accuracy, higher cost, needs prompt engineering</td></tr>
+  <tr><td>Fine-tuned model</td><td>Amazon SageMaker endpoint</td><td>Best accuracy for domain-specific content; requires labelled training data</td></tr>
+  <tr><td>Async queue</td><td>Amazon SQS Standard</td><td>Decouples write from moderation; at-least-once delivery</td></tr>
+  <tr><td>Human review</td><td>Amazon Augmented AI (A2I)</td><td>Managed human review loop with SLA tracking</td></tr>
+</table>
+
+<!-- AI Quiz -->
+<div style="margin-top: 2rem; padding: 1rem 1.2rem; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px;">
+<p style="font-size: 0.8rem; font-family: monospace; color: #7c3aed; margin-bottom: 1rem;">AI-Q — Retrieval question</p>
+
+<div class="question" id="ai-q1">
+  <p>AI-Q1. A comment system uses a keyword blocklist for moderation. What problem does an LLM classifier solve that the blocklist cannot?</p>
+  <ul class="options" data-correct="3">
+    <li>A) LLM classifiers run faster — blocklist lookups are O(N) per comment</li>
+    <li>B) Blocklists cannot handle Unicode characters; LLMs can</li>
+    <li>C) LLM classifiers understand context and semantics — "I want to kill this bug" is safe; a blocklist flags "kill". New slang and multilingual abuse are handled without rule updates.</li>
+    <li>D) LLM classifiers automatically retrain on new comments every hour</li>
+  </ul>
+  <div class="explanation">Blocklists are syntactic — they match strings, not meaning. LLMs are semantic — they understand that "kill" in "kill the process" is benign. This context-awareness is the core value. The tradeoff: LLMs cost $0.001–0.01 per call and add 50–200ms latency. The hybrid approach (blocklist first, LLM only for uncertain cases) gets accuracy without paying LLM cost on every comment.</div>
+</div>
+</div>
+
+</div>
+<!-- END AI ENGINEERING EXTENSION -->
+
+<footer>
+  Lesson 01 · Comment System Design ·
+  <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Odds Feed Observer</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 1.25rem 0 2rem; }
+  .question { margin: 1rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Odds Feed Observer</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 20 min · Lesson 1 of N</div>
+
+<p>
+  This project has used Observer twice before — q027's <code>BankAccount</code> notifying
+  an email listener and a fraud-alert listener, and q032's Twitter feed fanning out tweets to
+  followers. This lesson applies the same pattern to a different real production shape: a
+  live in-play sportsbook odds feed, where a price display board and a market-suspension
+  monitor both need to react to every odds change, independently of each other and of the
+  feed itself.
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Given "design a live odds feed" or any "one source of truth, several independent
+  reactions" problem, reach for Observer, explain why the Subject fires <em>after</em> its
+  own state changes (not before), and justify <code>CopyOnWriteArrayList</code> over a plain
+  list when listeners can register/unregister mid-notification.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. Entities at a glance</h2>
+
+<div class="diagram">Odds Feed — Core Entities
+
+  OddsListener (interface)              ← Observer
+    ├── PriceDisplayListener            ← tracks latest odds per selection
+    └── MarketSuspensionListener        ← suspends a selection on a drastic move
+
+  OddsChangedEvent (record)              (eventName, selectionName, previousOdds, newOdds)
+  OddsFeed                                ← Subject: current odds map + List&lt;OddsListener&gt;
+                                             fires AFTER updating its own state</div>
+
+<table>
+  <tr><th>Entity</th><th>Key responsibility</th><th>Interview signal</th></tr>
+  <tr><td><code>OddsListener</code></td><td>The only thing OddsFeed knows about downstream reactions</td><td>One generic method, not a typed hook per reaction</td></tr>
+  <tr><td><code>OddsChangedEvent</code></td><td>Immutable fact: these odds moved from X to Y</td><td>Record, not a mutable class — same reasoning as q044's Account guard on shared state</td></tr>
+  <tr><td><code>OddsFeed</code></td><td>Owns current odds, fires events after updating them</td><td>CopyOnWriteArrayList — listeners can self-unregister mid-notification safely</td></tr>
+  <tr><td><code>PriceDisplayListener</code></td><td>Latest-price lookup per selection</td><td>The "boring" listener — proves Observer isn't just for the interesting one</td></tr>
+  <tr><td><code>MarketSuspensionListener</code></td><td>Percentage-move threshold, not raw odds difference</td><td>Same odds range problem State/Strategy questions hit: absolute vs relative thresholds</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>2. TDD, red → green: the Subject fires after its own state changes</h2>
+
+<pre>
+// RED — nothing compiles yet
+@Test
+void firstPublishForANewSelectionHasNoBaselineAndDoesNotSuspend() {
+    OddsFeed feed = new OddsFeed();
+    PriceDisplayListener priceDisplay = new PriceDisplayListener();
+    feed.addListener(priceDisplay);
+
+    feed.publishOddsChange("Match A", "Home", new BigDecimal("2.00"));
+
+    assertEquals(0, priceDisplay.getLatestOdds("Home").compareTo(new BigDecimal("2.00")));
+}
+</pre>
+
+<pre>
+// GREEN
+public interface OddsListener {
+    void onOddsChanged(OddsChangedEvent event);
+}
+
+public record OddsChangedEvent(String eventName, String selectionName,
+                                BigDecimal previousOdds, BigDecimal newOdds) {}
+
+public class OddsFeed {
+    private final Map&lt;String, BigDecimal&gt; currentOdds = new ConcurrentHashMap&lt;&gt;();
+    private final List&lt;OddsListener&gt; listeners = new CopyOnWriteArrayList&lt;&gt;();
+
+    public void addListener(OddsListener listener) { listeners.add(listener); }
+    public void removeListener(OddsListener listener) { listeners.remove(listener); }
+
+    public void publishOddsChange(String eventName, String selectionName, BigDecimal newOdds) {
+        BigDecimal previousOdds = currentOdds.getOrDefault(selectionName, newOdds);
+        currentOdds.put(selectionName, newOdds);   // state changes FIRST
+
+        OddsChangedEvent event = new OddsChangedEvent(eventName, selectionName, previousOdds, newOdds);
+        for (OddsListener listener : listeners) {   // notify SECOND
+            listener.onOddsChanged(event);
+        }
+    }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Why previousOdds defaults to newOdds on a brand-new selection</strong>
+  A selection's first-ever published price has no prior value to have moved from.
+  Defaulting to newOdds gives a genuine zero-percent move on that first publish — treating a
+  missing baseline as zero and calling it a "100% move" would falsely trip
+  <code>MarketSuspensionListener</code> the instant any new market opened.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q1">
+    <p>Q1. Why does <code>OddsFeed.publishOddsChange()</code> update
+    <code>currentOdds</code> before looping over <code>listeners</code>, rather than after?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Java requires all field writes to precede any method call in the same method body</li>
+      <li>B) It doesn't matter — updating after would produce identical behaviour</li>
+      <li>C) A listener that reads OddsFeed's own state (rather than only the event object) — e.g. checking currentOdds for a different, correlated selection — must see the update already applied, not still pending</li>
+      <li>D) CopyOnWriteArrayList requires the backing map to be updated first or it throws</li>
+    </ul>
+    <div class="explanation">If a listener could observe OddsFeed mid-update (state changed, notification not yet sent, versus notification sent, state not yet changed), different listeners in the same list could see inconsistent pictures of "current" odds. Committing the state change first, then notifying, guarantees every listener sees the same already-applied fact.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. MarketSuspensionListener — percentage, not raw difference</h2>
+
+<pre>
+@Override
+public void onOddsChanged(OddsChangedEvent event) {
+    BigDecimal previousOdds = event.previousOdds();
+    BigDecimal move = event.newOdds().subtract(previousOdds).abs();
+    BigDecimal movePercentage = move
+            .divide(previousOdds, 4, RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(100));
+
+    if (movePercentage.compareTo(thresholdPercentage) >= 0) {
+        suspendedSelections.add(event.selectionName());
+    }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Why percentage-of-previousOdds, not the raw difference</strong>
+  A move from 1.10 to 1.20 (raw difference 0.10) is a huge relative jump on very short odds.
+  A move from 10.00 to 10.10 (same raw difference, 0.10) is close to irrelevant on long
+  odds. A single "suspend if the difference exceeds 0.10" rule would either suspend
+  constantly on short-odds markets or never suspend at all on long-odds ones. Dividing by
+  <code>previousOdds</code> makes the threshold mean the same thing regardless of what
+  range a selection's odds happen to sit in.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q2">
+    <p>Q2. Why does <code>MarketSuspensionListener</code> take its threshold as a
+    constructor parameter (<code>BigDecimal thresholdPercentage</code>) instead of a
+    hardcoded constant, when the requirement only demonstrates one threshold value in
+    tests?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Constructor parameters are required by JUnit for any class under test</li>
+      <li>B) Different markets in a real sportsbook need different suspension sensitivity — a football match-winner market and a tennis in-play market don't share one universal definition of "drastic move" — so the caller, not the class, must decide</li>
+      <li>C) BigDecimal fields cannot be declared as compile-time constants in Java</li>
+      <li>D) It doesn't actually need to be configurable — this is only a testing convenience</li>
+    </ul>
+    <div class="explanation">Hardcoding a single threshold would force every market that ever uses this listener to accept the same suspension sensitivity, which doesn't hold in a real sportsbook where different sports and bet types have very different normal volatility.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Why CopyOnWriteArrayList, not a plain ArrayList + synchronized</h2>
+
+<p>
+  A listener can legitimately need to remove itself from inside its own
+  <code>onOddsChanged()</code> callback — for example, a listener that only cares about one
+  alert and then stops listening. That means <code>OddsFeed</code> can be iterating
+  <code>listeners</code> at the exact moment a mutation to that same list happens, on the
+  same thread, mid-iteration.
+</p>
+
+<pre>
+// RED, then GREEN with CopyOnWriteArrayList already in place — no extra code needed
+@Test
+void listenerCanUnregisterItselfDuringNotificationWithoutBreakingTheFeed() {
+    OddsListener selfRemoving = new OddsListener() {
+        @Override
+        public void onOddsChanged(OddsChangedEvent event) {
+            feed.removeListener(this);
+        }
+    };
+    feed.addListener(selfRemoving);
+    feed.addListener(other);
+
+    feed.publishOddsChange(...);   // selfRemoving fires once, removes itself mid-loop
+    feed.publishOddsChange(...);   // selfRemoving does NOT fire again; other still does
+}
+</pre>
+
+<div class="callout">
+  <strong>What a plain ArrayList would do here</strong>
+  Iterating an <code>ArrayList</code> with a standard for-each while another piece of code
+  calls <code>list.remove()</code> on it throws <code>ConcurrentModificationException</code>
+  — this project's <code>feedback_teaching_explanations</code> standing rule is exactly why
+  this gets spelled out rather than silently choosing the "safe" collection type without
+  explanation. <code>CopyOnWriteArrayList</code>'s iterator works off a stable snapshot
+  taken when iteration starts, so an in-flight <code>removeListener()</code> call is safe —
+  the trade-off is that every <code>add</code>/<code>remove</code> copies the entire
+  backing array, which is fine here (listener churn is rare; odds publish frequently, but
+  listener registration doesn't) and would be the wrong choice for a list mutated as often
+  as it's iterated.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q3">
+    <p>Q3. What would happen if <code>OddsFeed.listeners</code> were a plain
+    <code>ArrayList</code>, and a listener called <code>feed.removeListener(this)</code>
+    from inside its own <code>onOddsChanged()</code>, mid-publish?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Nothing different — ArrayList and CopyOnWriteArrayList behave identically for this case</li>
+      <li>B) The removal would silently be ignored until the next publish</li>
+      <li>C) BigDecimal arithmetic elsewhere in the class would start failing</li>
+      <li>D) The for-each loop currently iterating listeners would throw ConcurrentModificationException, because a plain ArrayList detects structural modification during iteration and fails fast</li>
+    </ul>
+    <div class="explanation">ArrayList's iterator tracks a modification count and throws ConcurrentModificationException the moment it detects the list changed underneath it mid-iteration. CopyOnWriteArrayList's iterator instead works from an immutable snapshot taken at iteration start, which is exactly why it tolerates a listener modifying the list from within its own callback.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>5. What interviewers are actually probing</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>Why Observer here?</td><td>OddsFeed shouldn't need to know a price board or a suspension monitor exist — new reactions get added without touching OddsFeed</td></tr>
+  <tr><td>Why fire after updating state, not before?</td><td>Every listener must see a consistent, already-applied picture of current odds, not a pending one</td></tr>
+  <tr><td>Why percentage, not raw odds difference, for suspension?</td><td>A fixed raw threshold means wildly different things on short vs long odds; percentage-of-previousOdds normalises that</td></tr>
+  <tr><td>Why CopyOnWriteArrayList?</td><td>Listeners can register/unregister — including from inside their own callback, mid-notification — without the iteration throwing</td></tr>
+  <tr><td>Why a record for OddsChangedEvent?</td><td>An event is an immutable fact; a mutable event would let one listener silently change what later listeners in the same notification see</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unclear on why the threshold is percentage-based, or want to talk through what a third
+  listener (e.g. a settlement trigger, or an audit log writing every odds change to
+  WORM-style storage) would need to look like? Ask before moving to the question.
+</div>
+
+<footer>
+  Lesson 01 · Odds Feed Observer · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

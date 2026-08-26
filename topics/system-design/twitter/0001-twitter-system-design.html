@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Design Twitter</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a></div>
+
+<h1>Lesson 01 — Design Twitter</h1>
+<div class="meta">Category: System Design · Difficulty: Hard · Est. time: 25 min</div>
+
+<p>
+  Twitter is one of the most common hard system design questions. The central challenge is
+  <strong>feed generation at scale</strong>: how do 300M users see a personalised timeline
+  in under 200ms when a single celebrity tweet must reach 100M followers?
+</p>
+
+<div class="callout pass">
+  <strong>After this lesson you can:</strong>
+  Explain fan-out on write vs fan-out on read, justify the hybrid approach for celebrities,
+  design the timeline storage with Redis Sorted Sets, and map every component to AWS.
+</div>
+
+<!-- ──────── 1. SCALE ──────── -->
+<h2>1. Scale numbers (establish first in interview)</h2>
+
+<table>
+  <tr><th>Metric</th><th>Number</th><th>Why it matters</th></tr>
+  <tr><td>Daily Active Users (DAU)</td><td>300M</td><td>Read path must handle massive concurrency</td></tr>
+  <tr><td>Tweets posted/day</td><td>500M</td><td>~5,800 writes/sec average</td></tr>
+  <tr><td>Peak tweet writes</td><td>~150K/sec</td><td>Major events (World Cup final)</td></tr>
+  <tr><td>Read:write ratio</td><td>~100:1</td><td>Heavily read-optimised — cache everything</td></tr>
+  <tr><td>Average followers</td><td>200</td><td>Fan-out cost for normal users: manageable</td></tr>
+  <tr><td>Celebrity followers</td><td>up to 100M</td><td>Fan-out on write is catastrophic here</td></tr>
+  <tr><td>Tweet size</td><td>max 280 chars + media URL</td><td>Text is tiny; media lives on CDN</td></tr>
+  <tr><td>Timeline depth served</td><td>last 800 tweets</td><td>Redis sorted set per user, capped</td></tr>
+</table>
+
+<!-- ──────── 2. COMPONENTS ──────── -->
+<h2>2. High-level components</h2>
+
+<div class="diagram">                        ┌─────────────────────────────────┐
+  Mobile/Web Client ──────►│         API Gateway / LB        │
+                           └────┬──────────┬────────────┬────┘
+                                │          │            │
+                         ┌──────▼──┐  ┌───▼────┐  ┌───▼──────────┐
+                         │  Tweet  │  │  Feed  │  │   User /     │
+                         │ Service │  │Service │  │ Social Graph  │
+                         └──────┬──┘  └───┬────┘  └──────────────┘
+                                │         │
+                         ┌──────▼──┐      │ reads
+                         │  Kafka  │      ▼
+                         │fan-out  │  ┌──────────┐   ┌─────────────┐
+                         └──────┬──┘  │  Redis   │   │  Cassandra  │
+                                │     │ Timeline │   │   Tweets    │
+                         ┌──────▼──┐  │(sorted   │   │   Store     │
+                         │Fan-out  │  │  sets)   │   └─────────────┘
+                         │ Worker  │  └──────────┘
+                         └──────┬──┘
+                                │ writes to
+                         ┌──────▼───────────────┐
+                         │ Redis timelines of    │
+                         │ all followers         │
+                         └──────────────────────┘</div>
+
+<!-- ──────── 3. DATA MODEL ──────── -->
+<h2>3. Data model</h2>
+
+<h3>Tweets — Cassandra</h3>
+<pre>
+-- Cassandra: write-heavy, time-series, wide rows, no joins needed
+-- Partition key = user_id → all tweets by one user on one node
+CREATE TABLE tweets (
+    user_id    UUID,
+    tweet_id   BIGINT,      -- Snowflake ID: encodes timestamp, sortable
+    content    TEXT,
+    media_url  TEXT,
+    like_count COUNTER,
+    created_at TIMESTAMP,
+    PRIMARY KEY (user_id, tweet_id)
+) WITH CLUSTERING ORDER BY (tweet_id DESC);
+</pre>
+
+<div class="callout">
+  <strong>Why Cassandra, not PostgreSQL?</strong>
+  500M writes/day. Cassandra: tunable consistency, linear horizontal scale, append-only writes at O(1).
+  PostgreSQL: vertical scale limit, index maintenance overhead on billions of rows, cross-shard complexity.
+  Trade-off: Cassandra has no joins, no transactions — acceptable here since tweets are independent records.
+</div>
+
+<h3>Social graph — PostgreSQL or dedicated graph store</h3>
+<pre>
+-- Follow relationship = directed edge. Simple adjacency list in Postgres works up to ~1B edges.
+CREATE TABLE follows (
+    follower_id  UUID NOT NULL,
+    followee_id  UUID NOT NULL,
+    created_at   TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (follower_id, followee_id)
+);
+CREATE INDEX idx_follows_followee ON follows(followee_id);  -- "who follows X?"
+</pre>
+
+<h3>Timeline — Redis Sorted Set per user</h3>
+<pre>
+-- Key: timeline:{user_id}
+-- Score: tweet_id (Snowflake — numerically encodes time, so ZRANGE gives chronological order)
+-- Value: tweet_id (look up full tweet from Cassandra on render)
+
+ZADD timeline:user123  1718000001  tweet_id_A
+ZADD timeline:user123  1718000002  tweet_id_B
+
+-- Serve timeline: newest 20 tweets
+ZREVRANGE timeline:user123 0 19
+
+-- Cap at 800 — remove oldest when exceeded
+ZREMRANGEBYRANK timeline:user123 0 -801
+</pre>
+
+<!-- ──────── 4. FEED GENERATION ──────── -->
+<h2>4. Feed generation — the central design decision</h2>
+
+<h3>Option A: Fan-out on Write (Push model)</h3>
+
+<div class="diagram">Alice posts tweet
+       │
+       ▼
+  Kafka topic: "new-tweets"
+       │
+       ▼
+  Fan-out Workers (consumers)
+       │
+       ├──► ZADD timeline:bob    score=tweet_id  (Bob follows Alice)
+       ├──► ZADD timeline:carol  score=tweet_id
+       └──► ZADD timeline:dave   score=tweet_id
+       ... (one write per follower)</div>
+
+<table>
+  <tr><th></th><th>Fan-out on Write</th></tr>
+  <tr><td>Read latency</td><td>✅ O(1) — timeline pre-built in Redis</td></tr>
+  <tr><td>Write cost</td><td>❌ O(followers) writes per tweet</td></tr>
+  <tr><td>Celebrity problem</td><td>❌ 100M followers × 1 tweet = 100M Redis writes → minutes of lag</td></tr>
+  <tr><td>Best for</td><td>Normal users (≤ ~10K followers)</td></tr>
+</table>
+
+<h3>Option B: Fan-out on Read (Pull model)</h3>
+
+<div class="diagram">Bob opens timeline
+       │
+       ▼
+  Feed Service
+       │
+       ├── SELECT followee_ids FROM follows WHERE follower_id = bob
+       ├── For each followee: fetch latest tweets from Cassandra
+       └── Merge + sort + return top 20</div>
+
+<table>
+  <tr><th></th><th>Fan-out on Read</th></tr>
+  <tr><td>Read latency</td><td>❌ O(following_count × tweet_lookup) — slow, many Cassandra reads</td></tr>
+  <tr><td>Write cost</td><td>✅ Zero — tweet stored once</td></tr>
+  <tr><td>Best for</td><td>Celebrities (write once, read by many)</td></tr>
+</table>
+
+<h3>✅ Hybrid approach — what real Twitter uses</h3>
+
+<div class="diagram">Alice posts tweet
+       │
+       ├─ Alice has ≤ 10K followers?
+       │       │
+       │       ▼ YES → Fan-out on Write → push to all follower Redis timelines
+       │
+       └─ Alice is a celebrity (> 10K followers)?
+               │
+               ▼ NO PUSH — tweet stored in Cassandra only
+
+Bob opens timeline
+       │
+       ▼
+  Feed Service
+       │
+       ├─ 1. Fetch Bob's pre-built Redis timeline (fan-out on write results)
+       ├─ 2. Fetch latest tweets from Bob's celebrity followees (fan-out on read)
+       └─ 3. Merge + deduplicate + sort → return top N</div>
+
+<div class="callout">
+  <strong>Celebrity threshold</strong>
+  Typically ~10K–50K followers. Users above threshold are flagged in the user table
+  (<code>is_celebrity = true</code>). Fan-out worker skips them; Feed Service handles them at read time.
+  This is a configuration trade-off: lower threshold = more Redis writes, lower read latency;
+  higher threshold = fewer writes, higher read latency for celebrity content.
+</div>
+
+<!-- ──────── 5. TWEET ID ──────── -->
+<h2>5. Snowflake ID — why not UUID for tweet IDs</h2>
+
+<pre>
+-- Snowflake: 64-bit integer
+-- Bits: [timestamp 41] [datacenter 5] [machine 5] [sequence 12]
+-- Encodes creation time → sortable by ID alone (no separate created_at index needed)
+-- 4096 unique IDs per millisecond per machine
+
+-- Redis sorted set score = tweet_id → chronological order for free
+-- Cassandra clustering key = tweet_id DESC → newest-first for free
+-- No UUID needed: UUIDs are random → scatter writes across Cassandra nodes → hot spots
+</pre>
+
+<!-- ──────── 6. MEDIA ──────── -->
+<h2>6. Media — images and video</h2>
+
+<table>
+  <tr><th>Step</th><th>Component</th></tr>
+  <tr><td>Upload</td><td>Client uploads directly to S3 via pre-signed URL (bypasses API servers)</td></tr>
+  <tr><td>Processing</td><td>S3 event → Lambda → resize/transcode → store variants in S3</td></tr>
+  <tr><td>Serving</td><td>CloudFront CDN in front of S3 — edge-cached globally, low latency</td></tr>
+  <tr><td>Tweet stores</td><td>Only the S3 URL in Cassandra — not the bytes</td></tr>
+</table>
+
+<!-- ──────── 7. SEARCH & TRENDING ──────── -->
+<h2>7. Search and trending topics</h2>
+
+<h3>Full-text tweet search — Elasticsearch</h3>
+<pre>
+-- Tweet posted → Kafka → Search Indexer → Elasticsearch
+-- Index: tweets { tweet_id, content, author_id, created_at, hashtags[] }
+-- Query: full-text search on content + filter by date
+-- Why not Cassandra for search? No full-text index. Cassandra = key/range lookup only.
+-- Why Elasticsearch? Inverted index → O(1) term lookup regardless of corpus size.
+</pre>
+
+<h3>Trending topics — sliding window + Redis Sorted Set</h3>
+<pre>
+-- Every tweet published → extract hashtags → increment counter in Redis
+-- Redis Sorted Set: key="trending", score=count, member=hashtag
+
+ZINCRBY trending 1 "#WorldCup"    -- atomic increment
+ZREVRANGE trending 0 9            -- top 10 hashtags
+
+-- Problem: counts accumulate forever — need time decay
+-- Solution: sliding window — bucket counts by minute, sum last 60 buckets
+-- Key per minute: "trending:2026061512:34" (YYYYMMDDHHM)
+-- TTL on each bucket: 61 minutes
+-- Top trending = SUM of last 60 minute buckets for each hashtag
+</pre>
+
+<!-- ──────── 8. AWS ──────── -->
+<h2>8. In AWS / Distributed environment</h2>
+
+<table>
+  <tr><th>Component</th><th>AWS equivalent</th><th>Key point</th></tr>
+  <tr><td>API Gateway / LB</td><td>ALB + ECS Fargate</td><td>Auto-scales; sticky sessions not needed (stateless services)</td></tr>
+  <tr><td>Tweet store</td><td>Amazon Keyspaces (Cassandra-compatible) or DynamoDB</td><td>DynamoDB: simpler ops; Keyspaces: true Cassandra API compatibility</td></tr>
+  <tr><td>Social graph</td><td>RDS Aurora PostgreSQL Multi-AZ</td><td>ACID for follow/unfollow; read replicas for follower lookups</td></tr>
+  <tr><td>Timeline cache</td><td>ElastiCache Redis (cluster mode)</td><td>Sorted sets; cluster shards by user_id; Multi-AZ for HA</td></tr>
+  <tr><td>Fan-out queue</td><td>Amazon MSK (Managed Kafka)</td><td>Durable, replayable; fan-out workers are MSK consumers</td></tr>
+  <tr><td>Media storage</td><td>S3 + CloudFront</td><td>Pre-signed URLs for upload; CloudFront edge for global delivery</td></tr>
+  <tr><td>Search</td><td>Amazon OpenSearch Service</td><td>Managed Elasticsearch; tweet indexer as Lambda consumer from MSK</td></tr>
+  <tr><td>Trending</td><td>ElastiCache Redis + Lambda</td><td>ZINCRBY per hashtag; Lambda aggregates buckets every minute</td></tr>
+  <tr><td>Notifications</td><td>SNS (push) + SQS (pull) + Pinpoint (mobile push)</td><td>Fan-out to notification service via SNS topic</td></tr>
+</table>
+
+<h3>What breaks at scale without this design</h3>
+<ul style="margin: 0.5rem 0 1.5rem 1.5rem; line-height: 2;">
+  <li>Storing tweets in PostgreSQL → billions of rows → index scan latency, cross-shard JOINs</li>
+  <li>Fan-out on write for celebrities → 100M Redis writes per tweet → fan-out workers lag minutes behind</li>
+  <li>No Redis timeline cache → every feed load hits Cassandra for N followees → read storm</li>
+  <li>Media served from origin → no CDN → bandwidth saturated, global latency high</li>
+  <li>Single-region → AZ failure takes down all timelines → Multi-AZ ElastiCache + Aurora required</li>
+</ul>
+
+<!-- ──────── QUIZ ──────── -->
+<h2>9. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why is fan-out on write problematic for celebrity accounts (100M followers)?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Celebrity tweets are longer and require more storage per fan-out operation</li>
+      <li>B) One celebrity tweet triggers 100M Redis writes — fan-out workers lag far behind real-time; timeline updates take minutes not milliseconds</li>
+      <li>C) Redis Sorted Sets cannot hold more than 10M members per key</li>
+      <li>D) Fan-out on write requires a DB transaction per follower, which deadlocks at scale</li>
+    </ul>
+    <div class="explanation">O(followers) Redis writes per tweet. At 100M followers and even 100K writes/sec, one tweet takes 1000 seconds to propagate. The hybrid solution: don't push celebrity tweets at write time — merge them at read time from Cassandra instead.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Why use Cassandra for tweet storage instead of PostgreSQL?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Cassandra supports full-text search which PostgreSQL does not</li>
+      <li>B) PostgreSQL cannot store more than 1 billion rows</li>
+      <li>C) Tweets are append-only, require no joins, and need linear horizontal write scale — Cassandra's partition-per-user model gives O(1) writes and range reads without cross-node joins</li>
+      <li>D) Cassandra has ACID transactions making it safer for financial-grade tweet storage</li>
+    </ul>
+    <div class="explanation">PostgreSQL can store billions of rows but needs vertical scaling and complex sharding for 500M writes/day. Cassandra: partition key = user_id puts all tweets by one user on one node. Write = append to partition. Read recent tweets = range scan on one node. No joins, no cross-shard coordination. Trade-off: no transactions, no full-text search (that's Elasticsearch's job).</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why store tweet IDs (Snowflake IDs) in the Redis timeline sorted set rather than timestamps as the score?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Redis Sorted Sets only accept integer scores, not timestamps</li>
+      <li>B) Snowflake IDs are shorter and save memory in Redis</li>
+      <li>C) Timestamps are not unique — two tweets in the same millisecond would overwrite each other in the sorted set</li>
+      <li>D) Snowflake IDs encode the timestamp in their bits — so they sort chronologically by value, serve as unique identifiers, and are the key needed to fetch the full tweet from Cassandra — one field does three jobs</li>
+    </ul>
+    <div class="explanation">Snowflake ID: 41-bit timestamp prefix → numeric sort = chronological sort. Globally unique → no collision. Is the Cassandra lookup key. Using a separate timestamp score would require storing both the score and the tweet ID as separate fields, and two tweets at the same millisecond would have the same score — ambiguous sort order. Snowflake eliminates all three problems.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. Bob follows 500 people: 490 normal users and 10 celebrities. How does the hybrid Feed Service build his timeline?</p>
+    <ul class="options" data-correct="1">
+      <li>A) Fetch Bob's pre-built Redis timeline (tweets from 490 normal followees pushed at write time) + fetch latest tweets from 10 celebrity Cassandra partitions at read time → merge + sort → return top N</li>
+      <li>B) Fetch all 500 followees' latest tweets from Cassandra at read time and merge</li>
+      <li>C) Return only the Redis timeline — celebrities are excluded until their fan-out completes</li>
+      <li>D) Fan-out workers push celebrity tweets to a separate Redis key; Feed Service reads two sorted sets and merges</li>
+    </ul>
+    <div class="explanation">Hybrid: Redis gives O(1) access to normal-user tweets (already pushed). Celebrity tweets are pulled from Cassandra (one read per celebrity, bounded by following count). Merge is cheap — at most 10 Cassandra reads + one Redis read. Result: fast timeline with celebrity tweets included in real time. Option D would still require fan-out for celebrities, missing the point of the hybrid approach.</div>
+  </div>
+
+</div>
+
+<footer>Lesson 01 · Design Twitter · <a href="INDEX.md">← Index</a></footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

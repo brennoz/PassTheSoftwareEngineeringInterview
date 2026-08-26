@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Bet Slip Composite</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 1.25rem 0 2rem; }
+  .question { margin: 1rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .kw-why { color: #9333ea; } .kw-pat { color: #0284c7; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="INDEX.md">← Index</a>
+</div>
+
+<h1>Lesson 01 — Bet Slip Composite</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 25 min · Lesson 1 of N</div>
+
+<p>
+  "Design a bet slip" is a natural Composite Pattern question because a sportsbook already
+  has the exact shape Composite exists for: a customer places single bets and accumulator
+  (parlay) bets, mixes them freely on one slip, and the platform needs one uniform way to
+  total stake and payout across the whole slip — without an <code>instanceof</code> chain
+  anywhere. This is the first Composite-pattern question in this project (State x3,
+  Command, Strategy, and Specification have all appeared before this).
+</p>
+
+<div class="callout pass">
+  <strong>What you will be able to do after this lesson</strong>
+  Given "design a bet slip" or any tree-of-similar-things problem, identify which layer
+  actually needs Composite's recursive uniformity and which layer would only be
+  <em>pretending</em> to need it — and explain why those two answers are different in this
+  design.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>1. The tempting wrong shape, first</h2>
+
+<p>
+  The obvious first instinct: give every bet-shaped thing a <code>List&lt;Wager&gt;</code>
+  of children, all the way down. A <code>SingleBet</code> has zero children, an
+  <code>AccumulatorBet</code>'s children are its legs, a <code>BetSlip</code>'s children are
+  its bets. One recursive interface, total uniformity, done.
+</p>
+
+<div class="callout warn">
+  <strong>Why that's wrong for AccumulatorBet specifically</strong>
+  An accumulator's legs are <em>picks</em> — an event and odds and an eventual result. They
+  are not independently-staked bets. If <code>AccumulatorBet</code> held
+  <code>List&lt;Wager&gt;</code> legs, nothing would stop a caller from building a leg out of
+  a <code>SingleBet</code> that carries its own stake — implying that leg could be settled
+  and paid out on its own, which is not how a real parlay works. Only the accumulator's own
+  stake exists.
+</div>
+
+<p>
+  This is the actual design decision this lesson is about: Composite is genuinely earned at
+  <strong>one</strong> level (<code>BetSlip</code> over <code>Wager</code>) and would be a
+  <strong>false</strong> fit at another (<code>AccumulatorBet</code> over its legs). Knowing
+  which is which — not just "can I draw a recursive tree here" — is what separates a
+  correct Composite design from a pattern applied because it was available.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>2. Entities at a glance</h2>
+
+<div class="diagram">Bet Slip — Core Entities
+
+  Wager (interface)                 ← Composite component
+    ├── SingleBet         (Leaf)    ← one Selection + stake
+    ├── AccumulatorBet    (Leaf*)   ← composes List&lt;Selection&gt;, NOT List&lt;Wager&gt;
+    └── BetSlip           (Composite) ← composes List&lt;Wager&gt;, CAN nest BetSlip
+
+  Selection            (eventName, BigDecimal odds, SelectionResult result)
+  SelectionResult (enum)  PENDING / WON / LOST
+
+  * AccumulatorBet is a leaf from BetSlip's point of view — it has no Wager children —
+    even though internally it aggregates several Selections.</div>
+
+<table>
+  <tr><th>Entity</th><th>Key responsibility</th><th>Interview signal</th></tr>
+  <tr><td><code>Wager</code></td><td>Component interface: getStake / calculatePayout / isWon</td><td>No getChildren() here — that's BetSlip's own concern, not every Wager's</td></tr>
+  <tr><td><code>SingleBet</code></td><td>One Selection, one stake — the true leaf</td><td>calculatePayout() is self-contained: safe to sum blindly</td></tr>
+  <tr><td><code>AccumulatorBet</code></td><td>Combines several Selections behind one stake; all must win</td><td>legs: List&lt;Selection&gt;, not List&lt;Wager&gt; — a type-level design choice</td></tr>
+  <tr><td><code>BetSlip</code></td><td>Sums stake/payout over any mix of Wager, recursively</td><td>The only class where nesting the same type is actually correct</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>3. TDD, red → green: SingleBet first</h2>
+
+<p>
+  Start at the leaf — no dependencies, cheapest thing to get right first.
+</p>
+
+<pre>
+// RED — this doesn't compile yet, nothing exists
+@Test
+void singleBetWonPaysStakeTimesOdds() {
+    Selection selection = new Selection("Team A win", new BigDecimal("2.50"));
+    SingleBet bet = new SingleBet(selection, new BigDecimal("10.00"));
+    selection.settle(SelectionResult.WON);
+
+    assertEquals(0, bet.calculatePayout().compareTo(new BigDecimal("25.00")));
+}
+</pre>
+
+<pre>
+// GREEN — minimum to pass
+public class Selection {
+    private final String eventName;
+    private final BigDecimal odds;
+    private SelectionResult result = SelectionResult.PENDING;
+
+    public Selection(String eventName, BigDecimal odds) {
+        this.eventName = eventName;
+        this.odds = odds;
+    }
+    public BigDecimal getOdds() { return odds; }
+    public SelectionResult getResult() { return result; }
+    public void settle(SelectionResult result) { this.result = result; }
+}
+
+public interface Wager {
+    BigDecimal getStake();
+    BigDecimal calculatePayout();
+    boolean isWon();
+}
+
+public class SingleBet implements Wager {
+    private final Selection selection;
+    private final BigDecimal stake;
+
+    public SingleBet(Selection selection, BigDecimal stake) {
+        this.selection = selection;
+        this.stake = stake;
+    }
+    @Override public BigDecimal getStake() { return stake; }
+    @Override public boolean isWon() { return selection.getResult() == SelectionResult.WON; }
+    @Override public BigDecimal calculatePayout() {
+        return isWon() ? stake.multiply(selection.getOdds()) : BigDecimal.ZERO;
+    }
+}
+</pre>
+
+<p>
+  A second test (lost selection pays zero) passes with no further changes — the
+  <code>isWon()</code> guard already handles it. That's the signal <code>SingleBet</code> is
+  done; move to the next layer instead of adding more tests that exercise the same branch.
+</p>
+
+<div class="quiz">
+  <div class="question" id="q1">
+    <p>Q1. Why must <code>calculatePayout()</code> check <code>isWon()</code> internally,
+    rather than trusting the caller to check first and only call it when the bet has won?</p>
+    <ul class="options" data-correct="3">
+      <li>A) BigDecimal.multiply() throws if called on a losing bet</li>
+      <li>B) JUnit requires every method under test to be side-effect free</li>
+      <li>C) BetSlip later sums calculatePayout() across a whole tree of children without inspecting each one individually — the method must be safe to call blindly, on anything, at any settlement state</li>
+      <li>D) It isn't required — checking outside would be equally correct</li>
+    </ul>
+    <div class="explanation">BetSlip.calculatePayout() (built later in this lesson) calls calculatePayout() on every child uniformly, with no isWon() check at the call site. If SingleBet or AccumulatorBet trusted the caller to pre-check, that contract would be silently violated the first time BetSlip sums a tree containing an unsettled bet.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. AccumulatorBet — where the "legs are not Wagers" decision earns its keep</h2>
+
+<pre>
+// <span class="kw-pat">Pattern: Composite — but composing Selection, not Wager. legs is
+// List&lt;Selection&gt; on purpose: a leg is a pick, not an independently-staked sub-bet.</span>
+public class AccumulatorBet implements Wager {
+    private final List&lt;Selection&gt; legs = new ArrayList&lt;&gt;();
+    private final BigDecimal stake;
+
+    public AccumulatorBet(BigDecimal stake) { this.stake = stake; }
+    public void addLeg(Selection selection) { legs.add(selection); }
+
+    @Override
+    public boolean isWon() {
+        return !legs.isEmpty() && legs.stream().allMatch(leg -> leg.getResult() == SelectionResult.WON);
+    }
+
+    @Override
+    public BigDecimal calculatePayout() {
+        if (!isWon()) return BigDecimal.ZERO;
+        BigDecimal combinedOdds = legs.stream()
+                .map(Selection::getOdds)
+                .reduce(BigDecimal.ONE, BigDecimal::multiply);
+        return stake.multiply(combinedOdds);
+    }
+
+    @Override
+    public BigDecimal getStake() { return stake; }
+}
+</pre>
+
+<div class="callout warn">
+  <strong>Why <code>!legs.isEmpty()</code> in isWon(), not just allMatch()</strong>
+  <code>Stream.allMatch()</code> on an empty stream returns <code>true</code> — vacuous
+  truth. Without the explicit empty check, a freshly-constructed
+  <code>AccumulatorBet</code> with zero legs added would report <code>isWon() == true</code>
+  and pay out its full stake on settlement. This is a real production bug shape (an
+  accumulator built but never populated before settlement runs), not a hypothetical edge
+  case worth skipping.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q2">
+    <p>Q2. Why does <code>AccumulatorBet</code> hold <code>List&lt;Selection&gt;</code>
+    instead of <code>List&lt;Wager&gt;</code>, when <code>BetSlip</code> (built next) holds
+    <code>List&lt;Wager&gt;</code> for the exact same "combine several things" purpose?</p>
+    <ul class="options" data-correct="2">
+      <li>A) Java generics don't allow a class to implement an interface it also holds a list of</li>
+      <li>B) An accumulator leg is a pick (event + odds + eventual result), not an independently-staked bet — List&lt;Wager&gt; would let a leg carry its own stake, implying it could be settled and paid out on its own, which doesn't match how a real parlay works</li>
+      <li>C) Selection is faster to iterate over than Wager at runtime</li>
+      <li>D) BetSlip's children are always heterogeneous, so it needs Wager, while AccumulatorBet's legs are always the same type, so it doesn't</li>
+    </ul>
+    <div class="explanation">The type choice encodes a real domain rule: only the accumulator's own stake exists. Making legs Selection instead of Wager makes "a leg has its own stake" a compile error instead of something that has to be caught in code review or with a runtime instanceof guard.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>5. BetSlip — the actual recursive Composite</h2>
+
+<pre>
+// <span class="kw-pat">Pattern: Composite — the node that genuinely needs recursion. A Wager
+// here can be a SingleBet, an AccumulatorBet, or another BetSlip.</span>
+public class BetSlip implements Wager {
+    private final List&lt;Wager&gt; wagers = new ArrayList&lt;&gt;();
+
+    public void addWager(Wager wager) { wagers.add(wager); }
+
+    @Override
+    public BigDecimal getStake() {
+        return wagers.stream().map(Wager::getStake).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Override
+    public boolean isWon() {
+        return !wagers.isEmpty() && wagers.stream().allMatch(Wager::isWon);
+    }
+
+    @Override
+    public BigDecimal calculatePayout() {
+        return wagers.stream().map(Wager::calculatePayout).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}
+</pre>
+
+<p>
+  The TDD-driving test for this class is the nested-slip case, not the flat-mix case — the
+  flat mix (one <code>SingleBet</code> + one <code>AccumulatorBet</code> summed together)
+  would already pass with a non-recursive <code>List&lt;SingleBet | AccumulatorBet&gt;</code>
+  design. What actually forces <code>BetSlip</code> to implement <code>Wager</code> itself,
+  rather than just being a container of leaf bets, is this:
+</p>
+
+<pre>
+// RED, then GREEN with no extra code needed — BetSlip already implements Wager,
+// so nesting one inside another just works
+@Test
+void nestedBetSlipPayoutIsSummedByParentSlip() {
+    Selection wonSelection = new Selection("Nested single", new BigDecimal("2.00"));
+    SingleBet nestedSingle = new SingleBet(wonSelection, new BigDecimal("10.00"));
+    wonSelection.settle(SelectionResult.WON);
+
+    BetSlip innerSlip = new BetSlip();
+    innerSlip.addWager(nestedSingle);
+
+    BetSlip outerSlip = new BetSlip();
+    outerSlip.addWager(innerSlip);          // a BetSlip added as a Wager, not a special case
+
+    assertEquals(0, outerSlip.getStake().compareTo(new BigDecimal("10.00")));
+    assertEquals(0, outerSlip.calculatePayout().compareTo(new BigDecimal("20.00")));
+}
+</pre>
+
+<div class="callout">
+  <strong>Why no nesting guard on BetSlip, when AccumulatorBet has one (by type)</strong>
+  There is no business rule against a slip containing another slip — grouping a customer's
+  session-level wagers into one account-level rollup is a legitimate real reporting need.
+  AccumulatorBet's restriction exists because bookmakers genuinely forbid "an acca of accas"
+  as a product rule. Copying that restriction onto BetSlip would defend against a problem
+  this domain doesn't have — the two classes look structurally similar (both hold a
+  <code>List</code> of something bet-shaped) but the correct amount of restriction is
+  different for each, because the underlying business rules differ.
+</div>
+
+<div class="quiz">
+  <div class="question" id="q3">
+    <p>Q3. What test would fail first if <code>BetSlip</code> were refactored to hold
+    <code>List&lt;SingleBet&gt;</code> and <code>List&lt;AccumulatorBet&gt;</code> as two
+    separate fields, instead of one <code>List&lt;Wager&gt;</code>?</p>
+    <ul class="options" data-correct="1">
+      <li>A) nestedBetSlipPayoutIsSummedByParentSlip — there would be nowhere to put a BetSlip as a child anymore</li>
+      <li>B) singleBetWonPaysStakeTimesOdds — SingleBet's own payout logic doesn't depend on BetSlip's internal structure</li>
+      <li>C) accumulatorWithOneLostLegPaysZeroEvenIfOthersWon — AccumulatorBet doesn't reference BetSlip at all</li>
+      <li>D) None of them — all the existing tests would still pass unchanged</li>
+    </ul>
+    <div class="explanation">Two separate typed lists can each hold their own concrete type, but neither has room for "a BetSlip nested inside a BetSlip" — that's precisely the case that requires BetSlip's children to be typed as the shared Wager interface, not as specific leaf types.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>6. What interviewers are actually probing</h2>
+
+<table>
+  <tr><th>Probe</th><th>Expected answer</th></tr>
+  <tr><td>Why Composite here?</td><td>BetSlip must total stake/payout across SingleBet and AccumulatorBet uniformly, with no instanceof/switch on wager type</td></tr>
+  <tr><td>Why doesn't AccumulatorBet hold List&lt;Wager&gt; too?</td><td>An accumulator leg is a pick, not an independently-staked bet — List&lt;Selection&gt; makes that a type-level fact</td></tr>
+  <tr><td>Why can BetSlip nest BetSlip but AccumulatorBet can't nest itself?</td><td>Different business rules: no rule bans nested slips; bookmakers do ban nested accumulators</td></tr>
+  <tr><td>Why does isWon() explicitly check for an empty collection?</td><td>Stream.allMatch() on empty is vacuously true — an unpopulated accumulator or slip must not silently report as won</td></tr>
+  <tr><td>Where does BigDecimal.ZERO/ONE come in?</td><td>Identity elements for the reduce() calls — sum starts at ZERO, product starts at ONE</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Unclear on why AccumulatorBet's legs aren't Wager, or want to talk through what a fourth
+  Wager implementation (e.g. a "Free Bet" with a stake that isn't returned on a win) would
+  need to change? Ask before moving to the question.
+</div>
+
+<footer>
+  Lesson 01 · Bet Slip Composite · <a href="INDEX.md">← Index</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

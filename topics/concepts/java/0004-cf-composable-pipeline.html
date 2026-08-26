@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CompletableFuture — Composable Async Pipeline</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+  .diagram{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;font-family:'Menlo','Consolas',monospace;font-size:.82rem;line-height:1.8;margin:1rem 0 1.5rem;white-space:pre}
+  .tag{display:inline-block;font-family:monospace;font-size:.75rem;padding:.15em .5em;border-radius:3px;margin-left:.4rem;vertical-align:middle}
+  .tag.mvc{background:#dbeafe;color:#1e40af}
+  .tag.flux{background:#dcfce7;color:#166534}
+  .tag.kafka{background:#fef9c3;color:#854d0e}
+</style>
+</head>
+<body>
+<div class="lesson-nav">
+  <a href="../../">← Topics</a> /
+  <a href="0001-completable-future.html">0001 CompletableFuture basics</a>
+</div>
+<h1>CompletableFuture — Composable Async Pipeline</h1>
+<div class="meta">Category: Java · Topic: Async programming · Lesson 4 of 4</div>
+
+<p>This lesson answers one specific question that trips up many developers: <em>why return <code>CompletableFuture&lt;T&gt;</code> from a service instead of blocking inside and returning <code>T</code> directly?</em> The short answer is <strong>delegation</strong> — the service should not decide when to block. Different callers have different strategies.</p>
+
+<!-- ===== 1. THE CORE RULE ===== -->
+<h2>1. Return the Promise — Don't Cash It In</h2>
+
+<p>A <code>CompletableFuture&lt;T&gt;</code> is a <em>promise</em> of a future result. When a service method returns a CF instead of blocking, it hands the promise to the caller. The caller then decides what to do with it: block, chain further, combine with other CFs, or never block at all.</p>
+
+<div class="callout fail">
+  <strong>BAD — service blocks itself (wrong)</strong>
+<pre style="margin-top:.5rem">// Service collapses the CF internally. Caller has no choice.
+@Service
+public class SubscriptionService {
+    public EnrichedSubscription enrich(String id) {
+        Subscription sub = subscriptionRepo.findById(id).get();    // thread BLOCKS here
+        Account acc      = accountRepo.findById(sub.accountId()).get(); // thread BLOCKS again
+        return new EnrichedSubscription(sub, acc);
+    }
+}</pre>
+</div>
+
+<div class="callout pass">
+  <strong>GOOD — service returns CF (caller decides)</strong>
+<pre style="margin-top:.5rem">// Service returns a promise. No blocking anywhere inside.
+@Service
+public class SubscriptionService {
+    public CompletableFuture&lt;EnrichedSubscription&gt; enrich(String id) {
+        return subscriptionRepo.findById(id)          // CF&lt;Subscription&gt;
+            .thenApply(pricingService::applyDiscount)  // sync transform, no IO
+            .thenCompose(d -&gt;
+                accountRepo.findById(d.accountId())    // CF&lt;Account&gt;
+                    .thenApply(acc -&gt; new EnrichedSubscription(d, acc))
+            );
+        // No .get() anywhere — promise returned to caller
+    }
+}</pre>
+</div>
+
+<!-- ===== 2. THE CALLING THREAD ===== -->
+<h2>2. What Happens to the Calling Thread</h2>
+
+<p>When a Spring MVC controller handles an HTTP request, Tomcat assigns a thread from its pool (default: 200 threads). That thread runs your controller → service → returns response. If the service blocks internally, that Tomcat thread is pinned — sleeping while waiting for a DB or HTTP response — unable to serve other requests.</p>
+
+<div class="diagram">Without CF (blocking):
+
+  Tomcat thread  ──── controller ──── service.enrich() ───┐
+                                                           │ SLEEPING 50ms (DB call)
+                                                           │ SLEEPING 30ms (DB call)
+                                                           └──── response
+
+  Thread is pinned for 80ms. On 200 threads → 200 concurrent requests max.
+
+With CF (non-blocking, Spring MVC):
+
+  Tomcat thread  ──── controller ──── service.enrich() ──── .get() ──┐
+                                      returns CF immediately          │ waits at edge
+  Virtual threads run DB calls concurrently                           │
+  Tomcat thread resumes when CF completes ◄───────────────────────────┘</div>
+
+<p>In standard Spring MVC the Tomcat thread still blocks at the edge (the controller's <code>.get()</code>), but the <em>work inside the service is now parallelisable</em>. The real non-blocking story comes with WebFlux — covered in section 4.</p>
+
+<!-- ===== 3. THREE CALLERS ===== -->
+<h2>3. Three Callers — Three Strategies</h2>
+
+<p>The same service method <code>enrich(String id)</code> returning <code>CompletableFuture&lt;EnrichedSubscription&gt;</code> can be called from three different contexts, each handling the CF differently.</p>
+
+<h3>Strategy A — Spring MVC controller (block once at the HTTP edge) <span class="tag mvc">Spring MVC</span></h3>
+<pre>@RestController
+public class SubscriptionController {
+
+    @GetMapping("/subscriptions/{id}/enriched")
+    public EnrichedSubscription enrich(@PathVariable String id)
+            throws ExecutionException, InterruptedException, TimeoutException {
+
+        // Block ONCE at the HTTP boundary — not deep inside the service
+        // If you later want a timeout, change this one line only
+        return subscriptionService.enrich(id).get(500, TimeUnit.MILLISECONDS);
+    }
+}
+
+// If blocking were inside the service, you'd have to dig through
+// business logic to add or change a timeout. Here it is one call.</pre>
+
+<div class="callout">
+  <strong>Idiom: block at the boundary, not inside the domain</strong>
+  The service has zero knowledge of HTTP, timeout policies, or SLAs. The controller owns those decisions. This keeps services reusable across different callers with different timeout requirements.
+</div>
+
+<h3>Strategy B — WebFlux reactive controller (never blocks) <span class="tag flux">WebFlux</span></h3>
+<pre>@RestController
+public class SubscriptionController {
+
+    @GetMapping("/subscriptions/{id}/enriched")
+    public Mono&lt;EnrichedSubscription&gt; enrich(@PathVariable String id) {
+        // Mono.fromFuture wraps the CF — no .get() anywhere
+        // Netty event loop never blocks; response is sent when CF completes
+        return Mono.fromFuture(subscriptionService.enrich(id));
+    }
+}
+
+// Same service method. Zero code change in SubscriptionService.
+// WebFlux handles 10k concurrent requests on ~10 threads because no thread
+// ever sits idle waiting for a CF — they return to the event loop immediately.</pre>
+
+<div class="callout pass">
+  <strong>Why this scales</strong>
+  Netty's event loop threads never block. When <code>Mono.fromFuture(cf)</code> is returned, Netty registers a callback on the CF. The thread is immediately free to accept another request. When the CF completes, the callback fires and Netty writes the response. 10k open connections, 10 threads — possible because no thread sleeps.
+</div>
+
+<h3>Strategy C — Kafka consumer (block before offset commit) <span class="tag kafka">Kafka</span></h3>
+<pre>// Kafka consumer: must finish all async work BEFORE committing the offset
+// If we return without joining, the offset commits but the work might still fail
+@KafkaListener(topics = "subscriptions.events")
+public void onSubscriptionCreated(SubscriptionCreatedEvent event) {
+
+    // Fan out to two independent services in parallel
+    CompletableFuture&lt;EnrichedSubscription&gt; enrichCf =
+        subscriptionService.enrich(event.getSubscriptionId());
+
+    CompletableFuture&lt;Void&gt; auditCf = CompletableFuture.runAsync(
+        () -&gt; auditService.recordCreation(event), ioExecutor
+    );
+
+    // Block until both complete — BEFORE Kafka commits the offset
+    // If either fails, exception propagates, offset is NOT committed,
+    // Kafka retries the message — at-least-once delivery preserved.
+    CompletableFuture.allOf(enrichCf, auditCf)
+        .exceptionally(ex -&gt; {
+            log.error("Processing failed for subscriptionId={}",
+                event.getSubscriptionId(), ex);
+            throw new RuntimeException(ex); // forces offset NOT to commit
+        })
+        .join(); // block here — this is intentional in a Kafka consumer
+}</pre>
+
+<div class="callout warn">
+  <strong>Kafka consumers must join before returning</strong>
+  If you fire async work but return from the listener method without joining, Kafka commits the offset assuming success. If the async work later fails, the message is lost — no retry. In Kafka consumers, always <code>.join()</code> at the end of the listener method. This is the one place where blocking intentionally is correct.
+</div>
+
+<!-- ===== 4. SEQUENTIAL VS PARALLEL IN CF CHAIN ===== -->
+<h2>4. Sequential Chain vs Parallel Fan-out</h2>
+
+<p>Two different CF shapes exist. Knowing which to use is key to getting the performance benefit.</p>
+
+<h3>Sequential chain — result of A feeds into B</h3>
+<p>Use when the second call depends on data from the first. No parallelism possible — and that is correct. <code>thenCompose</code> is the tool.</p>
+
+<pre>// q001 pattern: account fetch needs accountId from the subscription
+public CompletableFuture&lt;EnrichedSubscription&gt; enrich(String subscriptionId) {
+    return subscriptionService.findById(subscriptionId)   // 1. fetch subscription
+        .thenApply(pricingService::applyDiscount)          // 2. apply discount (sync)
+        .thenCompose(discounted -&gt;
+            accountService.findById(discounted.accountId()) // 3. fetch account (needs accountId from step 2)
+                .thenApply(account -&gt; new EnrichedSubscription(discounted, account))
+        );
+}
+// Total time: t(subscription) + t(account) — sequential, unavoidable here
+// CF still adds value: non-blocking, composable, timeout-friendly</pre>
+
+<h3>Parallel fan-out — A, B, C are independent</h3>
+<p>Use when all calls can start simultaneously. <code>allOf</code> is the tool. This is where CF delivers real latency savings.</p>
+
+<pre>// q002 pattern: subscription, billing address, and payment method are independent
+public CompletableFuture&lt;Invoice&gt; buildInvoice(String subscriptionId, String accountId) {
+    // All three start at the same instant
+    CompletableFuture&lt;Subscription&gt; subCf = subscriptionService.getSubscription(subscriptionId)
+        .completeOnTimeout(Subscription.empty(), timeoutMs, MILLISECONDS)
+        .exceptionally(ex -&gt; Subscription.empty());   // broken service → fallback
+
+    CompletableFuture&lt;BillingAddress&gt; addrCf = billingAddressService.getBillingAddress(accountId)
+        .completeOnTimeout(BillingAddress.unknown(), timeoutMs, MILLISECONDS)
+        .exceptionally(ex -&gt; BillingAddress.unknown());
+
+    CompletableFuture&lt;PaymentMethod&gt; pmCf = paymentMethodService.getDefaultPaymentMethod(accountId)
+        .completeOnTimeout(PaymentMethod.unknown(), timeoutMs, MILLISECONDS)
+        .exceptionally(ex -&gt; PaymentMethod.unknown());
+
+    // allOf waits for all three — total time = max(t_sub, t_addr, t_pm)
+    return CompletableFuture.allOf(subCf, addrCf, pmCf)
+        .thenApply(ignored -&gt; new Invoice(subCf.join(), addrCf.join(), pmCf.join()));
+}
+// Sequential equivalent: t_sub + t_addr + t_pm = e.g. 20+30+15 = 65ms
+// Parallel with allOf:  max(20, 30, 15) = 30ms — 2× faster, same code complexity</pre>
+
+<!-- ===== 5. THE DOUBLE-SAFETY PATTERN ===== -->
+<h2>5. The Double-Safety Pattern — completeOnTimeout + exceptionally</h2>
+
+<p>These two methods handle completely different failure modes. Combined, they cover every way a remote service can fail.</p>
+
+<table>
+  <thead><tr><th>Failure mode</th><th>What happens</th><th>Which method fires</th></tr></thead>
+  <tbody>
+    <tr><td>Slow service (no response in time)</td><td>CF is still pending after deadline</td><td><code>completeOnTimeout</code></td></tr>
+    <tr><td>Broken service (throws exception)</td><td>CF completes exceptionally before deadline</td><td><code>exceptionally</code></td></tr>
+    <tr><td>Fast success</td><td>CF completes normally before deadline</td><td>Neither — result passes through</td></tr>
+  </tbody>
+</table>
+
+<pre>// Double-safety: chain order matters
+// completeOnTimeout MUST come before exceptionally
+CompletableFuture&lt;BillingAddress&gt; addrCf = billingAddressService.getBillingAddress(accountId)
+    .completeOnTimeout(BillingAddress.unknown(), 200, MILLISECONDS)
+    // ↑ slow service: CF still pending at 200ms → complete with fallback (normal completion)
+    .exceptionally(ex -&gt; BillingAddress.unknown());
+    // ↑ broken service: CF completed exceptionally (e.g. network error) → catch, return fallback
+
+// WHY order matters:
+// completeOnTimeout on a CF that ALREADY completed exceptionally is a no-op.
+// So: broken service fires before 200ms → completeOnTimeout is ignored → exceptionally fires.
+// Slow service still pending at 200ms → completeOnTimeout fires (normal completion) →
+//   exceptionally does NOT fire (result is now normal, not exceptional).
+
+// Testing the two paths separately (Mockito):
+// Path 1 — slow service (never-completing CF):
+when(service.get()).thenReturn(new CompletableFuture&lt;&gt;()); // pending forever → completeOnTimeout fires
+
+// Path 2 — broken service (immediately failed CF):
+when(service.get()).thenReturn(CompletableFuture.failedFuture(new RuntimeException("down")));
+// completes exceptionally before timeout → exceptionally fires</pre>
+
+<!-- ===== 6. COMPOSABILITY ACROSS LAYERS ===== -->
+<h2>6. Composability Across Layers</h2>
+
+<p>The real power of returning CF from services emerges when services call each other. Each layer composes the promise without blocking. Only the outermost caller (HTTP edge, Kafka listener) decides when to collect.</p>
+
+<pre>// Three service layers — each returns CF, none blocks internally
+
+// Layer 3: data access
+@Service
+public class SubscriptionRepository {
+    private final ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
+
+    public CompletableFuture&lt;Subscription&gt; findById(String id) {
+        return CompletableFuture.supplyAsync(() -&gt; jdbc.queryForObject(...), exec);
+    }
+}
+
+// Layer 2: domain service — composes layer 3, adds business logic
+@Service
+public class SubscriptionService {
+    public CompletableFuture&lt;EnrichedSubscription&gt; enrich(String id) {
+        return subscriptionRepository.findById(id)   // CF from layer 3
+            .thenApply(pricingService::applyDiscount)
+            .thenCompose(d -&gt; accountRepository.findById(d.accountId())
+                .thenApply(acc -&gt; new EnrichedSubscription(d, acc)));
+    }
+}
+
+// Layer 1: controller — only place that blocks (or doesn't, in WebFlux)
+@RestController
+public class SubscriptionController {
+    // Spring MVC: block once at edge
+    @GetMapping("/subscriptions/{id}/enriched")
+    public EnrichedSubscription get(@PathVariable String id) throws Exception {
+        return subscriptionService.enrich(id).get(500, MILLISECONDS);
+    }
+
+    // WebFlux: never block — wrap CF in Mono
+    @GetMapping("/subscriptions/{id}/enriched")
+    public Mono&lt;EnrichedSubscription&gt; get(@PathVariable String id) {
+        return Mono.fromFuture(subscriptionService.enrich(id));
+    }
+}</pre>
+
+<div class="callout">
+  <strong>Mental model</strong>
+  CF flows upward through layers like a baton. Each layer can transform it (<code>thenApply</code>), chain more async work (<code>thenCompose</code>), or combine it with others (<code>thenCombine</code>, <code>allOf</code>). The baton is only "opened" (blocked on) at the top — the HTTP edge or message consumer. Deep inside the domain, no thread ever sleeps waiting for I/O.
+</div>
+
+<!-- ===== 7. SPRING ASYNC ===== -->
+<h2>7. Spring @Async — CF Without Explicit Executor</h2>
+
+<p>Spring can manage the executor for you via <code>@Async</code>. The method runs on Spring's configured executor, and the calling thread returns immediately with a CF.</p>
+
+<pre>// Config: replace default SimpleAsyncTaskExecutor with virtual threads
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+    @Bean(name = "virtualThreadExecutor")
+    public Executor taskExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor(); // Java 21
+    }
+}
+
+// Service: annotated method runs on the executor, returns CF to caller
+@Service
+public class SubscriptionServiceImpl implements SubscriptionService {
+
+    @Async("virtualThreadExecutor")
+    @Override
+    public CompletableFuture&lt;Subscription&gt; findById(String id) {
+        // This method body runs on a virtual thread, not the caller's thread
+        Subscription sub = jdbc.queryForObject(...); // blocking JDBC — OK, virtual thread
+        return CompletableFuture.completedFuture(sub);
+    }
+}
+
+// Caller: does not need to pass an executor — Spring handles it
+subscriptionService.findById("sub-1")
+    .thenApply(pricingService::applyDiscount)
+    .thenCompose(d -&gt; accountService.findById(d.accountId())
+        .thenApply(acc -&gt; new EnrichedSubscription(d, acc)));
+
+// Spring AOP wraps the @Async method:
+// 1. Caller invokes findById() on the proxy
+// 2. Proxy submits the real method body to virtualThreadExecutor
+// 3. Caller gets a CF back immediately
+// 4. CF completes when the virtual thread finishes the JDBC call</pre>
+
+<div class="callout warn">
+  <strong>@Async pitfall: self-invocation</strong>
+  Calling <code>this.findById()</code> from inside the same bean bypasses Spring's proxy — the method runs on the caller's thread, not the executor. Always inject the service and call through the injected reference, not <code>this</code>.
+</div>
+
+<!-- ===== QUIZ ===== -->
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. A service method currently does <code>Subscription sub = repo.findById(id).get();</code> inside its body and returns <code>EnrichedSubscription</code>. A teammate suggests changing it to return <code>CompletableFuture&lt;EnrichedSubscription&gt;</code> and removing the inner <code>.get()</code>. The REST controller would then call <code>.get(500, MILLISECONDS)</code>. What is the main benefit of this change?</p>
+  <ul class="options" data-correct="2">
+    <li>The DB query now runs faster because CompletableFuture uses a faster JDBC driver internally</li>
+    <li>The calling code (controller) now owns the decision of when and how long to block. The service becomes reusable by callers with different timeout policies — a Kafka consumer, a WebFlux controller, or a batch job — without changing the service. The controller can add or change a timeout in one line instead of modifying business logic.</li>
+    <li>The change eliminates all thread blocking in the application — no thread ever waits after this change</li>
+    <li>The DB query now runs in parallel with the pricing calculation automatically</li>
+  </ul>
+  <div class="explanation">The benefit is delegation of the blocking decision, not eliminating it. In Spring MVC the controller's .get() still blocks a Tomcat thread — but that's the correct boundary. The service is now usable by WebFlux (Mono.fromFuture — no block at all) or Kafka (join before offset commit) without any changes to the service. Option D is wrong: the CF chain in this example is sequential (account fetch depends on subscription result), so no parallelism is gained — but the composability benefit is still real.</div>
+</div>
+
+<div class="question">
+  <p>Q2. You have this code: <code>service.getBillingAddress(id).completeOnTimeout(BillingAddress.unknown(), 200, MILLISECONDS).exceptionally(ex -&gt; BillingAddress.unknown())</code>. The address service immediately throws a <code>RuntimeException</code> (response time: 5ms). Which method fires?</p>
+  <ul class="options" data-correct="3">
+    <li><code>completeOnTimeout</code> fires because it is declared first in the chain</li>
+    <li>Both fire: <code>completeOnTimeout</code> provides the fallback, then <code>exceptionally</code> transforms it again</li>
+    <li><code>exceptionally</code> fires. The service threw at 5ms — the CF completed exceptionally before the 200ms deadline. <code>completeOnTimeout</code> only fires when the CF is still pending at deadline; a CF that already completed (even exceptionally) is unaffected by <code>completeOnTimeout</code>. <code>exceptionally</code> catches the exception and returns the fallback.</li>
+    <li>Neither fires — the chain re-throws the RuntimeException to the caller</li>
+  </ul>
+  <div class="explanation">completeOnTimeout checks: "is this CF still pending after 200ms?" If the CF already completed (normally or exceptionally) before 200ms, completeOnTimeout is a no-op. The CF completed exceptionally at 5ms, so completeOnTimeout does nothing. exceptionally then fires because the CF is in a failed state. This is the key distinction: completeOnTimeout = slow services (timeout), exceptionally = broken services (errors). Together they cover all failure modes.</div>
+</div>
+
+<div class="question">
+  <p>Q3. A WebFlux controller method returns <code>Mono.fromFuture(subscriptionService.enrich(id))</code>. The service internally uses <code>supplyAsync</code> with a virtual thread executor and chains <code>thenApply</code> / <code>thenCompose</code>. The request arrives on Netty's event loop thread. Is that event loop thread ever blocked while the DB calls run?</p>
+  <ul class="options" data-correct="1">
+    <li>No. The event loop thread returns the Mono to Netty immediately. Netty registers a callback on the CF. The DB calls run on virtual threads (the executor passed to supplyAsync). When the CF completes, Netty's event loop picks it up and writes the HTTP response — the event loop thread was never sleeping. This is how WebFlux serves thousands of concurrent requests on a small thread pool.</li>
+    <li>Yes. Mono.fromFuture calls CompletableFuture.get() internally to bridge the two async models, which blocks the event loop</li>
+    <li>No, but only because virtual threads eliminate all blocking — the same result would occur with a fixed thread pool</li>
+    <li>Yes. Netty's event loop must hold an OS thread open for each pending Mono until it completes</li>
+  </ul>
+  <div class="explanation">Mono.fromFuture subscribes to the CF's completion callback — it does NOT call get() or join(). The Netty event loop thread sets up the subscription and immediately returns to accept more connections. Option C is incorrect: virtual threads eliminate blocking from OS thread pinning, but the event loop is never blocked regardless — that is a property of the reactive model (Mono/CF callbacks), not of virtual threads. Virtual threads benefit the executor doing the DB calls, not the event loop.</div>
+</div>
+
+<div class="question">
+  <p>Q4. A Kafka listener calls <code>subscriptionService.enrich(event.getSubscriptionId())</code> and returns immediately without calling <code>.join()</code> or <code>.get()</code>. The CF is still running when the listener returns. What is the consequence?</p>
+  <ul class="options" data-correct="2">
+    <li>Kafka suspends the consumer partition until the CF completes, then commits the offset</li>
+    <li>Kafka commits the offset immediately when the listener method returns (before the CF completes). If the CF later fails, the message is lost — Kafka has no knowledge of the outstanding CF. The failure produces no retry. To preserve at-least-once delivery, always call <code>.join()</code> (or <code>CompletableFuture.allOf(...).join()</code>) at the end of a Kafka listener, so the offset is only committed after all async work succeeds.</li>
+    <li>Kafka retries the message automatically after detecting the CF was not awaited</li>
+    <li>The listener thread blocks in the background until the CF completes, then Kafka commits the offset</li>
+  </ul>
+  <div class="explanation">Kafka's offset commit is tied to the listener method's return, not to any CF running in background threads. Kafka has no awareness of CompletableFuture. When the listener returns, Spring Kafka considers the message processed and commits the offset. Any async work that fails after that point is silently lost — no DLQ, no retry. Kafka consumers are one of the few places where intentionally blocking (.join()) at the end of the method is the correct design.</div>
+</div>
+
+</div>
+
+<footer>Java Concepts · CompletableFuture Composable Pipeline · Lesson 4 of 4</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>

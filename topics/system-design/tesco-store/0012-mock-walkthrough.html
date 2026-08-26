@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Round 3 — Full 90-Minute Mock Walkthrough</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 900px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .phase { border: 1px solid var(--border); border-radius: 8px; margin: 1.5rem 0 2rem; overflow: hidden; }
+  .phase-head { background: var(--sidebar); padding: 0.7rem 1.2rem; font-family: monospace;
+                font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+  .phase-time { color: var(--accent); }
+  .phase-body { padding: 0.2rem 1.2rem 1.2rem; }
+  .say { background: #eef2ff; border-left: 3px solid #4f46e5; padding: 0.7rem 1rem;
+         margin: 0.8rem 0; border-radius: 0 5px 5px 0; font-style: italic; }
+  .say::before { content: "You say: "; font-style: normal; font-weight: bold; color: #4338ca; }
+  .them { background: #fef9f0; border-left: 3px solid #d97706; padding: 0.7rem 1rem;
+          margin: 0.8rem 0; border-radius: 0 5px 5px 0; font-style: italic; }
+  .them::before { content: "Interviewer might say: "; font-style: normal; font-weight: bold; color: #92400e; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0011-scale-capacity-estimation.html">← File 11</a></div>
+
+<h1>Full 90-Minute Mock Walkthrough</h1>
+<div class="meta">Tesco Interview Prep · Rehearsal · File 12 of 12</div>
+
+<div class="callout">
+  <strong>How to use this file</strong>
+  This is a rehearsal script for a hypothetical prompt, applying file 0001's method to files
+  0003–0011's content. Read it once for the shape, then practice saying each phase in YOUR OWN
+  words, out loud, timed — reading this verbatim in the real interview will sound rehearsed
+  and brittle the moment they ask something not scripted here. The value is in the structure
+  and pacing, not the exact sentences.
+</div>
+
+<div class="callout warn">
+  <strong>Invented prompt for this rehearsal — not what you'll actually be asked</strong>
+  "Design a system for how a Tesco store handles checkout, pricing, and stock — bearing in
+  mind stores need to keep operating even if there's a network issue." This specific wording
+  is made up for practice. Your real prompt could be completely different (see the closing
+  section for what to do if it is).
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 1 — Clarifying questions</span><span class="phase-time">0–10 min</span></div>
+  <div class="phase-body">
+    <p>Work through file 0001 Section 2's four categories, don't just ask one and move on:</p>
+    <div class="say">Before I start drawing — a few questions. First, scope: are we designing just the checkout/till flow, or also how stock and pricing get INTO the store from a central system?</div>
+    <div class="them">Let's say end-to-end — checkout, and how it stays in sync with the rest of the business.</div>
+    <div class="say">Got it. On scale — roughly how many stores and how many tills per store should I be designing for? I'll assume a large multi-format estate, a few thousand stores, if you don't have an exact number in mind.</div>
+    <div class="them">That's a reasonable assumption, go with it.</div>
+    <div class="say">And on availability — you mentioned network issues. Should the store be able to keep SELLING if it loses its connection to head office, or is some downtime acceptable?</div>
+    <div class="them">It needs to keep selling. That's actually the interesting part of this problem.</div>
+    <div class="say">That's a strong signal — it tells me I need local compute in the store, not everything calling a central API directly. Last one: is card payment processing in scope, or should I treat that as an external black box?</div>
+    <div class="them">You can treat the actual card network as external, but I want to see how you'd integrate with it.</div>
+    <div class="say">Understood. I'll design the integration point and treat the payment network itself as a third party. Let me quickly estimate scale, then I'll start drawing.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 2 — Capacity estimation (spoken, condensed from file 0011)</span><span class="phase-time">10–15 min</span></div>
+  <div class="phase-body">
+    <div class="say">Quick back-of-envelope: say ~3,000 stores, ~20 tills each on average — that's tiny per-store load, maybe a fraction of a transaction per second per store at peak, so the store's own local hardware doesn't need to be powerful. But aggregated nationally, at say 5x peak multiplier over an average day, that's a few hundred transactions a second hitting whatever central system aggregates all stores — THAT's where I need to think about real throughput, not any individual store. That split is going to shape the whole design: keep the store simple and self-sufficient, put the interesting scaling problem centrally.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 3 — High-level design (drawing, narrated)</span><span class="phase-time">15–40 min</span></div>
+  <div class="phase-body">
+    <p>Draw in this order, narrating each addition before moving to the next box — don't draw silently:</p>
+    <ol>
+      <li><strong>Client layer</strong> — a box for cashier terminals. <div class="say">These are the tills and self-checkouts — I'll treat them as thin clients.</div></li>
+      <li><strong>Local store box</strong> — a bounded rectangle labelled "store-edge." <div class="say">Because we said the store must keep selling offline, I'm putting a local compute layer here — not everything talks straight to the cloud.</div></li>
+      <li><strong>Services inside it</strong> — POS, Pricing (local cache), Inventory (local), Payment. <div class="say">Each of these is its own service — POS owns the checkout flow, Pricing and Inventory are local read caches synced from a central source of truth, Payment is deliberately isolated since it touches card data.</div></li>
+      <li><strong>The sync bridge</strong> — a Store-Sync box with a dashed/async arrow to a central box. <div class="say">This is the ONLY component allowed to assume the network is up — it queues events locally and syncs when it can, so nothing else in the store depends on connectivity.</div></li>
+      <li><strong>Central box</strong> — Central Pricing, Inventory/Warehouse, Reporting. <div class="say">Central holds the source of truth for pricing and aggregates stock/sales across every store — this is also where the interesting scale numbers from a minute ago actually apply.</div></li>
+      <li><strong>External payment gateway</strong> — dashed border, outside everything. <div class="say">Card processing goes to a certified external payment gateway — I want as little of my own system touching raw card data as possible, for PCI-DSS reasons.</div></li>
+    </ol>
+    <p>By minute 40 the board should look roughly like this (this is file 0003's diagram, condensed):</p>
+    <div class="diagram-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" font-family="Menlo,Consolas,monospace" font-size="10">
+      <rect width="900" height="380" fill="#fafafa"/>
+      <rect x="15" y="140" width="110" height="100" rx="6" fill="#f3f4f6" stroke="#6b7280"/>
+      <text x="70" y="165" text-anchor="middle" fill="#374151" font-weight="bold">Tills</text>
+      <text x="70" y="182" text-anchor="middle" fill="#374151" font-size="9">(cashier</text>
+      <text x="70" y="196" text-anchor="middle" fill="#374151" font-size="9">terminals)</text>
+      <path d="M128 190 L165 190" stroke="#1e3a8a" stroke-width="2" marker-end="url(#a1)"/>
+      <text x="146" y="182" text-anchor="middle" fill="#1e3a8a" font-size="8">WS</text>
+
+      <rect x="170" y="40" width="330" height="300" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+      <text x="335" y="62" text-anchor="middle" font-weight="bold" fill="#1e3a8a">Store-edge (K8s, per store)</text>
+      <rect x="188" y="78" width="140" height="34" rx="4" fill="#bfdbfe" stroke="#1d4ed8"/>
+      <text x="258" y="99" text-anchor="middle" fill="#1e3a8a" font-size="9">POS</text>
+      <rect x="338" y="78" width="140" height="34" rx="4" fill="#bfdbfe" stroke="#1d4ed8"/>
+      <text x="408" y="99" text-anchor="middle" fill="#1e3a8a" font-size="9">Pricing (local)</text>
+      <rect x="188" y="120" width="140" height="34" rx="4" fill="#bfdbfe" stroke="#1d4ed8"/>
+      <text x="258" y="141" text-anchor="middle" fill="#1e3a8a" font-size="9">Inventory (local)</text>
+      <rect x="338" y="120" width="140" height="34" rx="4" fill="#bfdbfe" stroke="#1d4ed8"/>
+      <text x="408" y="141" text-anchor="middle" fill="#1e3a8a" font-size="9">Payment</text>
+      <rect x="188" y="164" width="290" height="34" rx="4" fill="#c7d2fe" stroke="#4338ca"/>
+      <text x="333" y="185" text-anchor="middle" fill="#3730a3" font-size="9">Store-Sync (only one that needs WAN)</text>
+      <rect x="188" y="208" width="290" height="28" rx="4" fill="#e0e7ff" stroke="#4338ca" stroke-dasharray="3,2"/>
+      <text x="333" y="226" text-anchor="middle" fill="#3730a3" font-size="9">local DB + outbox queue</text>
+
+      <path d="M500 190 L560 190" stroke="#166534" stroke-width="2" stroke-dasharray="6,4" marker-end="url(a2)"/>
+      <text x="530" y="180" text-anchor="middle" fill="#166534" font-size="8">async</text>
+
+      <rect x="565" y="40" width="320" height="220" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+      <text x="725" y="62" text-anchor="middle" font-weight="bold" fill="#14532d">Central (AKS)</text>
+      <rect x="583" y="78" width="140" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+      <text x="653" y="99" text-anchor="middle" fill="#14532d" font-size="9">Central Pricing</text>
+      <rect x="733" y="78" width="135" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+      <text x="800" y="99" text-anchor="middle" fill="#14532d" font-size="9">Inventory/WH</text>
+      <rect x="583" y="120" width="285" height="34" rx="4" fill="#bbf7d0" stroke="#15803d"/>
+      <text x="725" y="141" text-anchor="middle" fill="#14532d" font-size="9">Reporting / Analytics</text>
+
+      <rect x="583" y="290" width="285" height="50" rx="6" fill="#fef3c7" stroke="#d97706" stroke-dasharray="4,3"/>
+      <text x="725" y="310" text-anchor="middle" fill="#92400e" font-size="9" font-weight="bold">External Payment Gateway</text>
+      <text x="725" y="325" text-anchor="middle" fill="#92400e" font-size="8">PCI-DSS boundary</text>
+      <path d="M408 154 L680 288" stroke="#92400e" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(a3)"/>
+
+      <defs>
+        <marker id="a1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e3a8a"/></marker>
+        <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#166534"/></marker>
+        <marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#92400e"/></marker>
+      </defs>
+    </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 4 — Deep dive (interviewer-driven, two rehearsed examples)</span><span class="phase-time">40–70 min</span></div>
+  <div class="phase-body">
+    <p><strong>Example A — resilience (pulling from files 0007, 0010):</strong></p>
+    <div class="them">Tell me more about what actually happens if a store loses internet mid-trading day.</div>
+    <div class="say">Nothing customer-facing breaks immediately — every service in the store box except Store-Sync was deliberately designed to not depend on that link. Checkout keeps working off the local price and stock cache. What DOES happen: Store-Sync can't publish its outbox anymore, so pending sale events queue up locally in a durable table — that's the outbox pattern, same transaction as the sale itself so nothing's lost. Card payments above a certain value might be affected since authorising those needs to reach an external gateway — that's really the one hard dependency. When the link comes back, Store-Sync drains the queue oldest-first, and the store does a full price resync rather than trying to replay potentially thousands of incremental changes, since that's simpler to reason about for correctness.</div>
+
+    <p><strong>Example B — protocol design (pulling from file 0005):</strong></p>
+    <div class="them">Walk me through the actual protocol between a till and the local server.</div>
+    <div class="say">WebSocket, not REST polling, because it needs to be bidirectional and low-latency — the till sends a scan event, the server pushes back a price/promo result without the till having to ask again. I'd use Spring's STOMP support over WebSocket specifically because it gives topic-based pub/sub for free — each till subscribes to its own topic so messages don't fan out to every connected till. On reconnect after a drop, the till re-subscribes and the server replays current basket state, because I'd keep basket state server-side precisely so a till crash mid-transaction doesn't lose the whole basket.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 5 — CI/CD (condensed from file 0002)</span><span class="phase-time">70–85 min</span></div>
+  <div class="phase-body">
+    <div class="them">Can you give me an example of CI/CD for this?</div>
+    <div class="say">Each service gets its own pipeline. On push: build, test, static analysis, then a container image goes to Azure Container Registry. Merge to main promotes through dev, staging, then a gated prod rollout. Here's the part specific to this domain: I'm not deploying to one cluster, potentially thousands of store clusters, so a central pipeline pushing to all of them synchronously doesn't scale well — one flaky store shouldn't stall the rollout. I'd switch to GitOps for that leg: each store's cluster pulls its own desired config independently via Flux, registered centrally through Azure Arc. I'd roll a new version to a small canary group of stores first, watch error rate for a bake period, then promote ring by ring — pilot stores, then a region, then everywhere.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<div class="phase">
+  <div class="phase-head"><span>Phase 6 — Wrap-up</span><span class="phase-time">85–90 min</span></div>
+  <div class="phase-body">
+    <div class="say">To summarise the key trade-offs: I chose local-first store compute over pure cloud-native for availability during network issues, at the cost of more operational complexity managing a fleet of edge clusters instead of one central system. I isolated payment into its own service specifically to shrink PCI-DSS scope. And I used a pull-based GitOps deployment model instead of push specifically because of the fleet scale, not because it's always the right default. With more time I'd want to dig into the offline card-payment story more — that edge case is genuinely partly a commercial/compliance question, not purely technical, and I'd want real numbers from Tesco's actual outage history before committing to a specific single-node-per-store hardware decision.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>If the real prompt is completely different</h2>
+
+<p>
+  It probably will be, at least in the specifics. What transfers regardless of the actual
+  problem statement:
+</p>
+
+<table>
+  <tr><th>From this rehearsal</th><th>Transfers to any prompt because</th></tr>
+  <tr><td>The clarifying-question categories (Phase 1)</td><td>Functional scope / scale / constraints / failure-tolerance apply to any system, not just retail</td></tr>
+  <tr><td>The estimate-then-justify habit (Phase 2)</td><td>Turning a vague requirement into a number, then using it to pick a component, is domain-independent</td></tr>
+  <tr><td>The narrate-while-drawing habit (Phase 3)</td><td>Silence while drawing is the failure mode file 0001 warns about, regardless of what's being drawn</td></tr>
+  <tr><td>The CI/CD template (Phase 5)</td><td>Genuinely reusable near-verbatim — the prompt guarantees this follow-up regardless of the system design problem</td></tr>
+  <tr><td>Naming trade-offs and honest limitations (Phase 6)</td><td>The single strongest, most portable interview habit in this whole folder</td></tr>
+</table>
+
+<h2>Final self-check before the real interview</h2>
+
+<ul>
+  <li>Draw.io open and a personal shape vocabulary (file 0001 Section 3) decided in advance — not improvised live</li>
+  <li>Can state the clarifying-question framework from memory, not by reading it</li>
+  <li>Can do a back-of-envelope estimate for ANY system, not just this one, in under 5 minutes</li>
+  <li>Has the CI/CD 90-second answer (file 0002 Section 6) ready near-verbatim, since it's a guaranteed ask</li>
+  <li>Comfortable saying "I don't know Tesco's real numbers, here's my assumption" out loud without hedging apologetically</li>
+</ul>
+
+<footer>
+  Tesco System Design Prep · File 12 of 12 (final) · <a href="INDEX.md">← Index</a>
+</footer>
+
+</body>
+</html>

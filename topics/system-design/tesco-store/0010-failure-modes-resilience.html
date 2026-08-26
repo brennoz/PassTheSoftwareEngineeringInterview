@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Failure Modes &amp; Resilience</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 900px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.88rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  td.ok { color: var(--pass); font-weight: bold; }
+  td.bad { color: var(--fail); font-weight: bold; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0009-payment-pci-dss.html">← File 9</a></div>
+
+<h1>Failure Modes &amp; Resilience</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 10 of 12</div>
+
+<p>
+  This file is the reference answer to "what happens when X breaks" for every X raised so far
+  in the folder — consolidated in one place because a live interview will very likely probe at
+  least one of these, and having the blast radius memorised beats re-deriving it live.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Blast-radius table</h2>
+
+<table>
+  <tr><th>Failure</th><th>What stops working</th><th>What KEEPS working</th></tr>
+  <tr>
+    <td>WAN link down (store ↔ central)</td>
+    <td class="bad">Price/promo updates stop arriving; card payments above the issuer floor limit (file 0009); central reporting for this store goes stale</td>
+    <td class="ok">Everything else — checkout, local stock, cash/gift-card payments, till WebSocket sessions — all untouched, because they never depended on the WAN link (file 0003's boundary rule)</td>
+  </tr>
+  <tr>
+    <td>Single store-edge pod crashes (e.g. Pricing Service)</td>
+    <td class="bad">That pod's function only, for the seconds it takes K8s to restart it (liveness probe failure → restart)</td>
+    <td class="ok">Other pods on the same node — POS, Inventory, Payment — keep serving. K8s readiness probes stop routing traffic to the crashed pod specifically, not the whole node</td>
+  </tr>
+  <tr>
+    <td>Whole edge box hardware failure</td>
+    <td class="bad">The entire store's local layer — tills fall back to a documented manual/paper contingency procedure until a replacement box is installed</td>
+    <td class="ok">Every OTHER store — this is single-store blast radius by design (file 0004's single-node trade-off, accepted explicitly)</td>
+  </tr>
+  <tr>
+    <td>One till/terminal fails</td>
+    <td class="bad">That till only — cashier moves the queue to another till</td>
+    <td class="ok">Every other till at the same store, since each WebSocket session is independent (file 0005)</td>
+  </tr>
+  <tr>
+    <td>Central AKS outage/degradation</td>
+    <td class="bad">Price/promo propagation stalls fleet-wide; cross-store reporting/analytics stalls; new fleet rollouts pause</td>
+    <td class="ok">Every store's actual checkout operation — the whole point of the edge architecture is that stores don't need central to sell</td>
+  </tr>
+  <tr>
+    <td>External card payment gateway outage</td>
+    <td class="bad">Card payments fleet-wide (this is genuinely outside Tesco's control)</td>
+    <td class="ok">Cash and gift-card/loyalty-balance payments; everything non-payment-related</td>
+  </tr>
+</table>
+
+<div class="callout pass">
+  <strong>The pattern across every row</strong>
+  Every failure in this table has a bounded, named blast radius — nothing cascades into "the
+  whole estate is down." That's not an accident; it's the direct, provable consequence of the
+  design decisions made earlier in this folder (local-first store-edge, single-writer sync,
+  per-pod isolation, per-store hardware isolation). If asked "what's your availability story,"
+  pointing at this table row by row IS the answer — it's more convincing than quoting an
+  abstract uptime percentage.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. Recovering from a WAN outage — the reconnect sequence</h2>
+
+<div class="diagram">WAN link restored
+   │
+   ▼
+Store-Sync Service resumes draining its outbox (file 0007) —
+oldest events first, preserving order per store
+   │
+   ▼
+Store pulls latest price/promo state from central (may be a full
+resync if the outage was long, not just a replay of missed deltas —
+simpler to reason about correctness than trying to replay a
+potentially huge backlog of incremental price-change events)
+   │
+   ▼
+Staleness indicator (last-synced timestamp) clears once caught up
+   │
+   ▼
+Store manager alert (if one was raised during the outage) resolves</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Zero-touch recovery for a replaced edge box</h2>
+
+<p>
+  A concrete payoff of the GitOps/Arc investment from files 0002 and 0008: when a failed edge
+  box is physically replaced, the new hardware registers with Azure Arc and its local Flux
+  agent pulls the exact desired-state configuration for that store from Git — no manual
+  reinstall runbook, no "which version should this store be on" guesswork. The same mechanism
+  that makes fleet-wide rollouts safe (ring-based promotion, file 0008) also makes single-store
+  disaster recovery close to automatic once the physical hardware problem is fixed.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>4. Circuit breakers on the calls that DO cross service boundaries</h2>
+
+<p>
+  POS → Pricing, POS → Payment are synchronous calls inside the same edge cluster (file
+  0006). Even at sub-millisecond intra-cluster latency, a hung dependency shouldn't be allowed
+  to hang the caller indefinitely — a circuit breaker (Resilience4j is the standard Spring
+  Boot choice) with a short timeout and a defined fallback (e.g. Pricing Service unreachable →
+  POS falls back to its own last-known-good local price cache rather than blocking the
+  checkout entirely) keeps one degraded service from taking down the till experience with it.
+</p>
+
+<footer>
+  Tesco System Design Prep · File 10 of 12 · Next:
+  <a href="0011-scale-capacity-estimation.html">0011 — Scale/Capacity Estimation</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

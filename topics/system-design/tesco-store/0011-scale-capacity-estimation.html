@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — Scale &amp; Capacity Estimation</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 900px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.7;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0010-failure-modes-resilience.html">← File 10</a></div>
+
+<h1>Scale &amp; Capacity Estimation</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 11 of 12</div>
+
+<p>
+  File 0001's time budget puts capacity estimation right after requirements-gathering, before
+  the diagram — the numbers here justify design decisions made throughout this folder rather
+  than being decorative. Every figure below is a stated, round assumption for practicing the
+  ESTIMATION SKILL, not a claim about Tesco's real numbers — say so explicitly if you do this
+  live: "I don't know Tesco's actual store count, I'll assume roughly 3,000 for this
+  exercise."
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Base assumptions (state these out loud, then move on)</h2>
+
+<table>
+  <tr><th>Quantity</th><th>Assumed value</th><th>Reasoning</th></tr>
+  <tr><td>Stores nationally</td><td>~3,000</td><td>Round number for a large UK supermarket chain across all formats (Superstore/Extra/Express/Metro)</td></tr>
+  <tr><td>Terminals per store (avg, across all formats)</td><td>~20</td><td>Small Express stores might have 2–4; large Extra/Superstore might have 30–40 staffed + self-checkout combined — 20 is a blended average, not a per-format number</td></tr>
+  <tr><td>Transactions per store per day</td><td>~3,000</td><td>A busy supermarket doing steady trade across opening hours, higher on weekends — round mid-estimate</td></tr>
+  <tr><td>Peak-to-average traffic ratio</td><td>~5×</td><td>Retail trading is spiky (lunchtime, after-work, weekends, Christmas) — 5× is a reasonable standard multiplier to assume without store-specific data</td></tr>
+</table>
+
+<!-- ─────────────────────────── -->
+<h2>2. Derived numbers</h2>
+
+<pre>WebSocket connections per store (file 0005's "not the big-scale problem" claim, checked):
+  ~20 terminals × ~80% active at peak  ≈ 16 concurrent WS connections per store
+  → trivially small for one local POS pod. Confirms the design assumption.
+
+National daily transactions:
+  3,000 stores × 3,000 tx/day  = 9,000,000 tx/day  (~9M)
+
+National average tx/sec:
+  9,000,000 / 86,400 seconds  ≈ 104 tx/sec  (nationally, hitting CENTRAL sync ingestion)
+
+National peak tx/sec:
+  104 × 5 (peak multiplier)  ≈ 520 tx/sec  (nationally, at peak)
+
+Per-store tx/sec at peak (sanity check — this never leaves the store in real time):
+  3,000 tx/day × 5 peak-multiplier / 86,400s  ≈ 0.17 tx/sec per store
+  → confirms a single store's local write load is trivially small; ALL the
+    interesting scale lives in the aggregate central ingestion path, not
+    any single store's edge cluster.
+
+Central sync payload volume at peak:
+  520 tx/sec × ~2KB per sale event (items, prices, payment token, no PAN)
+  ≈ ~1MB/sec ingress at peak
+  → well within a single Azure Service Bus namespace's throughput; no
+    unusual scaling problem here with standard managed-service limits.</pre>
+
+<!-- ─────────────────────────── -->
+<h2>3. What these numbers actually justify</h2>
+
+<table>
+  <tr><th>Number</th><th>Design decision it supports</th></tr>
+  <tr><td>~16 concurrent WS connections/store</td><td>File 0005's claim that WebSocket connection-scaling isn't the hard problem here — confirmed by the maths, not just asserted</td></tr>
+  <tr><td>~0.17 tx/sec per store</td><td>File 0004's edge hardware sizing (a modest small-form-factor box) — the local write load is nowhere near needing serious local compute</td></tr>
+  <tr><td>~1MB/sec central ingress at peak</td><td>File 0007's transport choice (Azure Service Bus, not needing Event Hubs-scale throughput) — the volume genuinely doesn't demand it</td></tr>
+  <tr><td>520 tx/sec national peak vs 104 average</td><td>File 0008's autoscaling story (HPA needs to handle a real 5× swing, not a flat load) and the DR/multi-AZ argument (central genuinely does carry aggregate national load, unlike any single store)</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Why doing this out loud matters more than the exact numbers</strong>
+  The interviewer isn't checking your estimate against a real number they know and you don't
+  — they're checking whether you can turn a vague requirement into a number, and then use
+  that number to justify a concrete decision (Service Bus vs Event Hubs, edge hardware size,
+  autoscaling targets) rather than picking components by vibes. Getting the assumed store
+  count "wrong" doesn't matter; skipping this step entirely, or doing the maths without ever
+  connecting it back to a design decision, does.
+</div>
+
+<footer>
+  Tesco System Design Prep · File 11 of 12 · Next:
+  <a href="0012-mock-walkthrough.html">0012 — Mock Walkthrough</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

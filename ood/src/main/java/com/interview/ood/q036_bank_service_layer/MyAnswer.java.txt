@@ -1,0 +1,115 @@
+package com.interview.ood.q036_bank_service_layer;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.*;
+
+public class MyAnswer {}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum AccountType     { CURRENT, SAVINGS }
+enum AccountStatus   { ACTIVE, CLOSED }
+enum TransactionType { CREDIT, DEBIT }
+
+// ─── Domain records ───────────────────────────────────────────────────────────
+
+// TODO 1: fill in the record bodies — fields listed in question.md
+
+record Account(String id, String ownerId, AccountType type, AccountStatus status) {}
+
+record Transaction(String id, String accountId, TransactionType type,
+                   BigDecimal amount, BigDecimal balanceAfter, Instant createdAt) {}
+
+record Transfer(String id, String fromAccountId, String toAccountId,
+                BigDecimal amount, Instant createdAt) {}
+
+// ─── Exceptions ───────────────────────────────────────────────────────────────
+
+// TODO 2: implement InsufficientFundsException — include accountId, balance, requested in message
+
+class InsufficientFundsException extends RuntimeException {
+    InsufficientFundsException(String accountId, BigDecimal balance, BigDecimal requested) {
+        throw new UnsupportedOperationException("TODO 2");
+    }
+}
+
+// ─── Repositories ─────────────────────────────────────────────────────────────
+
+// TODO 3: implement AccountRepository
+//   store         Map<String, Account>     keyed by id
+//   balances      Map<String, BigDecimal>  keyed by id (simulates DB balance column)
+//   addToBalance(id, amount)          → add, persist, return new balance
+//   subtractFromBalance(id, amount)   → check balance >= amount (throw InsufficientFundsException),
+//                                       subtract, persist, return new balance
+
+class AccountRepository {
+    Optional<Account> findById(String id) { throw new UnsupportedOperationException("TODO 3"); }
+    void save(Account account)            { throw new UnsupportedOperationException("TODO 3"); }
+    BigDecimal getBalance(String id)      { throw new UnsupportedOperationException("TODO 3"); }
+    BigDecimal addToBalance(String id, BigDecimal amount)      { throw new UnsupportedOperationException("TODO 3"); }
+    BigDecimal subtractFromBalance(String id, BigDecimal amount) { throw new UnsupportedOperationException("TODO 3"); }
+}
+
+// TODO 4: implement LedgerRepository
+//   byAccount  Map<String, List<Transaction>>  keyed by accountId
+//   record(txn)              → append (never delete)
+//   history(accountId)       → List.copyOf — unmodifiable
+
+class LedgerRepository {
+    void record(Transaction txn)              { throw new UnsupportedOperationException("TODO 4"); }
+    List<Transaction> history(String acctId)  { throw new UnsupportedOperationException("TODO 4"); }
+}
+
+// ─── Services ─────────────────────────────────────────────────────────────────
+
+// TODO 5: implement AccountService
+//   open(ownerId, type)         → new Account(UUID, ownerId, type, ACTIVE); save; return
+//   deposit(accountId, amount)  → validate ACTIVE; addToBalance; create + record Transaction; return
+//   withdraw(accountId, amount) → validate ACTIVE; subtractFromBalance; create + record Transaction; return
+//   getBalance(accountId)       → repo.getBalance(accountId)
+//   close(accountId)            → throw IllegalStateException if balance > 0
+//                                 replace account with status=CLOSED via repo.save(new Account(..., CLOSED))
+
+class AccountService {
+    AccountService(AccountRepository repo, LedgerRepository ledger) {
+        throw new UnsupportedOperationException("TODO 5");
+    }
+    Account     open(String ownerId, AccountType type)        { throw new UnsupportedOperationException("TODO 5"); }
+    Transaction deposit(String accountId, BigDecimal amount)  { throw new UnsupportedOperationException("TODO 5"); }
+    Transaction withdraw(String accountId, BigDecimal amount) { throw new UnsupportedOperationException("TODO 5"); }
+    BigDecimal  getBalance(String accountId)                  { throw new UnsupportedOperationException("TODO 5"); }
+    void        close(String accountId)                       { throw new UnsupportedOperationException("TODO 5"); }
+}
+
+// TODO 6: implement TransferService
+//   transfer(fromId, toId, amount)
+//     → throw IllegalArgumentException if fromId.equals(toId)
+//     → accountService.withdraw(fromId, amount)   [throws InsufficientFundsException if not enough]
+//     → accountService.deposit(toId, amount)
+//     → return new Transfer(UUID, fromId, toId, amount, Instant.now())
+
+class TransferService {
+    TransferService(AccountService accountService) {
+        throw new UnsupportedOperationException("TODO 6");
+    }
+    Transfer transfer(String fromId, String toId, BigDecimal amount) {
+        throw new UnsupportedOperationException("TODO 6");
+    }
+}
+
+// ─── BankService (facade) ─────────────────────────────────────────────────────
+
+// TODO 7: wire all dependencies in no-arg constructor; delegate every method
+
+class BankService {
+    BankService() { throw new UnsupportedOperationException("TODO 7"); }
+
+    Account           openAccount(String ownerId, AccountType type)          { throw new UnsupportedOperationException("TODO 7"); }
+    Transaction       deposit(String accountId, BigDecimal amount)            { throw new UnsupportedOperationException("TODO 7"); }
+    Transaction       withdraw(String accountId, BigDecimal amount)           { throw new UnsupportedOperationException("TODO 7"); }
+    Transfer          transfer(String fromId, String toId, BigDecimal amount) { throw new UnsupportedOperationException("TODO 7"); }
+    BigDecimal        getBalance(String accountId)                            { throw new UnsupportedOperationException("TODO 7"); }
+    List<Transaction> history(String accountId)                               { throw new UnsupportedOperationException("TODO 7"); }
+    void              closeAccount(String accountId)                          { throw new UnsupportedOperationException("TODO 7"); }
+}

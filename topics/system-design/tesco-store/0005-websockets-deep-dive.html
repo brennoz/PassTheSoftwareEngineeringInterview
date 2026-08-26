@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesco Store System — WebSockets Deep-Dive</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 820px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0004-store-edge-architecture.html">← File 4</a></div>
+
+<h1>WebSockets Deep-Dive: Cashier Terminal ↔ POS Pod</h1>
+<div class="meta">Tesco Interview Prep · Tier 2 — Worked Example · File 5 of 12</div>
+
+<p>
+  The recalled hint was "heavy use of WebSockets." This file works out what that most
+  plausibly means at the till, and — importantly — why the scaling story here is NOT the
+  usual "millions of concurrent WebSocket connections" problem most system-design prep
+  covers. That distinction is worth making explicit if it comes up, because it changes the
+  right answer.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>1. Why WebSocket over the alternatives, for THIS connection specifically</h2>
+
+<table>
+  <tr><th>Option</th><th>Why it loses here</th></tr>
+  <tr><td>REST polling (till polls POS pod every N ms for price/promo/stock updates)</td><td>Either too slow (polling interval becomes checkout latency) or wasteful (polling fast enough to feel instant means near-continuous HTTP overhead for mostly-empty responses)</td></tr>
+  <tr><td>Server-Sent Events (SSE)</td><td>One-directional (server→client only). The till needs to both push events (item scanned, payment initiated) AND receive pushes (price response, promo applied, "card declined") — SSE would need a second channel (HTTP POST) for the client→server direction, adding complexity WebSocket avoids with one connection</td></tr>
+  <tr><td>gRPC streaming</td><td>Viable alternative, genuinely — but WebSocket has simpler browser/kiosk-client tooling if the till UI is a web-based kiosk app (common for POS), and Spring's native STOMP-over-WebSocket support (below) gives pub/sub topic semantics for free</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>The actual justification, stated plainly</strong>
+  A checkout needs low-latency, bidirectional, server-push-capable communication between the
+  till and the local POS pod: scan an item → server looks up price/promo → pushes the result
+  back → till updates the display, all without the till polling. WebSocket is the natural fit
+  for exactly this shape of interaction, and it's a single persistent connection instead of
+  a new HTTP request per scan.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>2. Why this is NOT the "scale to millions of connections" problem</h2>
+
+<p>
+  Most system-design material that covers WebSockets (chat apps, live sports odds, social
+  feeds) focuses on the hard problem of sharding connection state across many WebSocket
+  server instances, because a single popular server might need to hold millions of concurrent
+  connections. That problem doesn't exist here, and saying so explicitly is a stronger answer
+  than silently reciting a sharding strategy that doesn't apply:
+</p>
+
+<ul>
+  <li>A store has roughly 20–80 terminals (tills + self-checkouts) — file 0011 works the
+  number out properly.</li>
+  <li>Every terminal in a store connects to that <em>store's own local POS pod</em>, not a
+  shared central WebSocket server. Connection count per pod is in the dozens, not thousands or
+  millions.</li>
+  <li>There is no cross-store connection sharing to worry about — Store A's tills never talk
+  to Store B's POS pod. The "fleet" scaling problem (file 0002, 0008) is about deploying and
+  managing 3,000 independent small pods, not about any single pod handling huge fan-out.</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Where the real scale problem actually lives</strong>
+  If asked "how does this scale," the honest answer redirects to the store-to-central sync
+  path (file 0007) and the fleet deployment/observability story (file 0008) — that's where
+  thousands-of-stores scale genuinely bites. The WebSocket layer itself is small-scale by
+  design, precisely because it never leaves the store.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>3. Connection lifecycle</h2>
+
+<div class="diagram">Till boots
+   │
+   ▼
+Connect to LOCAL POS pod (never central — file 0003's boundary rule)
+   │
+   ▼
+Auth handshake — per-terminal token (issued at store setup, not per-session login)
+   │
+   ▼
+Subscribe to till-specific topic: /topic/till/{tillId}/*
+   │
+   ▼
+Heartbeat/ping-pong every ~10s (detects a silently-dead connection faster
+than TCP timeouts would)
+   │
+   ├─ Connection drops (Wi-Fi hiccup, pod restart during a rolling update)
+   │       │
+   │       ▼
+   │  Exponential backoff reconnect (1s, 2s, 4s... capped)
+   │       │
+   │       ▼
+   │  Resume: re-subscribe, POS pod returns current basket state for that
+   │  till (basket lives server-side, keyed by tillId — see Section 5)
+   │       │
+   │       ▼
+   │  Till UI re-renders from server state — cashier sees no data loss,
+   │  at most a brief "reconnecting" flicker
+   │
+   ▼
+Till shuts down / end of day → clean disconnect</div>
+
+<div class="callout">
+  <strong>Why basket state lives server-side, not just in the till's browser/kiosk memory</strong>
+  If the till is "just a display" and the POS pod is the source of truth for basket state, a
+  till reboot or browser crash mid-transaction is recoverable — reconnect, re-subscribe, get
+  the basket back. If basket state lived only in the till's local memory, a crash mid-scan
+  loses the whole transaction and forces a manual re-scan of everything, which is exactly the
+  kind of visible, embarrassing failure a checkout system can't afford during a busy period.
+</div>
+
+<!-- ─────────────────────────── -->
+<h2>4. Spring implementation shape — STOMP over WebSocket</h2>
+
+<p>
+  Raw <code>@ServerEndpoint</code> WebSocket works, but Spring's STOMP-over-WebSocket support
+  (<code>spring-boot-starter-websocket</code> + <code>@EnableWebSocketMessageBroker</code>)
+  gives topic-based pub/sub semantics for free — a message published to
+  <code>/topic/till/{tillId}/price-update</code> only reaches subscribers of that topic,
+  rather than every connected till on the pod. This also matches how real-world Spring Boot
+  WebSocket systems are typically built in production, so it's a defensible, well-trodden
+  choice to name rather than inventing a bespoke protocol.
+</p>
+
+<pre>// Illustrative shape, not literal Tesco code
+@Controller
+public class PosSocketController {
+
+    @MessageMapping("/till/{tillId}/scan")
+    @SendTo("/topic/till/{tillId}/basket-update")
+    public BasketUpdate handleScan(@DestinationVariable String tillId, ScanEvent event) {
+        // look up price (local Pricing Service), apply promos, update basket state
+        // server is the source of truth — see Section 3
+    }
+}</pre>
+
+<h3>Message design</h3>
+
+<table>
+  <tr><th>Direction</th><th>Example message</th></tr>
+  <tr><td>Till → POS pod</td><td>Item scanned (barcode), payment initiated, void/refund requested</td></tr>
+  <tr><td>POS pod → Till</td><td>Price/promo applied for scanned item, running basket total, payment status (approved/declined/processing), print-receipt trigger</td></tr>
+</table>
+
+<p>
+  JSON payloads, not a binary format like protobuf — bandwidth is not the constraint on a
+  store's local LAN, and JSON's debuggability (reading raw WebSocket frames during
+  development/incident response) is worth more here than the marginal size savings binary
+  encoding would give at this connection count.
+</p>
+
+<!-- ─────────────────────────── -->
+<h2>5. Security, even on a "local" connection</h2>
+
+<p>
+  Being on the store LAN doesn't mean trusting it unconditionally — a till is close to the
+  payment path (file 0009), so defense in depth applies even for local traffic: TLS on the
+  WebSocket connection (WSS, not plain WS) even though it never leaves the building, and a
+  per-terminal auth token checked on connect rather than assuming "if you're on this network,
+  you're a legitimate till."
+</p>
+
+<footer>
+  Tesco System Design Prep · File 5 of 12 · Next:
+  <a href="0006-microservice-boundaries.html">0006 — Microservice Boundaries</a> ·
+  <a href="INDEX.md">Index</a>
+</footer>
+
+</body>
+</html>

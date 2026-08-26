@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 02 — Twitter: Service Layer vs Rich Domain Model</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; }
+  .split pre { margin: 0; }
+  .label { font-family: monospace; font-size: 0.8rem; background: var(--accent);
+            color: white; padding: 0.2rem 0.6rem; border-radius: 3px 3px 0 0;
+            display: inline-block; margin-bottom: -1px; }
+  .label.v2 { background: var(--pass); }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav"><a href="INDEX.md">← Index</a> · <a href="0001-tweet-model-observer.html">← Lesson 01 (Observer)</a></div>
+
+<h1>Lesson 02 — Twitter: Service Layer vs Rich Domain Model</h1>
+<div class="meta">Category: OOD · Difficulty: Medium · Est. time: 20 min · Prerequisite: Lesson 01</div>
+
+<p>
+  In Lesson 01 we built Twitter with the <strong>Rich Domain Model</strong>: behavior lived inside
+  <code>User</code> (Observer list, follow, post). In this lesson we rebuild it as a
+  <strong>Service Layer + Explicit Entities</strong>: <code>User</code> is a thin data record,
+  and separate service classes own all logic. We compare the two approaches from both
+  a design and an Object-Oriented Design perspective.
+</p>
+
+<!-- ──────── 1. TWO MODELS SIDE BY SIDE ──────── -->
+<h2>1. The two models at a glance</h2>
+
+<div class="split">
+  <div>
+    <span class="label">q032 — Rich Domain Model</span>
+    <pre>User {
+  id, username
+  List&lt;FeedObserver&gt; observers  ← graph
+  Feed feed                      ← timeline
+
+  follow(User target)    ← behavior
+  post(String content)   ← behavior
+  notifyObservers(tweet) ← behavior
+}
+
+Feed implements FeedObserver {
+  Deque&lt;Tweet&gt; timeline
+  onTweetPosted(tweet)
+}</pre>
+  </div>
+  <div>
+    <span class="label v2">q035 — Service Layer</span>
+    <pre>record User(id, username, bio) {}   ← data only
+
+record Follow(followerId,
+              followeeId,
+              followedAt) {}           ← explicit edge
+
+record Like(userId,
+            tweetId,
+            likedAt) {}               ← explicit edge
+
+SocialGraph   { follow, unfollow,
+                getFollowers,
+                getFollowing }         ← service
+FeedService   { getTimeline }          ← service
+LikeService   { like, unlike,
+                getLikeCount }         ← service</pre>
+  </div>
+</div>
+
+<!-- ──────── 2. EXPLICIT ENTITIES ──────── -->
+<h2>2. Explicit relationship entities — Follow and Like</h2>
+
+<p>
+  In q032, "Alice follows Bob" was encoded as Bob's feed being registered as an observer on Alice.
+  The relationship was implicit — encoded in object references, invisible to queries.
+  Here, it's a first-class entity.
+</p>
+
+<pre>
+// Follow: a directed edge in the social graph
+// Maps directly to a DB row: (follower_id, followee_id, followed_at)
+public record Follow(String followerId, String followeeId, Instant followedAt) {}
+
+// Like: a many-to-many join between User and Tweet
+// Maps directly to a DB row: (user_id, tweet_id, liked_at)
+public record Like(String userId, String tweetId, Instant likedAt) {}
+</pre>
+
+<div class="callout">
+  <strong>Records are ideal here</strong>
+  Java records (Java 16+): immutable, auto-generate equals/hashCode/toString, zero boilerplate.
+  Follow and Like are value objects — they have no identity beyond their fields.
+  Records enforce immutability without effort.
+</div>
+
+<!-- ──────── 3. IN-MEMORY REPOSITORIES ──────── -->
+<h2>3. In-memory repositories — simulating persistence</h2>
+
+<pre>
+// Repository pattern: abstracts storage. Swap Map for JPA without touching services.
+class TweetRepository {
+
+    private final Map&lt;String, Tweet&gt;        byId       = new HashMap&lt;&gt;();
+    // Secondary index: all tweets by one author — what a DB index would give us
+    private final Map&lt;String, List&lt;Tweet&gt;&gt;  byAuthor   = new HashMap&lt;&gt;();
+
+    Tweet save(Tweet tweet) {
+        byId.put(tweet.id(), tweet);
+        byAuthor.computeIfAbsent(tweet.authorId(), k -&gt; new ArrayList&lt;&gt;()).add(tweet);
+        return tweet;
+    }
+
+    Optional&lt;Tweet&gt; findById(String id) { return Optional.ofNullable(byId.get(id)); }
+
+    List&lt;Tweet&gt; findByAuthorId(String authorId) {
+        return byAuthor.getOrDefault(authorId, List.of());
+    }
+}
+</pre>
+
+<!-- ──────── 4. SOCIAL GRAPH SERVICE ──────── -->
+<h2>4. SocialGraph service — the queryable graph</h2>
+
+<pre>
+// SocialGraph: owns follow/unfollow and all graph queries
+// Internally: two maps (adjacency lists) for O(1) forward and reverse lookup
+class SocialGraph {
+
+    // follower → set of followee IDs  (forward: "who does Alice follow?")
+    private final Map&lt;String, Set&lt;String&gt;&gt; following = new HashMap&lt;&gt;();
+    // followee → set of follower IDs  (reverse: "who follows Alice?")
+    private final Map&lt;String, Set&lt;String&gt;&gt; followers = new HashMap&lt;&gt;();
+
+    Follow follow(String followerId, String followeeId) {
+        if (followerId.equals(followeeId))
+            throw new IllegalArgumentException("Cannot follow yourself");
+        following.computeIfAbsent(followerId, k -&gt; new HashSet&lt;&gt;()).add(followeeId);
+        followers.computeIfAbsent(followeeId, k -&gt; new HashSet&lt;&gt;()).add(followerId);
+        return new Follow(followerId, followeeId, Instant.now());
+    }
+
+    void unfollow(String followerId, String followeeId) {
+        following.getOrDefault(followerId, Set.of()).remove(followeeId);
+        followers.getOrDefault(followeeId, Set.of()).remove(followerId);
+    }
+
+    // These queries were IMPOSSIBLE in the Observer model
+    Set&lt;String&gt; getFollowing(String userId)  { return Set.copyOf(following.getOrDefault(userId, Set.of())); }
+    Set&lt;String&gt; getFollowers(String userId)  { return Set.copyOf(followers.getOrDefault(userId, Set.of())); }
+    boolean     isFollowing(String a, String b) { return following.getOrDefault(a, Set.of()).contains(b); }
+    int         getFollowerCount(String userId)  { return followers.getOrDefault(userId, Set.of()).size(); }
+}
+</pre>
+
+<!-- ──────── 5. FEED SERVICE ──────── -->
+<h2>5. FeedService — decoupled timeline assembly</h2>
+
+<pre>
+// FeedService depends on SocialGraph + TweetRepository — no coupling to User
+class FeedService {
+
+    private final SocialGraph     socialGraph;
+    private final TweetRepository tweetRepository;
+
+    FeedService(SocialGraph socialGraph, TweetRepository tweetRepository) {
+        this.socialGraph     = socialGraph;
+        this.tweetRepository = tweetRepository;
+    }
+
+    // Fan-out on read: pull tweets from all followees and merge
+    List&lt;Tweet&gt; getTimeline(String userId, int limit) {
+        return socialGraph.getFollowing(userId).stream()
+                .flatMap(followeeId -&gt; tweetRepository.findByAuthorId(followeeId).stream())
+                .sorted(Comparator.comparing(Tweet::createdAt).reversed())
+                .limit(limit)
+                .toList();
+    }
+}
+</pre>
+
+<!-- ──────── 6. COMPARISON ──────── -->
+<h2>6. Full comparison: Rich Domain Model vs Service Layer</h2>
+
+<h3>From a design (architectural) perspective</h3>
+
+<table>
+  <tr><th>Concern</th><th>Rich Domain Model (q032)</th><th>Service Layer (q035)</th></tr>
+  <tr><td>Behaviour location</td><td>Inside domain objects (<code>User.follow()</code>)</td><td>Inside service classes (<code>SocialGraph.follow()</code>)</td></tr>
+  <tr><td>Coupling</td><td>User coupled to Feed via CopyOnWriteArrayList of observers</td><td>Services coupled to repositories; entities have zero coupling</td></tr>
+  <tr><td>Queryability</td><td>"Who am I following?" — impossible without scanning all users</td><td><code>socialGraph.getFollowing(userId)</code> — O(1)</td></tr>
+  <tr><td>Persistence mapping</td><td>Observer list has no DB equivalent — transient state</td><td>Follow record maps directly to a DB row; swap Map for JPA repository</td></tr>
+  <tr><td>Testability</td><td>Must create real User + Feed objects to test posting</td><td>Test SocialGraph with empty maps; test FeedService by mocking both dependencies</td></tr>
+  <tr><td>Fan-out model</td><td>Push (Observer): post → synchronously notify each observer</td><td>Pull (Fan-out on read): timeline assembled on request from graph + tweets</td></tr>
+</table>
+
+<h3>From an OOD perspective</h3>
+
+<table>
+  <tr><th>Principle</th><th>Rich Domain Model (q032)</th><th>Service Layer (q035)</th></tr>
+  <tr><td>Single Responsibility</td><td>❌ User manages: data + social graph + feed + notifications</td><td>✅ User = data, SocialGraph = graph, FeedService = feed</td></tr>
+  <tr><td>Open/Closed</td><td>✅ New observer types don't require changing User</td><td>✅ New services added without touching entities</td></tr>
+  <tr><td>Dependency Inversion</td><td>❌ User directly instantiates Feed — hard to swap</td><td>✅ Services depend on interfaces/repos — easily swapped</td></tr>
+  <tr><td>Encapsulation</td><td>✅ Observer list hidden inside User</td><td>✅ Graph structure hidden inside SocialGraph</td></tr>
+  <tr><td>DDD alignment</td><td>Rich Domain Model — entities are "smart"</td><td>Thin entities + Domain Services — also valid DDD (domain services for cross-entity logic)</td></tr>
+  <tr><td>Pattern visibility</td><td>Observer Pattern clearly visible — good for textbook OOD</td><td>Repository + Service Layer — familiar to Spring Boot developers</td></tr>
+</table>
+
+<h3>Which is "better"?</h3>
+
+<div class="callout warn">
+  <strong>Neither is universally better — context decides.</strong>
+</div>
+
+<table>
+  <tr><th>Context</th><th>Use</th><th>Why</th></tr>
+  <tr><td>OOD interview asking "show me a design pattern"</td><td>Rich Domain Model</td><td>Observer Pattern is explicit; interviewer sees pattern knowledge immediately</td></tr>
+  <tr><td>OOD interview asking "design something production-ready"</td><td>Service Layer</td><td>Queryable graph, testable services, persistence-ready — shows senior thinking</td></tr>
+  <tr><td>Real Spring Boot application</td><td>Service Layer</td><td>Maps naturally to @Service, @Repository, JPA entities, unit-testable</td></tr>
+  <tr><td>Small script / prototype</td><td>Rich Domain Model</td><td>Less boilerplate; fewer classes</td></tr>
+</table>
+
+<p>
+  The Rich Domain Model shines when <em>behaviour</em> is complex and varies by subtype
+  (e.g. State Pattern for BookCopy — each state IS a class). The Service Layer shines
+  when <em>relationships</em> are complex and need to be queried (social graph, loan history,
+  payment ledger). Twitter is relationship-heavy — Service Layer fits better at real scale.
+</p>
+
+<!-- ──────── QUIZ ──────── -->
+<h2>7. Retrieval quiz</h2>
+
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. In the Service Layer approach, why does <code>User</code> not have a <code>follow()</code> method?</p>
+    <ul class="options" data-correct="3">
+      <li>A) Java records cannot have methods</li>
+      <li>B) The follow action only needs to update the followee, not the follower, so it belongs on the followee</li>
+      <li>C) Following involves two users and creates a <code>Follow</code> entity stored in <code>SocialGraph</code> — it is a cross-entity operation that belongs in a service, not in one entity</td></li>
+      <li>D) Putting follow() on User would violate the Observer Pattern</li>
+    </ul>
+    <div class="explanation">follow() must update the following-set of the follower AND the follower-set of the followee — it touches two entities and creates a third (Follow). Embedding this in User violates SRP and couples User to SocialGraph internals. A service class is the correct home for cross-entity logic — this is what DDD calls a Domain Service.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. What is the key advantage of storing <code>Follow</code> as an explicit entity vs encoding it as an Observer registration?</p>
+    <ul class="options" data-correct="1">
+      <li>A) The Follow entity can be queried, counted, persisted to a DB, and used for "mutual follows" or "suggested follows" — none of which are possible when the relationship is just an object reference in a list</li>
+      <li>B) The Follow entity uses less memory than storing a FeedObserver reference</li>
+      <li>C) Observer registration requires the JDK Observer interface which is deprecated</li>
+      <li>D) Follow entities allow the follow date to be stored — impossible with Observer</li>
+    </ul>
+    <div class="explanation">The core win is queryability and persistence-readiness. A Follow entity maps to a DB row — it can be counted (follower count), queried in reverse (who follows me?), used for graph traversal (friends-of-friends), and given a TTL or soft-delete. Observer registration is a transient object reference — invisible to queries, lost on restart, and carries no metadata.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. The Service Layer uses fan-out on read for the timeline. What is the trade-off vs the Observer (fan-out on write) approach?</p>
+    <ul class="options" data-correct="4">
+      <li>A) Fan-out on read is always slower because it requires more database queries</li>
+      <li>B) Fan-out on write always produces stale timelines; fan-out on read is always fresh</li>
+      <li>C) Fan-out on read cannot support real-time feeds; fan-out on write can</li>
+      <li>D) Fan-out on write: timeline always ready in O(1) at read time but O(followers) writes per post — catastrophic for celebrities. Fan-out on read: zero write cost per post but O(following_count) reads per timeline load — slow for users following thousands</li>
+    </ul>
+    <div class="explanation">The trade-off is write amplification vs read amplification. Fan-out on write pre-builds the timeline (fast reads, expensive writes). Fan-out on read builds on demand (cheap writes, expensive reads). Neither is universally better — real Twitter uses a hybrid. For this OOD in-memory exercise, fan-out on read is simpler to implement correctly and avoids the celebrity fan-out problem entirely.</div>
+  </div>
+
+</div>
+
+<footer>Lesson 02 · Twitter: Service Layer vs Rich Domain Model · <a href="INDEX.md">← Index</a></footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let answered  = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

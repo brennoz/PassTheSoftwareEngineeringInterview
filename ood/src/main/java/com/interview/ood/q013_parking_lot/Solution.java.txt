@@ -1,0 +1,120 @@
+package com.interview.ood.q013_parking_lot;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum SpotType { MOTORCYCLE, COMPACT, LARGE }
+
+enum VehicleType { MOTORCYCLE, CAR, TRUCK }
+
+// ── Vehicle hierarchy ────────────────────────────────────────────────────────
+
+abstract class Vehicle {
+    private final String licensePlate;
+    private final VehicleType type;
+
+    protected Vehicle(String licensePlate, VehicleType type) {
+        this.licensePlate = licensePlate;
+        this.type = type;
+    }
+
+    public VehicleType getType() { return type; }
+    public String getLicensePlate() { return licensePlate; }
+
+    // Returns ordered list of spot types this vehicle can fit into (preferred first)
+    public abstract List<SpotType> fitsIn();
+}
+
+class Motorcycle extends Vehicle {
+    public Motorcycle(String plate) { super(plate, VehicleType.MOTORCYCLE); }
+
+    @Override
+    public List<SpotType> fitsIn() {
+        return List.of(SpotType.MOTORCYCLE, SpotType.COMPACT, SpotType.LARGE);
+    }
+}
+
+class Car extends Vehicle {
+    public Car(String plate) { super(plate, VehicleType.CAR); }
+
+    @Override
+    public List<SpotType> fitsIn() {
+        return List.of(SpotType.COMPACT, SpotType.LARGE);
+    }
+}
+
+class Truck extends Vehicle {
+    public Truck(String plate) { super(plate, VehicleType.TRUCK); }
+
+    @Override
+    public List<SpotType> fitsIn() {
+        return List.of(SpotType.LARGE);
+    }
+}
+
+// ── ParkingSpot ──────────────────────────────────────────────────────────────
+
+class ParkingSpot {
+    private final String id;
+    private final int floor;
+    private final SpotType spotType;
+    private boolean available = true;
+
+    public ParkingSpot(String id, int floor, SpotType spotType) {
+        this.id = id;
+        this.floor = floor;
+        this.spotType = spotType;
+    }
+
+    public String getId() { return id; }
+    public int getFloor() { return floor; }
+    public SpotType getSpotType() { return spotType; }
+    public boolean isAvailable() { return available; }
+    public void occupy() { this.available = false; }
+    public void free() { this.available = true; }
+}
+
+// ── Ticket ───────────────────────────────────────────────────────────────────
+
+class Ticket {
+    private final String ticketId;
+    private final Vehicle vehicle;
+    private final ParkingSpot spot;
+    private final LocalDateTime entryTime;
+
+    public Ticket(String ticketId, Vehicle vehicle, ParkingSpot spot, LocalDateTime entryTime) {
+        this.ticketId = ticketId;
+        this.vehicle = vehicle;
+        this.spot = spot;
+        this.entryTime = entryTime;
+    }
+
+    public String getTicketId() { return ticketId; }
+    public Vehicle getVehicle() { return vehicle; }
+    public ParkingSpot getSpot() { return spot; }
+    public LocalDateTime getEntryTime() { return entryTime; }
+}
+
+// ── ParkingLot ───────────────────────────────────────────────────────────────
+
+class ParkingLot {
+
+    // park: find first available spot that fits the vehicle, mark occupied, return Ticket
+    // throw IllegalStateException if no spot available
+    public Ticket park(Vehicle vehicle) {
+        throw new UnsupportedOperationException("implement in MyAnswer");
+    }
+
+    // leave: free the spot, calculate fee ($2/hr, minimum 1hr), return fee
+    public double leave(Ticket ticket) {
+        throw new UnsupportedOperationException("implement in MyAnswer");
+    }
+
+    // isFullFor: returns true if no fitting spot exists for this vehicle type
+    public boolean isFullFor(VehicleType type) {
+        throw new UnsupportedOperationException("implement in MyAnswer");
+    }
+}

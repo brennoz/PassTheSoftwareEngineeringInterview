@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sealed Interfaces &amp; Pattern Matching for Switch</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0 1.5rem}
+  .compare-grid pre{margin:0}
+  .compare-label{font-size:.78rem;font-family:monospace;color:var(--muted);margin-bottom:.25rem;font-weight:bold}
+  @media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../../">&#8592; Topics</a> &middot; <a href="INDEX.md">Java Index</a></div>
+<h1>Sealed Interfaces &amp; Pattern Matching for Switch</h1>
+<div class="meta">Category: Java &middot; Topic: Java 17/21 Features &middot; Est. time: 20 min &middot; Lesson 8</div>
+
+<p>Two features that only make sense discussed together: <strong>sealed types</strong> (Java 17) let you declare a closed, finite set of subtypes; <strong>pattern matching for switch</strong> with <strong>record deconstruction patterns</strong> (both finalized in Java 21) let the compiler prove you've handled every one of them. Individually they're modest syntax additions. Together they replace a whole category of runtime bugs — the "someone added a new subtype and forgot to update this switch statement six months later" bug — with a compile error at the exact line that needs updating.</p>
+
+<!-- ===== 1. THE OLD WAY ===== -->
+<h2>1. The problem this solves — polymorphism without a shared method</h2>
+<p>Say you have a family of shapes and need to compute area. The textbook OOP answer is to put an <code>area()</code> method on each shape. But sometimes that's wrong — area might be a concern that belongs to a calculator, not the shape itself (single responsibility), or the shapes might be simple data records you don't want to load up with behaviour. The alternative before Java 21 was an <code>instanceof</code> chain, or the Visitor pattern to avoid it. Both have a shared weakness.</p>
+
+<div class="compare-grid">
+  <div>
+    <div class="compare-label">&#x26D4; instanceof chain &mdash; compiles even when incomplete</div>
+    <pre>double area(Shape shape) {
+    if (shape instanceof Circle c) {
+        return Math.PI * c.radius() * c.radius();
+    } else if (shape instanceof Rectangle r) {
+        return r.width() * r.height();
+    }
+    // Forgot Triangle entirely &mdash; this COMPILES.
+    // Every call with a Triangle throws at runtime instead.
+    throw new IllegalStateException("Unknown shape");
+}</pre>
+  </div>
+  <div>
+    <div class="compare-label">&#x2705; sealed + switch pattern matching &mdash; won't compile if incomplete</div>
+    <pre>double area(Shape shape) {
+    return switch (shape) {
+        case Circle(double radius) ->
+            Math.PI * radius * radius;
+        case Rectangle(double width, double height) ->
+            width * height;
+        // Missing "case Triangle" here is a
+        // COMPILE ERROR, not a runtime surprise.
+    };
+}</pre>
+  </div>
+</div>
+
+<div class="callout warn">
+  <strong>Why the instanceof version is dangerous, specifically</strong>
+  It's not that the code is wrong today — it's that it stays "correct" (compiles, passes
+  existing tests) even after it becomes wrong, the moment a new subtype is added and this one
+  switch/if-chain isn't updated. The bug is discovered by a user hitting the
+  <code>throw</code>, not by the compiler. Sealed + exhaustive switch turns that into a build
+  failure the person adding the new type sees immediately, at the exact call site that needs
+  a new case.
+</div>
+
+<!-- ===== 2. SEALED TYPES ===== -->
+<h2>2. Sealed types — declaring a closed hierarchy</h2>
+<p><code>sealed</code> on an interface or class, plus a <code>permits</code> clause, tells the
+compiler "this is the complete list of implementations — nothing outside this list is allowed
+to implement/extend it."</p>
+
+<pre>public sealed interface Shape permits Circle, Rectangle, Triangle {}
+
+public record Circle(double radius) implements Shape {}
+public record Rectangle(double width, double height) implements Shape {}
+public record Triangle(double base, double height) implements Shape {}</pre>
+
+<p>Every class named in <code>permits</code> must itself declare how it participates in the
+seal — <code>final</code> (no further subtyping, the common choice, and what a <code>record</code>
+implicitly is), <code>sealed</code> (has its own further-restricted permits list), or
+<code>non-sealed</code> (explicitly reopens the hierarchy to arbitrary subtypes from that point
+down — rare, and usually a sign the design should reconsider whether sealing was right here).</p>
+
+<table>
+  <tr><th>Modifier on the implementing class</th><th>Meaning</th></tr>
+  <tr><td><code>final</code></td><td>No further subtypes at all — the common case, and implicit for <code>record</code></td></tr>
+  <tr><td><code>sealed</code></td><td>Has its own <code>permits</code> list — the closed hierarchy continues one level deeper</td></tr>
+  <tr><td><code>non-sealed</code></td><td>Reopens to unlimited subtypes from here — use sparingly, it's an escape hatch that gives up the exhaustiveness guarantee for that branch</td></tr>
+</table>
+
+<!-- ===== 3. RECORD PATTERNS ===== -->
+<h2>3. Record patterns — deconstruction, not just type-checking</h2>
+<p><code>case Circle c -></code> only binds the whole record to a name; you'd still call
+<code>c.radius()</code> yourself. <code>case Circle(double radius) -></code> is a <strong>record
+pattern</strong> — it deconstructs the record's components directly into local variables,
+matching the record's own canonical constructor shape.</p>
+
+<pre>// Type pattern only &mdash; still need c.radius()
+case Circle c -> Math.PI * c.radius() * c.radius();
+
+// Record (deconstruction) pattern &mdash; radius is already a local double
+case Circle(double radius) -> Math.PI * radius * radius;</pre>
+
+<p>Record patterns nest, which matters once your domain has records containing other records
+— you can reach into nested structure in one pattern rather than chaining accessor calls:</p>
+
+<pre>record Point(double x, double y) {}
+record Line(Point start, Point end) {}
+
+// Nested record pattern &mdash; pulls all four numbers out in one match
+case Line(Point(double x1, double y1), Point(double x2, double y2)) ->
+    Math.hypot(x2 - x1, y2 - y1);</pre>
+
+<!-- ===== 4. GUARDED PATTERNS ===== -->
+<h2>4. Guarded patterns &mdash; adding a condition with <code>when</code></h2>
+<p>Sometimes a case depends on more than just the type — e.g. "a Circle, but only if its radius
+is zero." A <code>when</code> clause adds a boolean condition to a pattern without breaking out
+into a separate <code>if</code>:</p>
+
+<pre>String describe(Shape shape) {
+    return switch (shape) {
+        case Circle(double radius) when radius == 0 -> "a point, not really a circle";
+        case Circle(double radius) -> "a circle of radius " + radius;
+        case Rectangle(double w, double h) when w == h -> "actually a square";
+        case Rectangle r -> "a rectangle";
+        case Triangle t -> "a triangle";
+    };
+}</pre>
+
+<div class="callout">
+  <strong>Exhaustiveness still holds with guards, with one catch</strong>
+  The compiler can't prove a <code>when</code> condition covers every value of that type (it's
+  arbitrary boolean logic, not something it can statically reason about) — so when you use a
+  guard, you generally still need an unguarded fallback case for that same type below it (as
+  above: the guarded <code>Circle</code> case is followed by a plain <code>case Circle</code>
+  catch-all for that type). The overall switch is still exhaustive across all sealed
+  subtypes; it's just that a guarded case alone doesn't exhaust ITS type on its own.
+</div>
+
+<!-- ===== 5. THE SIMPLER PRECURSOR ===== -->
+<h2>5. instanceof pattern matching (Java 16) — the building block underneath</h2>
+<p>Before switch got pattern matching, <code>instanceof</code> did (Java 16, JEP 394) — this is
+what powered the <code>if (shape instanceof Circle c)</code> line back in Section 1's "old way"
+example. It's worth knowing as its own feature: useful for a single type check outside a
+switch, but it doesn't give you exhaustiveness checking the way a sealed-type switch does — the
+compiler has no way to know you've covered every case with a chain of independent
+<code>if</code> statements.</p>
+
+<!-- ===== QUIZ ===== -->
+<h2>Retrieval Quiz</h2>
+<div class="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. Why does the switch in Section 1's "new way" example NOT need a <code>default</code> branch?</p>
+    <ul class="options" data-correct="3">
+      <li>Switch expressions never require a default in Java</li>
+      <li>Because <code>Shape</code> is a record, not an interface</li>
+      <li>Because <code>Shape</code> is sealed with a <code>permits</code> list of exactly Circle/Rectangle/Triangle — the compiler can enumerate every possible subtype and verify all are handled</li>
+      <li>Because record patterns automatically supply a default case</li>
+    </ul>
+    <div class="explanation">
+      Exhaustiveness checking for switch only works this way against a <em>sealed</em> (or
+      enum) type, where the compiler has the complete, closed list of possibilities. Against a
+      plain (non-sealed) interface, the switch would need a <code>default</code>, since
+      anyone anywhere could add a new implementation the compiler doesn't know about.
+    </div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. A teammate adds <code>record Square(double side) implements Shape</code> to the <code>permits</code> list. What happens to the exhaustive switch from Section 1 if no new case is added for it?</p>
+    <ul class="options" data-correct="2">
+      <li>Nothing — it silently falls through and returns 0</li>
+      <li>The module fails to compile, pointing at the switch that's now missing a case</li>
+      <li>It throws a <code>MatchException</code> at runtime, the first time a Square is passed in</li>
+      <li>Java auto-generates a case that calls <code>Square</code>'s <code>toString()</code></li>
+    </ul>
+    <div class="explanation">
+      This is the entire payoff of pairing sealed types with exhaustive switch: the failure
+      moves from "a MatchException in production the day someone finally passes a Square" to
+      "a compile error the moment the teammate adds Square," at the exact switch that needs
+      updating. (Note: if the switch DID have a catch-all/default, it would compile fine and
+      silently take the wrong branch instead — which is exactly why Section 1's callout warns
+      against adding a default "just in case.")
+    </div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. What's the difference between <code>case Circle c -></code> and <code>case Circle(double radius) -></code>?</p>
+    <ul class="options" data-correct="2">
+      <li>No difference, purely stylistic</li>
+      <li>The second is a record pattern that deconstructs <code>radius</code> into a local variable directly; the first only binds the whole record, and you'd still call <code>c.radius()</code> to get the value</li>
+      <li>The first only works on records, the second only works on regular classes</li>
+      <li>The second requires the <code>when</code> keyword</li>
+    </ul>
+    <div class="explanation">
+      Both are valid pattern-matching forms. The plain type pattern (<code>Circle c</code>)
+      just narrows the type and binds a name to the whole object. The record pattern
+      additionally reaches into the record's components, matching its canonical constructor
+      shape, and binds each component to its own local variable.
+    </div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. In the guarded-pattern example (Section 4), why does <code>case Circle(double radius) when radius == 0 -> ...</code> need a plain <code>case Circle(double radius) -> ...</code> below it, when the switch is already exhaustive over <code>Shape</code>?</p>
+    <ul class="options" data-correct="4">
+      <li>It doesn't — that line is unnecessary and can be deleted</li>
+      <li>Guards are only legal on the last case in a switch</li>
+      <li>Java requires every record pattern to appear at least twice</li>
+      <li>A <code>when</code> guard is arbitrary boolean logic the compiler can't statically prove covers every value of that type — so a Circle where <code>radius != 0</code> needs its own (unguarded) case to still be handled</li>
+    </ul>
+    <div class="explanation">
+      Exhaustiveness checking works at the type level (has every sealed subtype got a case),
+      not at the value level (has every possible input to a boolean guard been covered) — the
+      latter is undecidable in general. So a guarded case for a type still needs a fallback,
+      unguarded case for that same type, or the compiler will report the switch as
+      non-exhaustive.
+    </div>
+  </div>
+
+  <div class="question" id="q5">
+    <p>Q5. What does marking a permitted subclass <code>non-sealed</code> actually do?</p>
+    <ul class="options" data-correct="1">
+      <li>Reopens the hierarchy from that point — arbitrary new subtypes of THAT class are now allowed, which means a switch that's exhaustive over the sealed parent may no longer be exhaustive if it also tries to pattern-match that non-sealed branch's own subtypes</li>
+      <li>It's a compile error &mdash; permitted subclasses must be <code>final</code> or <code>sealed</code></li>
+      <li>It has no effect &mdash; <code>non-sealed</code> is a no-op modifier kept only for readability</li>
+      <li>It makes the class abstract</li>
+    </ul>
+    <div class="explanation">
+      <code>non-sealed</code> is a deliberate escape hatch: it lets one branch of an otherwise
+      closed hierarchy stay open to unknown future subtypes (useful for a plugin-style
+      extension point), at the cost of giving up compiler-verified exhaustiveness for that
+      branch specifically.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Lesson 8 &middot; Sealed Interfaces &amp; Pattern Matching for Switch &middot;
+  <a href="0003-streams.html" style="color:var(--accent)">&larr; Streams &amp; Collectors</a>
+</footer>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.dataset.answered) return;
+      ul.dataset.answered = '1';
+      const idx = i + 1;
+      if (idx === correct) {
+        li.classList.add('correct');
+      } else {
+        li.classList.add('wrong');
+        ul.querySelectorAll('li')[correct - 1].classList.add('reveal');
+      }
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (exp) exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</body>
+</html>

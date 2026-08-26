@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Java CompletableFuture — Complete Guide</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+  .method-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1rem 0 1.5rem;font-size:.85rem}
+  .method-card{background:var(--sidebar);border:1px solid var(--border);border-radius:6px;padding:.7rem 1rem}
+  .method-card code{font-size:.82rem}
+  .method-card p{margin-bottom:0;font-size:.85rem;color:var(--muted)}
+  @media(max-width:600px){.method-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../../">← Topics</a></div>
+<h1>Java CompletableFuture</h1>
+<div class="meta">Category: Java · Topic: Async programming · Lesson 1 of 1</div>
+
+<p><code>CompletableFuture&lt;T&gt;</code> is Java's primary tool for non-blocking async composition. It extends <code>Future&lt;T&gt;</code> (Java 5) with chainable transformations, combining, error recovery, and manual completion. Understanding it is essential for any Spring Boot backend — every HTTP client, JDBC call, and external API call can be run concurrently and composed without blocking threads.</p>
+
+<!-- ===== WHY ===== -->
+<h2>1. The Problem with Future</h2>
+
+<pre>// Java 5 Future — blocking only, no composition
+ExecutorService pool = Executors.newFixedThreadPool(4);
+Future&lt;EventDto&gt; future = pool.submit(() -> eventClient.getEvent(id));
+
+// .get() blocks the calling thread — you waste a thread waiting
+EventDto event = future.get();       // blocks here
+List&lt;BetDto&gt; bets = betFuture.get(); // can't even start bets until event is done
+
+// You CANNOT chain: "when event is done, fetch bets" — no callback mechanism
+// You CANNOT recover from exceptions without try/catch around every .get()
+// You CANNOT combine two futures without blocking one</pre>
+
+<pre>// CompletableFuture solves all of this
+CompletableFuture&lt;EventDto&gt; eventCf = CompletableFuture.supplyAsync(() -> eventClient.getEvent(id));
+CompletableFuture&lt;List&lt;BetDto&gt;&gt; betsCf = CompletableFuture.supplyAsync(() -> betClient.getBets(id));
+
+// Both fire simultaneously. Combine without blocking either.
+CompletableFuture&lt;EventSummary&gt; summary = eventCf.thenCombine(betsCf, EventSummary::new);
+
+// Chain error recovery
+summary.exceptionally(ex -> EventSummary.empty());</pre>
+
+<!-- ===== CREATION ===== -->
+<h2>2. Creation</h2>
+
+<pre>// --- Already-done value (tests, cached results) ---
+CompletableFuture&lt;EventDto&gt; cf = CompletableFuture.completedFuture(cachedEvent);
+CompletableFuture&lt;EventDto&gt; failed = CompletableFuture.failedFuture(new RuntimeException("not found"));
+
+// --- Async computation on ForkJoinPool.commonPool() (default) ---
+// WARNING: ForkJoinPool is sized to CPU cores (e.g. 4 on t3.large).
+// Good for CPU-bound. BAD for I/O — 4 threads max.
+CompletableFuture&lt;EventDto&gt; cf = CompletableFuture.supplyAsync(
+    () -> eventClient.getEvent(id)
+);
+
+// --- Async computation on explicit executor (correct for I/O) ---
+ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor(); // Java 21
+CompletableFuture&lt;EventDto&gt; cf = CompletableFuture.supplyAsync(
+    () -> eventClient.getEvent(id),
+    ioExecutor
+);
+
+// --- Async with no result (Runnable, returns CF&lt;Void&gt;) ---
+CompletableFuture&lt;Void&gt; cf = CompletableFuture.runAsync(
+    () -> auditLog.record(event),
+    ioExecutor
+);
+
+// --- Manual completion (you control when/what completes) ---
+CompletableFuture&lt;String&gt; cf = new CompletableFuture&lt;&gt;();
+// somewhere else, when result is ready:
+cf.complete("result");
+cf.completeExceptionally(new RuntimeException("failed"));
+// if cf is already completed, these calls are no-ops
+cf.completeAsync(() -> expensiveComputation(), executor); // complete async</pre>
+
+<!-- ===== TRANSFORM ===== -->
+<h2>3. Transform — thenApply / thenCompose</h2>
+
+<div class="callout">
+  <strong>The key distinction</strong>
+  <code>thenApply</code> — transform is synchronous (pure function, returns plain value).
+  <code>thenCompose</code> — transform is asynchronous (calls another service, returns CF). Without thenCompose you'd get <code>CF&lt;CF&lt;T&gt;&gt;</code> — nested futures.
+</div>
+
+<pre>// thenApply — sync transform (like Stream.map)
+// runs on the thread that completed the upstream CF (or calling thread if already done)
+CompletableFuture&lt;String&gt; eventName = CompletableFuture
+    .supplyAsync(() -> eventClient.getEvent(id), ioExecutor)  // CF&lt;EventDto&gt;
+    .thenApply(event -> event.getName().toUpperCase());         // CF&lt;String&gt;
+
+// thenApplyAsync — transform on new thread from executor pool
+// use when the transform itself is CPU-heavy or you want to avoid thread-starvation
+CompletableFuture&lt;String&gt; name = eventCf
+    .thenApplyAsync(event -> heavyTransform(event), executor);
+
+// thenAccept — consume result, return CF&lt;Void&gt; (no further chaining of result)
+CompletableFuture&lt;Void&gt; done = eventCf
+    .thenAccept(event -> log.info("Event loaded: {}", event.getId()));
+
+// thenRun — run after completion, no access to result, return CF&lt;Void&gt;
+CompletableFuture&lt;Void&gt; done = eventCf
+    .thenRun(() -> metrics.increment("events.loaded"));</pre>
+
+<pre>// thenCompose — async transform (like Stream.flatMap)
+// fn RETURNS a CF — thenCompose flattens CF&lt;CF&lt;T&gt;&gt; → CF&lt;T&gt;
+CompletableFuture&lt;List&lt;BetDto&gt;&gt; bets = CompletableFuture
+    .supplyAsync(() -> eventClient.getEvent(id), ioExecutor)      // CF&lt;EventDto&gt;
+    .thenCompose(event ->
+        CompletableFuture.supplyAsync(                             // CF&lt;List&lt;BetDto&gt;&gt;
+            () -> betClient.getBetsForEvent(event.getId()),
+            ioExecutor
+        )
+    );
+// Result: CF&lt;List&lt;BetDto&gt;&gt;   ← flat
+
+// What thenApply would produce instead (wrong for this case):
+CompletableFuture&lt;CompletableFuture&lt;List&lt;BetDto&gt;&gt;&gt; nested = CompletableFuture
+    .supplyAsync(() -> eventClient.getEvent(id), ioExecutor)
+    .thenApply(event ->
+        CompletableFuture.supplyAsync(() -> betClient.getBetsForEvent(event.getId()), ioExecutor)
+    );
+// CF&lt;CF&lt;List&lt;BetDto&gt;&gt;&gt;  ← double-wrapped, useless</pre>
+
+<!-- ===== COMBINE ===== -->
+<h2>4. Combine Multiple Futures</h2>
+
+<pre>// thenCombine — combine exactly TWO CFs when BOTH complete
+// biFunction receives both results
+CompletableFuture&lt;EventDto&gt;  eventCf = CompletableFuture.supplyAsync(() -> eventClient.getEvent(id), exec);
+CompletableFuture&lt;PriceDto&gt;  priceCf = CompletableFuture.supplyAsync(() -> priceClient.getPrice(id), exec);
+
+CompletableFuture&lt;String&gt; display = eventCf.thenCombine(
+    priceCf,
+    (event, price) -> event.getName() + " @ " + price.getOdds()
+);
+
+// allOf — wait for ALL CFs to complete, returns CF&lt;Void&gt; (no direct result)
+CompletableFuture&lt;EventDto&gt;     eventCf  = CompletableFuture.supplyAsync(() -> eventClient.getEvent(id), exec);
+CompletableFuture&lt;List&lt;BetDto&gt;&gt; betsCf   = CompletableFuture.supplyAsync(() -> betClient.getBets(id), exec);
+CompletableFuture&lt;PriceDto&gt;     priceCf  = CompletableFuture.supplyAsync(() -> priceClient.getPrice(id), exec);
+
+// All 3 fire simultaneously. Total time = max(t_event, t_bets, t_price).
+EventSummary summary = CompletableFuture.allOf(eventCf, betsCf, priceCf)
+    .thenApply(ignored -> {
+        // .join() here is INSTANT — allOf guarantees all 3 are done before this runs
+        return new EventSummary(eventCf.join(), betsCf.join(), priceCf.join());
+    })
+    .join(); // block once for the final result
+
+// anyOf — completes when FIRST finishes (Object type — you lose type safety)
+CompletableFuture&lt;Object&gt; first = CompletableFuture.anyOf(cf1, cf2, cf3);
+// Useful for: fallback to fastest data source, race between replicas</pre>
+
+<div class="callout pass">
+  <strong>Real pattern: parallel fetch in sportsbook-service</strong>
+  Sequential: 20ms (event) + 30ms (bets) + 15ms (price) = 65ms total.<br>
+  Parallel with allOf: max(20, 30, 15) = 30ms total. 2× speedup, zero extra code complexity.
+</div>
+
+<!-- ===== ERROR HANDLING ===== -->
+<h2>5. Error Handling</h2>
+
+<pre>// exceptionally — recover on failure, return fallback value
+// ONLY runs if upstream failed
+CompletableFuture&lt;PriceDto&gt; price = CompletableFuture
+    .supplyAsync(() -> priceClient.getPrice(id), exec)
+    .exceptionally(ex -> {
+        log.warn("Price fetch failed eventId={}: {}", id, ex.getMessage());
+        return PriceDto.stale();  // fallback
+    });
+
+// handle — ALWAYS runs whether success or failure
+// receives (result, throwable) — exactly one will be null
+CompletableFuture&lt;PriceDto&gt; price = CompletableFuture
+    .supplyAsync(() -> priceClient.getPrice(id), exec)
+    .handle((result, ex) -> {
+        if (ex != null) {
+            log.warn("Price unavailable: {}", ex.getMessage());
+            return PriceDto.stale();
+        }
+        metrics.recordSuccess("price.fetch");
+        return result;
+    });
+
+// whenComplete — side effect only, CANNOT change the result
+// always runs, result/exception pass through unchanged
+CompletableFuture&lt;PriceDto&gt; price = CompletableFuture
+    .supplyAsync(() -> priceClient.getPrice(id), exec)
+    .whenComplete((result, ex) -> {
+        if (ex != null) log.error("Price fetch failed", ex);
+        else metrics.record("price.fetch.ok", result.getLatency());
+        // return value here has no effect — result passes through as-is
+    });
+
+// Chaining recovery then continuing
+CompletableFuture&lt;EventSummary&gt; summary = eventCf
+    .exceptionally(ex -> EventDto.empty())           // recover event
+    .thenCombine(
+        betsCf.exceptionally(ex -> List.of()),       // recover bets
+        (event, bets) -> new EventSummary(event, bets)
+    );</pre>
+
+<table>
+  <thead><tr><th>Method</th><th>Runs when</th><th>Can change result?</th><th>Use for</th></tr></thead>
+  <tbody>
+    <tr><td><code>exceptionally(fn)</code></td><td>Failure only</td><td>Yes (provides fallback)</td><td>Fallback value on error</td></tr>
+    <tr><td><code>handle(biFunc)</code></td><td>Always</td><td>Yes</td><td>Transform or recover in one step</td></tr>
+    <tr><td><code>whenComplete(biConsumer)</code></td><td>Always</td><td>No (side effects only)</td><td>Logging, metrics, cleanup</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== TIMEOUT ===== -->
+<h2>6. Timeout (Java 9+)</h2>
+
+<pre>// orTimeout — completes exceptionally with TimeoutException after deadline
+CompletableFuture&lt;AdvisoryResult&gt; advisory = CompletableFuture
+    .supplyAsync(() -> advisoryClient.check(bet), exec)
+    .orTimeout(500, TimeUnit.MILLISECONDS)
+    .exceptionally(ex -> {
+        // ex is TimeoutException or original exception
+        log.warn("Advisory timeout — defaulting to APPROVE");
+        return AdvisoryResult.APPROVED;
+    });
+
+// completeOnTimeout — provide default value instead of exception (cleaner)
+CompletableFuture&lt;AdvisoryResult&gt; advisory = CompletableFuture
+    .supplyAsync(() -> advisoryClient.check(bet), exec)
+    .completeOnTimeout(AdvisoryResult.APPROVED, 500, TimeUnit.MILLISECONDS);
+// If advisory responds in time → use its result
+// If 500ms exceeded → complete with APPROVED, no exception needed
+
+// Combining: timeout + circuit breaker + fallback
+public CompletableFuture&lt;PriceDto&gt; getPriceSafe(Long eventId) {
+    return CompletableFuture
+        .supplyAsync(() ->
+            CircuitBreaker.decorateSupplier(priceCircuitBreaker,
+                () -> priceClient.getPrice(eventId)
+            ).get(),
+            ioExecutor
+        )
+        .completeOnTimeout(PriceDto.stale(), 200, TimeUnit.MILLISECONDS)
+        .exceptionally(ex -> {
+            log.warn("Price unavailable eventId={}", eventId);
+            return PriceDto.stale();
+        });
+}</pre>
+
+<!-- ===== BLOCKING ===== -->
+<h2>7. Blocking — get() vs join()</h2>
+
+<pre>// get() — throws checked exceptions — use in normal methods
+try {
+    EventDto event = eventCf.get();                              // blocks indefinitely
+    EventDto event = eventCf.get(5, TimeUnit.SECONDS);          // blocks up to 5s
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new RuntimeException(e);
+} catch (ExecutionException e) {
+    throw new RuntimeException(e.getCause()); // unwrap the actual exception
+} catch (TimeoutException e) {
+    throw new ServiceTimeoutException("event-service", e);
+}
+
+// join() — throws unchecked CompletionException — use in CF chains and streams
+EventDto event = eventCf.join();           // throws CompletionException(unchecked)
+
+// join() preferred in CF chains — already done when called after allOf:
+CompletableFuture.allOf(eventCf, betsCf)
+    .thenApply(v -> new Result(eventCf.join(), betsCf.join())); // instant, not blocking
+
+// join() preferred in streams:
+List&lt;EventDto&gt; events = ids.stream()
+    .map(id -> CompletableFuture.supplyAsync(() -> eventClient.getEvent(id), exec))
+    .toList()        // collect all CFs first — so all start before any join()
+    .stream()
+    .map(CompletableFuture::join) // then join — all already running in parallel
+    .toList();
+// WARNING: do NOT .map(id -> cf).map(cf -> cf.join()) in one stream
+// That starts cf1, waits for cf1, starts cf2, waits for cf2 — SEQUENTIAL, not parallel
+
+// getNow() — non-blocking, returns default if not done
+EventDto event = eventCf.getNow(EventDto.empty()); // returns empty if CF not yet done</pre>
+
+<div class="callout fail">
+  <strong>Stream parallel fetch — the order matters</strong>
+  Collect all CFs into a list FIRST (so all start), then join in a second pass.
+  A single stream that maps and immediately joins runs SEQUENTIALLY — no parallelism.
+</div>
+
+<!-- ===== EXECUTOR CHOICE ===== -->
+<h2>8. Executor Choice</h2>
+
+<pre>// ForkJoinPool.commonPool() — DEFAULT when no executor passed
+// Sized to available CPU cores (Runtime.getRuntime().availableProcessors())
+// On t3.large (2 vCPU): pool has 1 thread (max(1, processors - 1))
+// PROBLEM: fire 100 I/O calls — only 1-2 run concurrently, 98 queue up
+
+// --- Option 1: Fixed thread pool (classic I/O pool) ---
+ExecutorService ioPool = Executors.newFixedThreadPool(
+    50,                                    // 50 concurrent I/O tasks
+    new ThreadFactory() {
+        private final AtomicInteger n = new AtomicInteger();
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "io-pool-" + n.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        }
+    }
+);
+
+// --- Option 2: Virtual thread per task (Java 21, best for I/O) ---
+ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
+// Each task gets own VT. No pool ceiling. JVM schedules on carrier threads.
+// Correct for HTTP calls, JDBC, Redis, any I/O-bound supplyAsync.
+// DO NOT use for CPU-bound (no benefit, extra scheduling overhead).
+
+// --- Option 3: Spring's @Async executor (configured in app context) ---
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor(); // Java 21
+    }
+}
+
+// Usage in service
+@Async("taskExecutor")
+public CompletableFuture&lt;EventDto&gt; getEventAsync(Long id) {
+    return CompletableFuture.completedFuture(eventClient.getEvent(id));
+}
+// Calling thread is not blocked — Spring MVC dispatches to VT executor</pre>
+
+<!-- ===== REAL WORLD PATTERNS ===== -->
+<h2>9. Real-World Patterns</h2>
+
+<h3>Pattern 1 — Parallel service calls with independent fallbacks</h3>
+<pre>// Each service fails independently — the others still return
+public EventSummaryDto buildEventSummary(Long eventId) {
+    var exec = Executors.newVirtualThreadPerTaskExecutor();
+
+    CompletableFuture&lt;EventDto&gt; eventCf = CompletableFuture
+        .supplyAsync(() -> eventService.getEvent(eventId), exec)
+        .completeOnTimeout(EventDto.empty(), 200, MILLISECONDS)
+        .exceptionally(ex -> EventDto.empty());
+
+    CompletableFuture&lt;List&lt;BetDto&gt;&gt; betsCf = CompletableFuture
+        .supplyAsync(() -> betManager.getBets(eventId), exec)
+        .completeOnTimeout(List.of(), 300, MILLISECONDS)
+        .exceptionally(ex -> List.of());
+
+    CompletableFuture&lt;PriceDto&gt; priceCf = CompletableFuture
+        .supplyAsync(() -> pricingService.getPrice(eventId), exec)
+        .completeOnTimeout(PriceDto.stale(), 150, MILLISECONDS)
+        .exceptionally(ex -> PriceDto.stale());
+
+    return CompletableFuture.allOf(eventCf, betsCf, priceCf)
+        .thenApply(v -> EventSummaryDto.of(
+            eventCf.join(),
+            betsCf.join(),
+            priceCf.join()
+        ))
+        .join();
+}</pre>
+
+<h3>Pattern 2 — Sequential fan-out (result of first feeds into second)</h3>
+<pre>// Use thenCompose: result of getEvent feeds into getBets
+public CompletableFuture&lt;List&lt;BetDto&gt;&gt; getBetsForLatestEvent(Long raceId) {
+    return CompletableFuture
+        .supplyAsync(() -> eventService.getLatestEvent(raceId), ioExecutor)
+        .thenCompose(event ->
+            CompletableFuture.supplyAsync(
+                () -> betManager.getBetsForEvent(event.getId()),
+                ioExecutor
+            )
+        )
+        .exceptionally(ex -> {
+            log.error("Failed to load bets for race {}", raceId, ex);
+            return List.of();
+        });
+}</pre>
+
+<h3>Pattern 3 — Batch parallel processing</h3>
+<pre>// Process N items in parallel, collect all results
+public List&lt;PriceDto&gt; getPricesForMarkets(List&lt;Long&gt; marketIds) {
+    // Step 1: start ALL CFs (fire all requests simultaneously)
+    List&lt;CompletableFuture&lt;PriceDto&gt;&gt; futures = marketIds.stream()
+        .map(id -> CompletableFuture
+            .supplyAsync(() -> priceService.getPrice(id), ioExecutor)
+            .completeOnTimeout(PriceDto.stale(), 200, MILLISECONDS)
+        )
+        .toList(); // collect BEFORE joining — critical for parallelism
+
+    // Step 2: join all (all are already running)
+    return futures.stream()
+        .map(CompletableFuture::join) // instant if all done, waits for slowest
+        .toList();
+}</pre>
+
+<h3>Pattern 4 — Fire-and-forget async notification</h3>
+<pre>// Bet accepted — notify audit log async, don't block the response
+public BetSlipResponse createSlip(CreateSlipCommand cmd) {
+    BetSlip slip = betRepository.save(BetSlip.from(cmd));
+
+    // Non-blocking: response goes back to client immediately
+    CompletableFuture.runAsync(
+        () -> auditService.recordBetPlacement(slip),
+        ioExecutor
+    ).exceptionally(ex -> {
+        log.error("Audit notification failed slipId={}", slip.getId(), ex);
+        return null; // must handle — swallowed exceptions are silent bugs
+    });
+
+    return BetSlipResponse.from(slip);
+}</pre>
+
+<h3>Pattern 5 — Async enrichment in Kafka consumer</h3>
+<pre>// Kafka consumer receives event, enriches from two services, publishes result
+@KafkaListener(topics = "arm-dev.event-service.json")
+public void processEvent(EventUpdateEvent event) {
+    // Enrich in parallel from two services
+    CompletableFuture&lt;TenantDto&gt;    tenantCf  = CompletableFuture.supplyAsync(
+        () -> tenantService.getTenant(event.getTenantId()), ioExecutor);
+    CompletableFuture&lt;SportsbookDto&gt; sbookCf   = CompletableFuture.supplyAsync(
+        () -> sportsbookService.getConfig(event.getTenantId()), ioExecutor);
+
+    tenantCf.thenCombine(sbookCf, (tenant, sbook) ->
+            enrichedEventPublisher.publish(event, tenant, sbook)
+        )
+        .exceptionally(ex -> {
+            log.error("Enrichment failed eventId={}", event.getId(), ex);
+            deadLetterPublisher.publish(event, ex);
+            return null;
+        })
+        .join(); // Kafka consumer must wait for async work to finish before committing offset
+}</pre>
+
+<!-- ===== PITFALLS ===== -->
+<h2>10. Common Pitfalls</h2>
+
+<div class="callout fail">
+  <strong>Pitfall 1 — Exception silently swallowed</strong>
+<pre style="margin-top:.5rem">// BAD — exception disappears if nobody calls get()/join()
+CompletableFuture.supplyAsync(() -> {
+    throw new RuntimeException("service down");
+}); // fire-and-forget — RuntimeException is lost forever
+
+// GOOD — always attach error handling
+CompletableFuture.supplyAsync(() -> priceClient.getPrice(id), exec)
+    .exceptionally(ex -> { log.error("Failed", ex); return PriceDto.stale(); });</pre>
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 2 — Blocking inside a CF chain (nested blocking)</strong>
+<pre style="margin-top:.5rem">// BAD — get() inside thenApply blocks the pool thread
+CompletableFuture.supplyAsync(() -> eventClient.getEvent(id))
+    .thenApply(event -> {
+        List&lt;BetDto&gt; bets = betsCf.get(); // BLOCKS the thread running thenApply
+        return new EventSummary(event, bets);
+    });
+
+// GOOD — use thenCombine, never block inside a chain
+eventCf.thenCombine(betsCf, (event, bets) -> new EventSummary(event, bets));</pre>
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 3 — Sequential stream instead of parallel</strong>
+<pre style="margin-top:.5rem">// BAD — starts cf1, joins cf1, starts cf2, joins cf2 — SEQUENTIAL
+List&lt;EventDto&gt; events = ids.stream()
+    .map(id -> CompletableFuture.supplyAsync(() -> eventClient.getEvent(id), exec))
+    .map(CompletableFuture::join) // immediate join defeats parallelism
+    .toList();
+
+// GOOD — collect first (all start), then join
+List&lt;CompletableFuture&lt;EventDto&gt;&gt; cfs = ids.stream()
+    .map(id -> CompletableFuture.supplyAsync(() -> eventClient.getEvent(id), exec))
+    .toList();                // all running now
+List&lt;EventDto&gt; events = cfs.stream()
+    .map(CompletableFuture::join) // join all — already in flight
+    .toList();</pre>
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 4 — ForkJoinPool for I/O tasks</strong>
+<pre style="margin-top:.5rem">// BAD — ForkJoinPool.commonPool() has 2 threads on a 2-core machine
+// 100 concurrent I/O calls → 98 tasks queue, latency explodes
+CompletableFuture.supplyAsync(() -> jdbcTemplate.query(...)); // default pool
+
+// GOOD — explicit I/O executor
+ExecutorService ioExec = Executors.newVirtualThreadPerTaskExecutor();
+CompletableFuture.supplyAsync(() -> jdbcTemplate.query(...), ioExec);</pre>
+</div>
+
+<!-- ===== METHOD REFERENCE ===== -->
+<h2>11. Method Quick Reference</h2>
+
+<table>
+  <thead><tr><th>Method</th><th>Input → Output</th><th>When to use</th></tr></thead>
+  <tbody>
+    <tr><td><code>supplyAsync(supplier, exec)</code></td><td>() → T</td><td>Start async computation</td></tr>
+    <tr><td><code>runAsync(runnable, exec)</code></td><td>() → Void</td><td>Fire-and-forget side effect</td></tr>
+    <tr><td><code>completedFuture(v)</code></td><td>T → CF&lt;T&gt;</td><td>Already-done value (tests, cache)</td></tr>
+    <tr><td><code>thenApply(fn)</code></td><td>T → U</td><td>Sync transform (pure function)</td></tr>
+    <tr><td><code>thenApplyAsync(fn, exec)</code></td><td>T → U</td><td>Async transform on given pool</td></tr>
+    <tr><td><code>thenCompose(fn)</code></td><td>T → CF&lt;U&gt;</td><td>Chain another async call (flatMap)</td></tr>
+    <tr><td><code>thenAccept(consumer)</code></td><td>T → Void</td><td>Consume result, no return</td></tr>
+    <tr><td><code>thenRun(runnable)</code></td><td>Void → Void</td><td>Run after, no input needed</td></tr>
+    <tr><td><code>thenCombine(other, fn)</code></td><td>(T, U) → V</td><td>Merge two independent CFs</td></tr>
+    <tr><td><code>allOf(cf...)</code></td><td>multiple → Void</td><td>Wait for all, then join each</td></tr>
+    <tr><td><code>anyOf(cf...)</code></td><td>multiple → Object</td><td>First completed wins</td></tr>
+    <tr><td><code>exceptionally(fn)</code></td><td>Throwable → T</td><td>Recover on failure only</td></tr>
+    <tr><td><code>handle(biFunc)</code></td><td>(T|null, ex|null) → U</td><td>Always runs, can transform</td></tr>
+    <tr><td><code>whenComplete(biConsumer)</code></td><td>(T|null, ex|null) → void</td><td>Always runs, side effects only</td></tr>
+    <tr><td><code>orTimeout(n, unit)</code></td><td>—</td><td>Fail with TimeoutException after n</td></tr>
+    <tr><td><code>completeOnTimeout(v, n, unit)</code></td><td>—</td><td>Complete with default after n</td></tr>
+    <tr><td><code>get()</code></td><td>→ T (checked)</td><td>Block; throws ExecutionException</td></tr>
+    <tr><td><code>join()</code></td><td>→ T (unchecked)</td><td>Block; throws CompletionException</td></tr>
+    <tr><td><code>getNow(default)</code></td><td>→ T</td><td>Non-blocking, returns default if pending</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== QUIZ ===== -->
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. You call <code>eventClient.getEvent(id)</code> which itself returns <code>CompletableFuture&lt;EventDto&gt;</code>. You want to chain it with another async call <code>betClient.getBets(event.getId())</code> that also returns a CF. Which method gives you <code>CF&lt;List&lt;BetDto&gt;&gt;</code> rather than <code>CF&lt;CF&lt;List&lt;BetDto&gt;&gt;&gt;</code>?</p>
+  <ul class="options" data-correct="2">
+    <li><code>thenApply</code> — it maps the result of the first CF to the second CF and flattens automatically</li>
+    <li><code>thenCompose</code> — the function returns a <code>CF&lt;List&lt;BetDto&gt;&gt;</code>, and thenCompose flattens <code>CF&lt;CF&lt;List&gt;&gt;</code> into <code>CF&lt;List&gt;</code>. thenApply would return <code>CF&lt;CF&lt;List&gt;&gt;</code> — double-wrapped and unusable without nested join()</li>
+    <li><code>thenCombine</code> — merges both CFs into one result using a BiFunction</li>
+    <li><code>thenAccept</code> — consumes the first CF result and triggers the second</li>
+  </ul>
+  <div class="explanation">thenCompose is CF's equivalent of flatMap. Rule: if your transform function returns a CF, use thenCompose. If it returns a plain value (String, DTO), use thenApply. thenCombine is for merging two INDEPENDENT CFs that both start at the same time — not for chaining where result of first feeds second.</div>
+</div>
+
+<div class="question">
+  <p>Q2. You fire 3 parallel calls with <code>allOf(eventCf, betsCf, priceCf).thenApply(v -&gt; new Result(eventCf.join(), betsCf.join(), priceCf.join()))</code>. What does <code>eventCf.join()</code> do inside the <code>thenApply</code> callback?</p>
+  <ul class="options" data-correct="3">
+    <li>Blocks the calling thread for up to 30ms waiting for the event response</li>
+    <li>Starts a new async operation on ForkJoinPool to fetch the event</li>
+    <li>Returns immediately without blocking — <code>allOf</code> guarantees all three CFs are complete before <code>thenApply</code> runs. <code>join()</code> on a completed CF returns the cached result instantly. This is the correct pattern: allOf waits for all, then join() inside thenApply extracts the results without blocking.</li>
+    <li>Throws CompletionException if the event CF encountered an exception during execution</li>
+  </ul>
+  <div class="explanation">allOf's contract: the CF returned by allOf completes only after ALL input CFs complete. thenApply runs only after allOf completes. So when thenApply runs, all three CFs are already done — join() is a no-op (returns cached result). This is why you always call allOf first, then collect results with join() inside thenApply. Option D is wrong because exceptions in the input CFs are propagated through allOf — if any CF failed, thenApply would not run (allOf itself completes exceptionally).</div>
+</div>
+
+<div class="question">
+  <p>Q3. You write <code>CompletableFuture.supplyAsync(() -&gt; priceClient.getPrice(id))</code> with no explicit executor. The server has 2 CPU cores. You fire 200 concurrent requests each making this call. What is the performance bottleneck?</p>
+  <ul class="options" data-correct="1">
+    <li>ForkJoinPool.commonPool() defaults to max(1, processors-1) = 1 thread on a 2-core machine. Only 1 I/O task runs at a time; 199 tasks queue. Price fetches that should take 20ms in parallel now take 200 × 20ms = 4 seconds serially. Fix: pass an explicit I/O executor — <code>Executors.newVirtualThreadPerTaskExecutor()</code> in Java 21, or a fixed thread pool sized for concurrency.</li>
+    <li>CompletableFuture has a built-in concurrency limit of 16 tasks per JVM</li>
+    <li>Each supplyAsync call creates a new OS thread — 200 threads × 1MB stack = 200MB memory exhaustion</li>
+    <li>The default timeout on supplyAsync is 100ms — tasks taking longer are cancelled</li>
+  </ul>
+  <div class="explanation">ForkJoinPool.commonPool() is CPU-sized, not I/O-sized. On a 2-core machine it typically has 1 worker thread. This is the correct default for CPU-bound work (math, compression) where you want at most cores-worth of parallelism. For I/O-bound work (HTTP, JDBC, Redis) you want many more threads because they spend most time waiting, not using CPU. Always pass an explicit executor to supplyAsync for I/O-bound tasks.</div>
+</div>
+
+<div class="question">
+  <p>Q4. A <code>supplyAsync</code> task throws a <code>RuntimeException</code>. Nobody calls <code>get()</code> or <code>join()</code>. Nobody attaches <code>exceptionally()</code> or <code>handle()</code>. What happens to the exception?</p>
+  <ul class="options" data-correct="2">
+    <li>The JVM logs the exception to stderr and shuts down the thread that ran the task</li>
+    <li>The exception is silently swallowed — stored inside the failed CF but never surfaced. If no code ever calls get()/join()/handle() on that CF, the exception is lost with zero logging, zero indication of failure. This is the most dangerous CompletableFuture pitfall. Always attach error handling: <code>.exceptionally(ex -&gt; { log.error(…); return fallback; })</code></li>
+    <li>ForkJoinPool's UncaughtExceptionHandler logs it to Datadog automatically</li>
+    <li>The CF retries the supplier up to 3 times before storing the exception</li>
+  </ul>
+  <div class="explanation">Unlike Thread where an uncaught exception goes to UncaughtExceptionHandler, CompletableFuture stores the exception inside the CF in a failed state. If nothing ever observes that state (no get/join/handle/exceptionally), the exception is permanently lost. This commonly causes fire-and-forget audit log calls, notification sends, or cache updates to silently fail in production with no trace in logs. Rule: every CompletableFuture chain that produces no result for the caller (runAsync, void thenAccept) must still have .exceptionally() or .whenComplete() to log failures.</div>
+</div>
+
+</div>
+
+<footer>Java Concepts · CompletableFuture · Lesson 1 of 1</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>

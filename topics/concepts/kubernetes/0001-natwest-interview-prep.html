@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Prep — Kubernetes Quickfire (NatWest)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.7; color: var(--ink);
+    max-width: 860px; margin: 0 auto; padding: 3rem 2rem 6rem;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1.02rem; margin: 0; font-weight: bold; }
+  p  { margin: 0.5rem 0; }
+  ul, ol { padding-left: 1.5rem; margin: 0.4rem 0; }
+  li { margin: 0.25rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto;
+    margin: 0.5rem 0; line-height: 1.55;
+  }
+  pre .c  { color: #6c7086; font-style: italic; }
+  pre .kw { color: #cba6f7; }
+  pre .st { color: #a6e3a1; }
+  pre .nu { color: #f9e2af; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.86rem; }
+  th { background: var(--bg-soft); text-align: left; padding: 0.4rem 0.7rem; border: 1px solid var(--border); }
+  td { padding: 0.4rem 0.7rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .callout { background: var(--bg-note); border-left: 4px solid var(--accent); padding: 0.9rem 1.1rem; margin: 1.2rem 0; border-radius: 0 4px 4px 0; }
+  .callout-warn { background: var(--bg-warn); border-left-color: #d97706; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+
+  .arch-box {
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg-soft); padding: 0.9rem 1.1rem;
+    margin: 0.8rem 0; font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+    line-height: 1.8; color: var(--ink);
+    white-space: pre; overflow-x: auto;
+  }
+
+  .qa { border: 1px solid var(--border); border-radius: 6px; margin: 0.9rem 0; overflow: hidden; }
+  .qa .q { background: var(--bg-soft); padding: 0.6rem 1rem; font-weight: bold; font-size: 0.98rem; }
+  .say { background: var(--bg-say); border-left: 4px solid var(--say-border); padding: 0.7rem 1rem; margin: 0; font-size: 0.94rem; }
+  .say .tag { font-family: 'Menlo', monospace; font-size: 0.7rem; font-weight: bold; color: var(--say-border); letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+  details { padding: 0.6rem 1rem; font-size: 0.9rem; border-top: 1px dashed var(--border); }
+  details summary { cursor: pointer; font-weight: bold; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.03em; font-family: 'Menlo', monospace; }
+  details summary:hover { color: var(--accent); }
+  details .body { margin-top: 0.5rem; }
+
+  .badge { display: inline-block; font-size: 0.76rem; padding: 0.1em 0.5em; border-radius: 3px; font-weight: bold; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e0e0e0; --muted: #aaa; --border: #444;
+      --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+      --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+    }
+    body { background: #1a1a1a; }
+    pre { background: #111 !important; }
+    table th { background: #2a2a2a; }
+    table tr:nth-child(even) { background: #222; }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e0e0e0; --muted: #aaa; --border: #444;
+    --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+    --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+  }
+  :root[data-theme="light"] {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+</style>
+</head>
+<body>
+
+<h1>Interview Prep — Kubernetes Quickfire</h1>
+<p class="meta">
+  <span class="badge badge-blue">NatWest</span>
+  <span class="badge badge-amber">1st technical round</span>
+  &nbsp;·&nbsp; Format: quickfire, 30–45 sec per answer, expand only if pushed
+</p>
+
+<div class="callout">
+  <strong>Why this matters for the role:</strong> Nick is looking for Cloud experience alongside Java/TDD. K8s questions test whether you understand where your Java service actually runs in production, not just that it compiles — this is the section that separates "writes code" from "ships and operates a service."
+</div>
+
+<hr>
+
+<h2 id="what">What K8s is, in one breath</h2>
+
+<div class="qa">
+  <div class="q">What is Kubernetes and why not just run containers with Docker directly?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Kubernetes is a container orchestrator — it schedules containers onto a cluster of machines, restarts them when they crash, scales them up/down, routes traffic to healthy instances, and rolls out new versions with zero downtime. Plain Docker runs one container on one machine with no self-healing, no scaling, and no coordinated rollout — fine for a laptop, not for a bank running hundreds of services across many nodes.</div>
+  <details><summary>▸ if pushed</summary><div class="body">The core loop underneath everything is the controller pattern: you declare desired state (e.g. "3 replicas of this image"), and a controller continuously reconciles actual cluster state toward that declaration. Every K8s object — Deployment, Service, HPA — follows this same declarative reconcile loop.</div></details>
+</div>
+
+<hr>
+
+<h2 id="objects">Core objects</h2>
+
+<div class="qa">
+  <div class="q">What's a Pod?</div>
+  <div class="say"><span class="tag">SAY THIS</span>The smallest deployable unit in K8s — one or more containers that share network namespace and storage, always scheduled together on the same node. Usually one container per Pod (your app); a second "sidecar" container (like a Datadog agent or an Envoy proxy) is the common exception.</div>
+</div>
+
+<div class="qa">
+  <div class="q">What's a Deployment?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A controller that manages a set of identical Pods via a ReplicaSet — you declare the desired replica count and Pod template (image, resources, probes), and the Deployment controller keeps that many healthy Pods running, handling rolling updates when you change the image tag.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Rolling update strategy is tunable: <code>maxSurge</code> (how many extra Pods above desired count during rollout) and <code>maxUnavailable</code> (how many can be down). <code>maxUnavailable: 0</code> is the zero-downtime setting — a new Pod must be Ready before an old one is terminated.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">What's a Service?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A stable network endpoint (a fixed DNS name and virtual IP) in front of a set of Pods, selected by label. Pods are ephemeral — they get new IPs every time they restart — so nothing should ever talk to a Pod IP directly; everything talks to the Service, which load-balances across whichever Pods are currently Ready.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Types: <code>ClusterIP</code> (internal only, default), <code>NodePort</code> (exposes a port on every node, rarely used directly in prod), <code>LoadBalancer</code> (provisions a cloud load balancer — an AWS NLB/ALB on EKS). Most prod setups front everything with an <code>Ingress</code> instead of per-service LoadBalancers, to avoid provisioning a cloud LB per microservice.</div></details>
+</div>
+
+<div class="qa">
+  <div class="q">Deployment vs Service — how do they relate?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A Deployment manages the Pods (what's running, how many, how they update). A Service is the stable front door to those Pods (how traffic finds them). They're linked only by label selectors — the Service's selector matches labels on the Pod template inside the Deployment, not a direct reference. That decoupling is why you can swap Deployments (e.g. blue/green) without touching the Service at all.</div>
+</div>
+
+<hr>
+
+<h2 id="ops">Scaling, config, health</h2>
+
+<div class="qa">
+  <div class="q">What's an HPA?</div>
+  <div class="say"><span class="tag">SAY THIS</span>HorizontalPodAutoscaler — watches a metric (CPU%, memory%, or a custom metric like request rate) and adjusts a Deployment's replica count automatically between a min and max, instead of a human scaling manually before a known traffic spike.</div>
+</div>
+
+<div class="qa">
+  <div class="q">ConfigMap vs Secret?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Both inject configuration into Pods as env vars or mounted files. ConfigMap is for non-sensitive config (feature flags, timeouts, URLs). Secret is base64-encoded (not encrypted by default — encryption at rest needs to be explicitly enabled at the cluster level, or you use something like AWS Secrets Manager + External Secrets Operator to sync real secrets in rather than storing them as raw K8s Secrets).</div>
+</div>
+
+<div class="qa">
+  <div class="q">Liveness vs readiness vs startup probes?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Liveness answers "should this Pod be restarted" — fails, K8s kills and recreates it. Readiness answers "should this Pod receive traffic right now" — fails, it's pulled from the Service's endpoints but not restarted. Startup probe covers slow-starting apps — nothing else runs until it passes, preventing a liveness probe from killing a Pod that's just still booting.</div>
+  <details><summary>▸ if pushed</summary><div class="body">Missing a readiness probe is a classic prod incident: a Pod that's still starting up (JVM warming, DB connection pool not ready) gets traffic immediately on creation and returns errors until it's actually ready. Missing a liveness probe means a hung/deadlocked Pod that's technically "running" but not serving anything just sits there forever, silently dropping capacity.</div></details>
+</div>
+
+<hr>
+
+<h2 id="banking">Banking angle — why this matters more here than elsewhere</h2>
+
+<div class="qa">
+  <div class="q">Why does K8s rollout safety matter more for a bank than a typical web app?</div>
+  <div class="say"><span class="tag">SAY THIS</span>A ledger or payment service can't tolerate split-brain — two versions of business logic running simultaneously against the same DB during a rollout is how you get inconsistent balance calculations or a bug that only affects half of in-flight requests. Zero-downtime rolling updates (<code>maxUnavailable: 0</code>), strict readiness probes, and progressive delivery (canary via Argo Rollouts, not a big-bang rollout) aren't nice-to-haves here — they're the mechanism that keeps "correct" during a deploy, not just "available."</div>
+</div>
+
+<div class="qa">
+  <div class="q">Why do resource limits matter on a shared banking cluster?</div>
+  <div class="say"><span class="tag">SAY THIS</span>Without CPU/memory limits, one misbehaving service (a memory leak, a runaway batch job) can starve every other Pod on the same node — the "noisy neighbour" problem. On a cluster running multiple regulated services, that's not just a performance bug, it's a service running fine in isolation but failing in prod because of something unrelated on the same node. Requests/limits plus <code>PodDisruptionBudget</code> for critical services are the standard mitigation.</div>
+</div>
+
+<hr>
+
+<h2 id="pipeline">The bigger picture — one commit to a running Pod</h2>
+
+<p style="font-size:0.9rem">If asked to sketch how a change actually reaches production, this is the shape (worth having as a mental model, not something to recite verbatim):</p>
+
+<div class="arch-box">git push → GitLab CI (test, build, docker build/push to ECR)
+              │
+              ▼
+      ArgoCD (GitOps controller inside the cluster, polls a Git repo
+              holding the desired Helm values — NOT triggered by CI directly)
+              │
+              ▼
+      EKS rolling update (readiness-gated, zero-downtime)
+              │
+              ▼
+      Datadog (traces, metrics, SLO alerting → PagerDuty/Slack on breach)
+
+  Terraform underneath: provisions the EKS cluster, node groups, ECR,
+  IAM roles — infra, not application state.</div>
+
+<div class="callout">
+  <strong>Key point if asked "who deploys to prod?":</strong> Nothing in CI has direct cluster credentials — ArgoCD is the only thing with write access to the cluster, and it only acts on what's committed to Git. That boundary is deliberate: it caps a compromised CI pipeline's blast radius at "can push a Git commit," not "can run kubectl against prod."
+</div>
+
+<hr>
+
+<div class="footer">
+  <p><strong>Related:</strong>
+    <a href="../java/0005-natwest-interview-prep.html">Java/Spring/AWS Quickfire</a> ·
+    <a href="../../devops/architecture/0001-full-pipeline.html">Full DevOps Pipeline lesson (this repo)</a> ·
+    <a href="../../../devops/q041_bet_settlement_pipeline/question.md">q041 — GitOps rollout safety exercise (this repo)</a>
+  </p>
+  <p style="margin-top:0.6rem; font-size:0.85rem">
+    This repo also has a full Bank system project (Event Sourcing/Saga, project 09 in <code>SystemDesignLab</code>) and a betting-domain deployment pipeline (<code>q041</code> above) — both are good concrete "I've thought about this in a liability-critical context" reference points if a question invites an example.
+  </p>
+  <p style="margin-top:0.8rem; font-style:italic">Cram doc — SAY THIS is what you say out loud. Only open "if pushed" if they ask you to go deeper.</p>
+</div>
+
+</body>
+</html>
