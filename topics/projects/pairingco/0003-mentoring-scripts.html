@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mentoring Scripts — PairingCo Pairing</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.7; color: var(--ink);
+    max-width: 860px; margin: 0 auto; padding: 3rem 2rem 6rem;
+    background: #fefefe;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  p  { margin: 0.5rem 0; }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .badge { display: inline-block; font-size: 0.76rem; padding: 0.1em 0.5em; border-radius: 3px; font-weight: bold; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 2rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+
+  /* Q&A card, reused from bankco-interview-prep.html for consistency */
+  .qa { border: 1px solid var(--border); border-radius: 6px; margin: 0.9rem 0; overflow: hidden; }
+  .qa .q { background: var(--bg-soft); padding: 0.6rem 1rem; font-weight: bold; font-size: 0.98rem; }
+  .say { background: var(--bg-say); border-left: 4px solid var(--say-border); padding: 0.7rem 1rem; margin: 0; font-size: 0.94rem; }
+  .say .tag { font-family: 'Menlo', monospace; font-size: 0.7rem; font-weight: bold; color: var(--say-border); letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+  details { padding: 0.6rem 1rem; font-size: 0.9rem; border-top: 1px dashed var(--border); }
+  details summary { cursor: pointer; font-weight: bold; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.03em; font-family: 'Menlo', monospace; }
+  details summary:hover { color: var(--accent); }
+  details .body { margin-top: 0.5rem; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e0e0e0; --muted: #aaa; --border: #444;
+      --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+      --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+    }
+    body { background: #1a1a1a; }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e0e0e0; --muted: #aaa; --border: #444;
+    --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+    --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+  }
+  :root[data-theme="light"] {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="../../">&#8592; Topics</a> &nbsp;&middot;&nbsp;
+  <a href="0002-safe-refactor-playbook.html">&#8592; Previous: Safe Refactor Playbook</a>
+</div>
+
+<h1>Mentoring Scripts</h1>
+<p class="meta">
+  <span class="badge badge-blue">PairingCo</span>
+  <span class="badge badge-amber">Moments &amp; phrases</span>
+  &nbsp;&middot;&nbsp; What to say when &middot; Lesson 3 of 3
+</p>
+
+<p>The two engineers are playing junior developers. The scripts below aren't lines to memorise verbatim &mdash; they're the <em>shape</em> of what a mentoring response sounds like in each recurring moment, versus the shape of a purely technical response that misses the brief.</p>
+
+<div class="qa">
+  <div class="q">Q1: A "junior" asks "why not just do X?" (a quicker, hackier fix than yours)</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "That would work for today &mdash; the tradeoff is it hardcodes &lt;assumption&gt;, so it breaks the moment &lt;realistic scenario&gt; happens. I'd rather spend the extra two minutes now. Does that tradeoff make sense, or do you think that scenario's unlikely enough it's not worth it?"
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Validates the suggestion first (it's not wrong, it's a tradeoff), states the concrete cost, then hands the decision back &mdash; that's mentoring, not overruling. A purely technical candidate just says "no, do it properly" and moves on, which reads as poor communication even if the code ends up the same.</div>
+  </details>
+</div>
+
+<div class="qa">
+  <div class="q">Q2: A "junior" pushes back on your chosen pattern/approach</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "Good pushback. I went with &lt;pattern&gt; because &lt;reason tied to the code in front of us&gt;. Walk me through what you had in mind &mdash; if it handles &lt;the same edge case&gt; as well, I'm open to it."
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Treats disagreement as signal, not a threat to defend against. Interviewers are explicitly testing whether you can be pushed off your first idea without getting defensive &mdash; this is the single most common "trap" in a pairing round.</div>
+  </details>
+</div>
+
+<div class="qa">
+  <div class="q">Q3: You don't know a codebase convention or domain term</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "I don't know this codebase's convention for &lt;thing&gt; &mdash; how do you two usually name/structure this? That'll shape what I call it rather than me guessing and getting it wrong."
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Reading unfamiliar code is graded explicitly. Guessing confidently and being wrong reads worse than asking &mdash; and asking model's exactly the behaviour you'd want a senior to model for a real junior on day one.</div>
+  </details>
+</div>
+
+<div class="qa">
+  <div class="q">Q4: Time is running out and the refactor isn't finished</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "We're close to time &mdash; here's where I'd stop: &lt;current state, tests green&gt;. I haven't touched &lt;remaining smell&gt; yet; if I had another 20 minutes I'd tackle it by &lt;one-line plan&gt;, but I'd rather leave this in a safe, tested state than rush an unfinished change."
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Directly matches "finishing is not the goal." Stopping cleanly with a stated plan for the rest scores better than a rushed, unverified last-minute change.</div>
+  </details>
+</div>
+
+<div class="qa">
+  <div class="q">Q5: Naming the pattern you're applying</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "I'm pulling this into a &lt;Strategy/Factory/etc&gt; &mdash; the reason is &lt;the concrete repeated branch/duplication in front of us&gt;. I considered &lt;alternative&gt; but rejected it because &lt;concrete reason&gt;."
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Naming a pattern without the "why here" and "what I rejected" clauses is just vocabulary. The rubric rewards the reasoning, not the terminology.</div>
+  </details>
+</div>
+
+<div class="qa">
+  <div class="q">Q6: A "junior" offers a suggestion mid-change &mdash; do you take it?</div>
+  <div class="say">
+    <span class="tag">SAY</span>
+    "Let's try that &mdash; quick way to find out is to run the test after. If it goes red we'll know why and back it out."
+  </div>
+  <details>
+    <summary>WHY THIS SHAPE</summary>
+    <div class="body">Treats their idea as a testable hypothesis instead of silently overriding or silently complying. Reinforces the safety-net habit from Lesson 2 at the same time.</div>
+  </details>
+</div>
+
+<div class="footer">Lesson 3 of 3 &middot; PairingCo Pairing Prep &middot; PassTheSoftwareEngineeringInterview</div>
+</body>
+</html>

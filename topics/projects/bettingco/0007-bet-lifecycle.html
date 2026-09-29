@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — End-to-End Bet Lifecycle</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 780px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">&#8592; ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo &#8212; End-to-End Bet Lifecycle</h1>
+<div class="meta">Category: Projects &middot; Topic: ARM BettingCo &middot; Est. time: 25 min &middot; Lesson 7 of 30</div>
+
+<h2>The Slip Abstraction</h2>
+<p>The entry point for bet placement is <code>POST /slips</code>, handled by <code>SlipController.createSlip()</code>. A <strong>Slip</strong> is the container that holds one or more <strong>Bet</strong> objects. This distinction matters: a single customer submission &#8212; say, a Lucky 15 &#8212; explodes into 15 individual Bet records (4 singles + 6 doubles + 4 trebles + 1 fourfold). <code>BetController</code> handles queries against existing bets; it plays no role in placement.</p>
+
+<p><code>BetType</code> is not just SINGLE/WIN/PLACE. The full set includes: SINGLE, DOUBLE, TREBLE, ACCUMULATOR4 through ACCUMULATOR25, TRIXIE, YANKEE, CANADIAN, HEINZ, SUPER_HEINZ, GOLIATH, PATENT, LUCKY_15, LUCKY_31, LUCKY_63. <code>BetExplosionService</code> is responsible for expanding combinatorial bet types into their constituent individual bets for liability tracking.</p>
+
+<h2>Correct End-to-End Flow</h2>
+
+<div class="diagram">Browser
+  |  POST /slips  {JWT, sportsbookRef, selections, stake}
+  v
+bet-manager-service (port 8084)
+  SlipService.createSlip()
+  1. findBySportsbookId(tenantId, sportsbookRef) -> if present, return existing (idempotent)
+  2. populateBet() -> betValidator.validate()
+  3. BetExplosionService.explode() -> combinatorial Bets created
+  4. bet.updateBetStatus(): PENDING -> APPROVED / DECLINED / CANCELLED (synchronous)
+  5. slipRepository.save(slip)
+  6. betMessenger.send(bet) -> Kafka PRODUCES: test-local.arm-dev.bet-updates.json (BetDto)
+  7. liabilityService.update(bet) [async, liability-executor thread pool]
+       -> if threshold exceeded -> suspensionService.suspendEvent()
+
+  Also CONSUMES (background):
+  &lt;- arm-dev.event-service.json             EventKafkaListener  (event/market/outcome state)
+  &lt;- test-local.arm-dev.event-rule4-update  Rule4Listener       (non-runner deductions)
+
+  ---------------------------------------------------------------
+  RACE RUNS -- RESULT DECLARED
+  ---------------------------------------------------------------
+
+settlement-service
+  EventServiceKafkaListener CONSUMES: arm-dev.event-service.json
+    (listener ID: arm-events-settlement)
+  DataService.handleMessage():
+    resultConfirmed=true  AND result != NOT_SET -> settle=true
+    resultConfirmed=false AND result == VOIDED  -> settle=true (void)
+    resultConfirmed=false AND result == NOT_SET -> unsettle=true
+    marketOutcomeResultInspectorCache (ConcurrentHashMap) prevents re-processing
+  OutcomeSettlerService.settle():
+    -> REST GET betsApi.getBetStatusesForOutcome(outcomeId)
+        (eligible statuses: APPROVED, FULLY_CASHED_OUT, PARTIALLY_CASHED_OUT, SETTLED)
+    -> batch bets (default 100/batch)
+    -> SettlementBroadcaster.broadcast()
+  PRODUCES: test-local.arm-dev.bet-settlement  (List&lt;BetStatusDto&gt;)
+
+  ---------------------------------------------------------------
+
+bet-manager-service
+  BetSettlementListener CONSUMES: test-local.arm-dev.bet-settlement
+  For each BetStatusDto in batch:
+    settle==true  -> settlementService.settleBetEarlyResult(betId, ...)
+    settle==false -> settlementService.unsettleBet(betId)
+  SettlementEngine.settle(bet):
+    1. earlySettled? -> mark resettlementEligible=true, skip (re-settled on final result)
+    2. betStatus not in {APPROVED, FULLY_CASHED_OUT, PARTIALLY_CASHED_OUT}? -> skip
+    3. cast (forecast/tricast)? -> castSettler.settle()
+    4. settleWinBet() -> resultBet() (LegResult per leg: WON / LOST / VOID)
+                     -> calculatePayout() (BigDecimal -- BOG, Rule 4, each-way)
+    5. updateBet(): winningsAmount, freeWinningAmount, pushedAmount, refundedAmount,
+                    betStatus=SETTLED, settledTime, settledReason, settledBy
+    6. betRepository.save(bet)
+    7. betMessenger.send(bet) -> Kafka PRODUCES: test-local.arm-dev.bet-updates.json
+
+  ---------------------------------------------------------------
+
+sportsbook-service
+  BetSettlementKafkaListener CONSUMES: arm-dev.bet-updates.json
+  -> STOMP broadcast to browser subscribers</div>
+
+<h2>Phase 1: Placement &#8212; Idempotency</h2>
+<p>Idempotency is enforced at the Slip level using a composite deduplication key: <code>(sportsbookTenantId, sportsbookRef)</code>. At the very start of <code>SlipService.createSlip()</code>, before any validation or persistence:</p>
+
+<pre>Optional&lt;Slip&gt; optional = slipRepository.findBySportsbookId(tenantId, sportsbookRef);
+if (optional.isPresent()) {
+    return slipMapper.toDto(optional.get());
+}</pre>
+
+<p>If the HTTP response is lost and the client retries with the same <code>sportsbookRef</code>, the SELECT finds the already-persisted Slip and returns it immediately. No duplicate Bet is created. There is no <code>idempotency_key</code> field, no UNIQUE constraint on the bets table, and no <code>DataIntegrityViolationException</code> to catch &#8212; the deduplication is a pre-check SELECT, not an exception-driven pattern.</p>
+
+<div class="callout pass">
+  <strong>Why pre-check SELECT beats UNIQUE constraint here</strong>
+  A UNIQUE constraint is reactive &#8212; it lets the INSERT happen and catches the collision. A pre-check SELECT is proactive &#8212; it avoids the INSERT entirely and returns the original object without touching the database constraint machinery. The tradeoff: if two requests race with the same sportsbookRef in the same millisecond, both may pass the SELECT before either commits. In practice, sportsbookRef is generated by the upstream sportsbook from its own transaction, so true concurrent duplicates are extremely rare. The SELECT pattern is simpler and avoids error-path complexity.
+</div>
+
+<h2>Phase 2: BetStatus State Machine</h2>
+<p>The full <code>BetStatus</code> enum has seven values. Each Bet also carries a second field, <code>sportsbookBetStatus</code>, reflecting the sportsbook's view of the bet.</p>
+
+<table>
+  <tr><th>betStatus</th><th>Set by</th><th>When</th></tr>
+  <tr><td>PENDING</td><td>SlipService</td><td>Initial state, before validation</td></tr>
+  <tr><td>APPROVED</td><td>bet.updateBetStatus()</td><td>Synchronously during POST /slips &#8212; all checks pass</td></tr>
+  <tr><td>DECLINED</td><td>bet.updateBetStatus()</td><td>Synchronously during POST /slips &#8212; validation failure</td></tr>
+  <tr><td>CANCELLED</td><td>bet.updateBetStatus()</td><td>Synchronously during POST /slips &#8212; market suspended or selection removed</td></tr>
+  <tr><td>SETTLED</td><td>SettlementEngine.settle()</td><td>After payout calculated in bet-manager-service</td></tr>
+  <tr><td>PARTIALLY_CASHED_OUT</td><td>SettlementEngine / cashout flow</td><td>Customer partially cashed out before result</td></tr>
+  <tr><td>FULLY_CASHED_OUT</td><td>SettlementEngine / cashout flow</td><td>Customer fully cashed out before result</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>Key fact: PENDING&#8594;APPROVED is synchronous</strong>
+  The transition from PENDING to APPROVED (or DECLINED/CANCELLED) happens inside the same HTTP request as POST /slips, within bet.updateBetStatus(). There is no async advisory-service approval step. The HTTP response returned to the browser already contains the final APPROVED/DECLINED status. SETTLED, PARTIALLY_CASHED_OUT, and FULLY_CASHED_OUT are set later by SettlementEngine inside bet-manager-service &#8212; NOT by a separate settlement-service.
+</div>
+
+<p>The dual status fields serve different audiences: <code>betStatus</code> is the ARM-internal lifecycle state. <code>sportsbookBetStatus</code> mirrors the sportsbook's categorisation &#8212; values: ACTIVE, CANCELLED, PARTIALLY_CASHED_OUT, FULLY_CASHED_OUT &#8212; used when syncing state back to the originating sportsbook.</p>
+
+<h2>Phase 3: Kafka Topology</h2>
+<p>The Kafka topic names and producer/consumer directions are specific and must not be inverted.</p>
+
+<table>
+  <tr><th>Topic</th><th>Producer</th><th>Consumer(s)</th><th>Purpose</th></tr>
+  <tr><td>test-local.arm-dev.bet-updates.json</td><td>bet-manager-service (betMessenger)</td><td>sportsbook-service</td><td>BetDto after placement or settlement</td></tr>
+  <tr><td>arm-dev.event-service.json</td><td>event-service / feed handler</td><td>bet-manager-service (EventKafkaListener), settlement-service (EventServiceKafkaListener)</td><td>Event/market/outcome state updates and results</td></tr>
+  <tr><td>test-local.arm-dev.bet-settlement</td><td>settlement-service (SettlementBroadcaster)</td><td>bet-manager-service (BetSettlementListener)</td><td>List&lt;BetStatusDto&gt; &#8212; bets eligible for settlement</td></tr>
+  <tr><td>test-local.arm-dev.event-rule4-update</td><td>event-service</td><td>bet-manager-service (Rule4Listener)</td><td>Non-runner Rule 4 deduction updates</td></tr>
+</table>
+
+<div class="callout">
+  <strong>settlement-service is a router, not a payout calculator</strong>
+  settlement-service never touches winnings amounts. Its job is: consume the results feed &#8212; identify which bets are eligible for settlement &#8212; batch them &#8212; publish the list to test-local.arm-dev.bet-settlement. All payout calculation happens in SettlementEngine inside bet-manager-service after consuming that topic. This split keeps payout logic co-located with the Bet domain model, and gives settlement-service a single, small responsibility.
+</div>
+
+<p>The Kafka message key is <code>bet.getId()</code> (Long). There is no <code>correlationId</code> field in <code>BetDto</code>. The <code>uuid</code> that appears in MDC (Mapped Diagnostic Context) logs within settlement-service comes from the incoming event-feed message &#8212; it identifies the event update, not the bet placement.</p>
+
+<h2>Phase 4: What settlement-service Actually Does</h2>
+<p><code>EventServiceKafkaListener</code> (listener ID: <code>arm-events-settlement</code>) consumes <code>arm-dev.event-service.json</code>. <code>DataService.handleMessage()</code> inspects each market outcome in the event update and applies these rules:</p>
+
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>resultConfirmed=true</code> AND <code>result != NOT_SET</code> &#8594; <strong>settle=true</strong></li>
+  <li><code>resultConfirmed=false</code> AND <code>result == VOIDED</code> &#8594; <strong>settle=true</strong> (void path)</li>
+  <li><code>resultConfirmed=false</code> AND <code>result == NOT_SET</code> &#8594; <strong>unsettle=true</strong></li>
+</ul>
+
+<p>Deduplication is handled by <code>marketOutcomeResultInspectorCache</code>, a <code>ConcurrentHashMap</code> that tracks the last-seen result per outcome. If the incoming result is identical to the cached value, the message is skipped &#8212; no redundant settlement broadcasts.</p>
+
+<p><code>OutcomeSettlerService.settle()</code> then calls <code>betsApi.getBetStatusesForOutcome(outcomeId)</code> via REST to retrieve eligible bets from bet-manager-service. Eligible statuses: APPROVED, FULLY_CASHED_OUT, PARTIALLY_CASHED_OUT, SETTLED. Bets are batched (default 100/batch) and published to <code>test-local.arm-dev.bet-settlement</code> via <code>SettlementBroadcaster.broadcast()</code>. If that REST call throws a <code>RestClientException</code>, the method returns early &#8212; there is no retry.</p>
+
+<h2>Phase 5: Payout Calculation in SettlementEngine</h2>
+<p>When <code>BetSettlementListener</code> in bet-manager-service receives the <code>List&lt;BetStatusDto&gt;</code>:</p>
+
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>betStatusDto.settle == true</code> &#8594; <code>settlementService.settleBetEarlyResult(betId, ...)</code></li>
+  <li><code>betStatusDto.settle == false</code> &#8594; <code>settlementService.unsettleBet(betId)</code> &#8594; reverts status to APPROVED</li>
+</ul>
+
+<p><code>SettlementEngine.settle()</code> runs the following steps:</p>
+
+<ol style="margin: 0 0 1rem 1.5rem;">
+  <li>If <code>earlySettled=true</code> &#8594; mark <code>resettlementEligible=true</code>, skip (will be re-settled when the final result arrives).</li>
+  <li>If <code>betStatus</code> not in {APPROVED, FULLY_CASHED_OUT, PARTIALLY_CASHED_OUT} &#8594; skip.</li>
+  <li>If cast (forecast or tricast) &#8594; delegate to <code>castSettler.settle()</code>.</li>
+  <li>Otherwise: <code>settleWinBet()</code> &#8594; <code>resultBet()</code> assigns a <code>LegResult</code> (WON, LOST, or VOID) to each leg &#8594; <code>calculatePayout()</code>.</li>
+  <li>After payout: <code>updateBet()</code> writes <code>winningsAmount</code>, <code>freeWinningAmount</code>, <code>pushedAmount</code>, <code>refundedAmount</code>, <code>betStatus=SETTLED</code>, <code>settledTime</code>, <code>settledReason</code>, <code>settledBy</code>.</li>
+  <li><code>betRepository.save(bet)</code>.</li>
+  <li><code>betMessenger.send(bet)</code> &#8594; publishes settled <code>BetDto</code> to <code>test-local.arm-dev.bet-updates.json</code>.</li>
+</ol>
+
+<h3>Payout Complexity</h3>
+<p>The payout calculation is not a simple <code>stake x win_price</code>. Several adjustments apply, tracked as <code>BetAdjustment</code> entities:</p>
+
+<table>
+  <tr><th>Scenario</th><th>How it is handled</th></tr>
+  <tr><td>Accumulator</td><td>Odds multiply across all legs; a single LOST leg voids the accumulator winnings</td></tr>
+  <tr><td>Each-way</td><td><code>unitStake = stake / oddsMap.size()</code> &#8212; split between WIN and PLACE PartTypes; winnings calculated per PartType</td></tr>
+  <tr><td>Best Odds Guaranteed (BOG)</td><td>Two parallel payouts: at LP (price taken at placement) vs min(SP, LP). The larger wins, subject to BOG_CAP config. Tracked as BetAdjustment of type BOG</td></tr>
+  <tr><td>Rule 4 deductions</td><td>Non-runner withdrawal tax applied via BetDeduction entities of type BetDeductionType</td></tr>
+  <tr><td>Void legs</td><td>Stake for voided legs flows into refundedAmount</td></tr>
+  <tr><td>Cashout</td><td>Tracked as BetAdjustment of type CASHOUT; does not override winningsAmount</td></tr>
+  <tr><td>Resettlement</td><td>If resettlementEligible=true, SettlementService.resettleBets() re-runs payout; may add FPTP / FREE_FPTP adjustments</td></tr>
+</table>
+
+<p>Full <code>BetAdjustment</code> type set: BOG, FREE_STAKE_BOG, CASHOUT, FREE_STAKE_CASHOUT, FPTP, FREE_FPTP, BOOST. Every monetary value &#8212; stake, winningsAmount, refundedAmount, pushedAmount &#8212; is <code>BigDecimal</code>. Never <code>double</code> or <code>float</code>.</p>
+
+<h2>Void and Unsettle</h2>
+<p>Voiding a bet is not a separate status &#8212; it goes through the SETTLED path. <code>SettlementEngine.voidBet()</code> sets <code>betStatus=SETTLED</code> and sets <code>refundedAmount=stakeAmount</code>, with <code>winningsAmount=ZERO</code>. The bet is considered settled (not pending), but the customer receives their stake back rather than a payout.</p>
+
+<p>Unsettling reverses a prior settlement: <code>settlementService.unsettleBet(betId)</code> sets <code>betStatus</code> back to APPROVED, clears the payout fields, and saves. This happens when <code>settle==false</code> arrives from <code>BetSettlementListener</code> &#8212; typically triggered by a results amendment or a data correction.</p>
+
+<h2>Error Handling &#8212; No Dead Letter Queue</h2>
+<p>In <code>BetSettlementListener.settleBet()</code>, exceptions per individual bet are caught and logged but not re-thrown:</p>
+
+<pre>catch (Exception e) {
+    logfmt().error(log, "Error settling bet {}", bet.getId(), e);
+}</pre>
+
+<p>This means one failed bet in a batch does not block settlement of the remaining bets in that batch. Processing continues. There is no explicit Dead Letter Queue (DLQ) configuration visible in the codebase. Similarly, in settlement-service, a <code>RestClientException</code> on the <code>betsApi.getBetStatusesForOutcome()</code> call causes the <code>OutcomeSettlerService.settle()</code> method to return early with no retry &#8212; the failed outcome would need to be re-triggered by a subsequent event-feed message.</p>
+
+<div class="callout warn">
+  <strong>No @Retryable on settlement &#8212; intentional</strong>
+  The @Retryable annotation is present only in bet-manager-service, on RetryableQuantBetBuilderClient.getPrices() and getMultiplePrices() &#8212; the REST calls to the ML BetBuilder engine used during placement price retrieval. It does not appear in the settlement path. There is no advisory-service REST call at placement either; that flow does not exist.
+</div>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. The browser times out on POST /slips and retries with the same request. How does ARM prevent creating a duplicate bet?</p>
+  <ul class="options" data-correct="2">
+    <li>The client generates an idempotency_key UUID; a UNIQUE constraint on the bets table catches the duplicate INSERT and returns the original bet</li>
+    <li>SlipService.createSlip() starts with a SELECT via findBySportsbookId(tenantId, sportsbookRef); if a Slip already exists for that composite key it is returned immediately before any INSERT occurs</li>
+    <li>The load balancer pins the retry to the same pod, which caches the response in memory and returns it without touching the database</li>
+    <li>BetController deduplicates incoming requests using the JWT subject claim and rejects the second submission</li>
+  </ul>
+  <div class="explanation">The idempotency mechanism is a pre-check SELECT on the composite key (sportsbookTenantId, sportsbookRef). There is no idempotency_key field, no UNIQUE constraint on the bets table, and no DataIntegrityViolationException to catch. The SELECT-first approach means the deduplication is proactive and avoids inserting at all on a retry, rather than relying on exception handling. BetController plays no role in placement &#8212; that is SlipController's responsibility.</div>
+</div>
+
+<div class="question">
+  <p>Q2. After a race result is declared, settlement-service publishes List&lt;BetStatusDto&gt; to test-local.arm-dev.bet-settlement. What does bet-manager-service do when it receives a BetStatusDto where settle==true?</p>
+  <ul class="options" data-correct="3">
+    <li>It publishes the BetStatusDto directly to arm-dev.bet-updates.json so sportsbook-service can update the browser UI</li>
+    <li>It calls betsApi.getBetStatusesForOutcome() to retrieve the full bet details from settlement-service</li>
+    <li>SettlementEngine.settle() runs: resultBet() assigns LegResult per leg, calculatePayout() computes winningsAmount (BigDecimal, with BOG/Rule4/each-way adjustments), betStatus is set to SETTLED, betRepository.save() persists, and betMessenger.send() publishes the settled BetDto</li>
+    <li>It forwards the BetStatusDto to advisory-service for risk reconciliation before updating the bet record</li>
+  </ul>
+  <div class="explanation">bet-manager-service owns all payout calculation. settlement-service is purely a router: it reads the results feed, identifies eligible bets via REST, and publishes batches. The actual SettlementEngine.settle() execution &#8212; LegResult assignment, BOG comparison, Rule 4 deduction, each-way stake split, BigDecimal payout, betRepository.save() &#8212; all happens inside bet-manager-service after consuming test-local.arm-dev.bet-settlement. There is no advisory-service involvement at settlement time.</div>
+</div>
+
+<div class="question">
+  <p>Q3. A PENDING bet transitions to APPROVED during the POST /slips request. When and where does the transition to SETTLED occur?</p>
+  <ul class="options" data-correct="1">
+    <li>SettlementEngine.settle() inside bet-manager-service sets betStatus=SETTLED after consuming test-local.arm-dev.bet-settlement and completing payout calculation &#8212; this is asynchronous, triggered by the race result arriving in the event feed</li>
+    <li>settlement-service sets betStatus=SETTLED synchronously when it receives the race result from event-service</li>
+    <li>The PENDING&#8594;APPROVED transition is asynchronous; advisory-service sets APPROVED, then settlement-service sets SETTLED</li>
+    <li>sportsbook-service sets betStatus=SETTLED after consuming arm-dev.bet-updates.json and pushing the STOMP notification to the browser</li>
+  </ul>
+  <div class="explanation">PENDING&#8594;APPROVED (or DECLINED/CANCELLED) is synchronous inside the POST /slips request &#8212; bet.updateBetStatus() is called before slipRepository.save(). The transition to SETTLED is asynchronous and happens much later: race result &#8594; event-service publishes &#8594; settlement-service routes eligible bets &#8594; bet-manager-service BetSettlementListener consumes &#8594; SettlementEngine.settle() sets betStatus=SETTLED and saves. settlement-service never writes to the bets table; sportsbook-service only reads from arm-dev.bet-updates.json and pushes to the browser.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide &middot; Lesson 7 of 30</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — AWS Infrastructure and Deployment</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 780px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo — AWS Infrastructure and Deployment</h1>
+<div class="meta">Category: Projects · Topic: ARM BettingCo · Est. time: 20 min · Lesson 10 of 14</div>
+
+<h2>AWS Topology</h2>
+
+<div class="diagram">AWS Region: eu-west-1
+VPC
+├── EKS Cluster: dev-2-eu-west-1
+│   ├── Namespace: arm-dev   (development environment)
+│   └── Namespace: arm-int   (integration / pre-prod environment)
+│
+├── EKS Cluster: prod-eu-west-1
+│   └── Namespace: arm-prod  (production)
+│
+├── MSK (Managed Streaming for Kafka)
+│   Brokers: msk-broker-1.dev.bettingcosport.com:9092
+│            msk-broker-2.dev.bettingcosport.com:9092
+│            msk-broker-3.dev.bettingcosport.com:9092
+│
+├── ElastiCache Redis
+│   6-node cluster: 3 primary + 3 replica
+│   Prod endpoint: a1dca3a16ce804620ad4e91fc2a56c34-895886155.eu-west-1.elb.amazonaws.com:6379
+│
+├── ECR (Elastic Container Registry)
+│   Dev:  471627132520.dkr.ecr.eu-west-1.amazonaws.com
+│   Prod: 168953832003.dkr.ecr.eu-west-1.amazonaws.com
+│
+└── EFS (Elastic File System)
+    Persistent volumes for stateful services</div>
+
+<div class="callout">
+  <strong>Why two EKS clusters (not two namespaces in one cluster)?</strong>
+  Two separate clusters provide blast radius reduction: a catastrophic failure in dev (misconfigured HPA, runaway pod, misconfigured network policy) cannot affect prod. They also allow different node group configurations (dev can use cheaper instances). The cost is duplicate cluster management, which Terraform IaC and Helm make manageable.
+</div>
+
+<h2>Helm Chart — arm-chart</h2>
+<p>All 43+ services are deployed from a single Helm chart (<code>arm-chart</code>), parameterised with environment-specific values files:</p>
+
+<pre>arm-chart/
+  Chart.yaml
+  templates/
+    deployment.yaml    ← {{ .Values.image.tag }} injected by CI
+    service.yaml
+    configmap.yaml
+    hpa.yaml
+  values-dev.yaml     ← dev-specific: low replica counts, debug logging
+  values-int.yaml     ← int: closer to prod settings
+  values-prod.yaml    ← prod: full replica counts, prod endpoints</pre>
+
+<p>Horizontal Pod Autoscaler (HPA) — dev defaults (values-dev.yaml):</p>
+<pre>minReplicas: 1
+maxReplicas: 5
+targetCPUUtilizationPercentage: 80</pre>
+<p>Production override (values-prod.yaml): <code>minReplicas: 2, maxReplicas: 3</code>. Two replicas always running ensures availability; capped at 3 to control cost. No <code>behavior</code> stabilization block is configured in the Helm chart.</p>
+
+<div class="callout">
+  <strong>Why Helm over raw Kubernetes YAML?</strong>
+  43 services × 3 environments = 129 sets of nearly-identical Deployment/Service/ConfigMap YAML files if done raw. Helm templates parameterise the differences (image tag, replica count, environment variables, endpoints) while sharing a single template definition. <code>helm upgrade arm-chart values-prod.yaml --set image.tag=latest-sha</code> deploys the right configuration for prod in one command.
+</div>
+
+<h2>GitLab CI/CD Pipeline</h2>
+
+<div class="diagram">GitLab CI Stages (defined in .gitlab-ci.yml)
+
+Stage 1: build
+  └── ./gradlew build -x test    ← Gradle 8.5, compiles all modules
+
+Stage 2: unit-tests
+  └── ./gradlew test              ← JUnit 5 unit tests, fail fast on failure
+      docker-test.sh              ← frontend tests (Jest/Vitest) in Docker
+
+Stage 3: docker-push
+  └── docker build -t {ECR_URL}/{service}:{date}-{branch}-{sha}
+      docker push {ECR_URL}/{service}:{date}-{branch}-{sha}
+
+Stage 4: helm-deploy
+  └── helm upgrade arm-chart ./helm/arm-chart \
+        -f values-{env}.yaml \
+        --set image.tag={sha}
+
+Branch rules:
+  trunk (main)     → auto-deploy to arm-dev namespace
+  release/*        → conditional deploy to arm-int + manual gate for arm-prod
+  feature/*        → build + test only, no deploy</div>
+
+<div class="callout pass">
+  <strong>Why manual gate for production?</strong>
+  Every production deployment is a deliberate decision. The GitLab CI pipeline pauses at the helm-deploy stage for prod and requires a human to click "Deploy". This prevents accidental deployments (merged PRs accidentally triggering prod), ensures QA has validated in arm-int first, and creates a clear audit trail of who approved each production release.
+</div>
+
+<h2>Secrets Management — HashiCorp Vault</h2>
+<p>Secrets (DB credentials, Kafka TLS certs, JWT signing keys) are managed by <strong>HashiCorp Vault</strong> via the Vault Secrets Operator (VSO). The Kubernetes CRD <code>VaultStaticSecret</code> declares which Vault path to sync; VSO writes the values into a Kubernetes Secret every 60 seconds. Services consume the Secret via <code>envFrom.secretRef</code> in the Helm Deployment — no AWS Secrets Manager, no hardcoded credentials.</p>
+
+<h2>Ingress</h2>
+<p>ARM uses <strong>nginx ingress</strong> variants rather than AWS Application Load Balancer (ALB) Ingress Controller:</p>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>nginx-cloudflare</code> — public traffic via Cloudflare proxy</li>
+  <li><code>nginx-public</code> — public endpoints without Cloudflare</li>
+  <li><code>nginx-internal</code> — internal service-to-service traffic</li>
+  <li><code>nginx-protected</code> — authenticated internal routes</li>
+</ul>
+<p>Route 53 DNS → nginx ingress → K8s Service → pods. No ALB in the ingress path.</p>
+
+<h2>Terraform — arm-config</h2>
+<p>All AWS infrastructure is managed as Terraform code in the <code>arm-config</code> repository:</p>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li>ECR repositories (one per service)</li>
+  <li>EKS node groups and IAM roles</li>
+  <li>VPC, subnets, security groups</li>
+  <li>EFS volumes for persistent storage</li>
+  <li>MSK cluster configuration</li>
+  <li>Route53 DNS records (prod only)</li>
+  <li>Datadog monitors (alert thresholds as code)</li>
+</ul>
+<p>Separate Terraform state per environment. Changes to infrastructure go through the same GitLab CI review process as application code.</p>
+
+<h2>Local Development</h2>
+<p>Local dev uses <code>docker-compose</code> (in <code>arm-utils/local-env/</code>) to start:</p>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li>Redis cluster: 6 containers (3 primary + 3 replica, <code>bitnami/redis-cluster</code>)</li>
+  <li>RabbitMQ cluster: 3 nodes + HAProxy for STOMP relay</li>
+  <li>Kafka + Zookeeper (local replacement for MSK)</li>
+  <li>PostgreSQL (local, schema per developer)</li>
+</ul>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. ARM uses one Helm chart (arm-chart) for all 43+ services with different values files per environment. What is the primary benefit?</p>
+  <ul class="options" data-correct="2">
+    <li>Helm is significantly faster at deploying containers than raw kubectl apply</li>
+    <li>One parameterised chart avoids duplicating 43 Deployment/Service/ConfigMap YAML files per environment; env differences are localised to values files; image tags are injected by CI at deploy time as a single --set argument</li>
+    <li>Helm automatically compresses Docker images before pushing to ECR</li>
+    <li>Kubernetes requires Helm charts for services that use HPA</li>
+  </ul>
+  <div class="explanation">Without Helm: 43 services × 3 envs × ~3 YAML files each = 387 YAML files to maintain. Change the HPA target CPU: update in 387 places. With Helm: one template, one values file per env. Change HPA target: edit the template once. The parameterisation is the value — not speed or compression.</div>
+</div>
+
+<div class="question">
+  <p>Q2. GitLab CI deploys automatically to arm-dev on every trunk merge but requires manual approval for arm-prod. Why the asymmetry?</p>
+  <ul class="options" data-correct="2">
+    <li>arm-prod uses a different AWS account that requires separate credentials</li>
+    <li>Manual gate ensures every production deployment is a deliberate, auditable decision; dev is a sandbox for rapid iteration where auto-deploy accelerates feedback; prod affects real customers and requires QA validation in arm-int first</li>
+    <li>GitLab CI does not support automatic deployments to production namespaces</li>
+    <li>Terraform manages prod deployments, not GitLab CI helm-deploy</li>
+  </ul>
+  <div class="explanation">Auto-deploy to dev = fast feedback on every merge. Manual gate to prod = every production change is a conscious decision with a human accountable for it. The audit trail (who clicked "Deploy", when, which SHA) matters for post-incident reviews and regulatory compliance in the gambling industry. arm-int bridges the gap: it gets the automatic deploy from release/* branches, giving QA a stable pre-prod environment before manual prod promotion.</div>
+</div>
+
+<div class="question">
+  <p>Q3. A new service needs a Kafka topic. Terraform manages MSK in arm-config. What is the correct process?</p>
+  <ul class="options" data-correct="2">
+    <li>Create the topic manually in the AWS MSK console — Terraform doesn't support topic management</li>
+    <li>Add the topic definition to arm-config's Terraform MSK module, submit for code review, and apply via GitLab CI — infrastructure changes are version-controlled and reviewed like application code</li>
+    <li>The service creates the topic automatically on startup using Kafka AdminClient</li>
+    <li>Kafka topics don't need to be pre-provisioned — they are created on first publish</li>
+  </ul>
+  <div class="explanation">Infrastructure as code means all infrastructure changes — including Kafka topics — go through the same review and CI pipeline as application code. Manual console changes are untracked (no audit trail, no rollback, no reproducibility). Auto-create on publish is disabled in production MSK to prevent accidental topic creation with wrong partition counts or retention settings. Terraform plan → review → apply is the correct path.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Lesson 10 of 14</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

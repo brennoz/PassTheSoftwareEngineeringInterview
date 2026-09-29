@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Infrastructure &amp; K8s Topology</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 1300px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.88rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); font-family: monospace; font-size: 0.82rem; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo — Infrastructure &amp; Kubernetes Topology</h1>
+<div class="meta">Category: Projects · Topic: ARM BettingCo · Diagram 4 of 4 · K8s / AWS / CI-CD</div>
+
+<p>ARM runs on two AWS Elastic Kubernetes Service (EKS) clusters — one shared dev/integration cluster and a dedicated production cluster — both in <code>eu-west-1</code>. All services share a single Helm chart with environment-specific values files. Deployments are triggered by GitLab CI/CD pipelines that build Docker images, push to ECR (Elastic Container Registry), and run <code>helm upgrade</code>. Kubernetes Horizontal Pod Autoscaler (HPA) manages scale automatically against CPU load.</p>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1100" font-family="Menlo,Consolas,monospace" font-size="10.5">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6b7280"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <rect width="1240" height="1100" fill="#fafafa"/>
+
+  <!-- ════════════════════════════════════════
+       CI/CD PIPELINE (top strip)
+  ════════════════════════════════════════ -->
+  <rect x="10" y="10" width="1220" height="120" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="620" y="32" text-anchor="middle" font-weight="bold" fill="#14532d" font-size="13">GitLab CI/CD Pipeline</text>
+
+  <!-- Stage boxes -->
+  <!-- 1. build -->
+  <rect x="30" y="44" width="160" height="72" rx="6" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="110" y="66" text-anchor="middle" font-weight="bold" fill="#14532d">1. build</text>
+  <text x="110" y="82" text-anchor="middle" fill="#14532d" font-size="9">./gradlew build</text>
+  <text x="110" y="96" text-anchor="middle" fill="#14532d" font-size="9">-x test (fast)</text>
+  <text x="110" y="108" text-anchor="middle" fill="#166534" font-size="9">artifact: JAR</text>
+
+  <!-- arrow -->
+  <line x1="190" y1="80" x2="210" y2="80" stroke="#16a34a" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- 2. unit-tests -->
+  <rect x="210" y="44" width="170" height="72" rx="6" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="295" y="66" text-anchor="middle" font-weight="bold" fill="#14532d">2. unit-tests</text>
+  <text x="295" y="82" text-anchor="middle" fill="#14532d" font-size="9">./gradlew test</text>
+  <text x="295" y="96" text-anchor="middle" fill="#14532d" font-size="9">JUnit 5 + Mockito</text>
+  <text x="295" y="108" text-anchor="middle" fill="#166534" font-size="9">no Testcontainers</text>
+
+  <!-- arrow -->
+  <line x1="380" y1="80" x2="400" y2="80" stroke="#16a34a" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- 3. docker push ECR -->
+  <rect x="400" y="44" width="200" height="72" rx="6" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="500" y="66" text-anchor="middle" font-weight="bold" fill="#14532d">3. docker push ECR</text>
+  <text x="500" y="80" text-anchor="middle" fill="#14532d" font-size="9">docker build → tag → push</text>
+  <text x="500" y="94" text-anchor="middle" fill="#14532d" font-size="9">471627132520.dkr.ecr</text>
+  <text x="500" y="108" text-anchor="middle" fill="#166534" font-size="9">.eu-west-1.amazonaws.com (dev)</text>
+
+  <!-- arrow -->
+  <line x1="600" y1="80" x2="620" y2="80" stroke="#16a34a" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- 4. helm deploy dev (auto) -->
+  <rect x="620" y="44" width="180" height="72" rx="6" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="710" y="62" text-anchor="middle" font-weight="bold" fill="#14532d">4. helm deploy dev</text>
+  <text x="710" y="76" text-anchor="middle" fill="#14532d" font-size="9">helm upgrade --install</text>
+  <text x="710" y="90" text-anchor="middle" fill="#14532d" font-size="9">namespace: arm-dev</text>
+  <text x="710" y="104" text-anchor="middle" fill="#166534" font-size="9">auto on trunk merge</text>
+
+  <!-- arrow (conditional) -->
+  <line x1="800" y1="80" x2="820" y2="80" stroke="#ea580c" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
+  <text x="810" y="73" text-anchor="middle" fill="#ea580c" font-size="8">release/*</text>
+
+  <!-- 5. helm deploy int (conditional) -->
+  <rect x="820" y="44" width="180" height="72" rx="6" fill="#fed7aa" stroke="#ea580c" stroke-width="1.2"/>
+  <text x="910" y="62" text-anchor="middle" font-weight="bold" fill="#9a3412">5. deploy int</text>
+  <text x="910" y="76" text-anchor="middle" fill="#9a3412" font-size="9">namespace: arm-int</text>
+  <text x="910" y="90" text-anchor="middle" fill="#9a3412" font-size="9">release/* branch only</text>
+  <text x="910" y="104" text-anchor="middle" fill="#c2410c" font-size="9">conditional trigger</text>
+
+  <!-- arrow (manual gate) -->
+  <line x1="1000" y1="80" x2="1020" y2="80" stroke="#dc2626" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arr-red)"/>
+  <text x="1010" y="73" text-anchor="middle" fill="#dc2626" font-size="8">manual gate</text>
+
+  <!-- 6. helm deploy prod -->
+  <rect x="1020" y="44" width="200" height="72" rx="6" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+  <text x="1120" y="62" text-anchor="middle" font-weight="bold" fill="#7f1d1d">6. deploy prod</text>
+  <text x="1120" y="76" text-anchor="middle" fill="#7f1d1d" font-size="9">168953832003.dkr.ecr</text>
+  <text x="1120" y="90" text-anchor="middle" fill="#7f1d1d" font-size="9">.eu-west-1.amazonaws.com</text>
+  <text x="1120" y="104" text-anchor="middle" fill="#991b1b" font-size="9">namespace: arm-prod ← manual</text>
+
+  <!-- ════════════════════════════════════════
+       DEV EKS CLUSTER
+  ════════════════════════════════════════ -->
+  <rect x="10" y="148" width="760" height="470" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="390" y="172" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="13">EKS Cluster: dev-2-eu-west-1 (eu-west-1)</text>
+  <text x="390" y="188" text-anchor="middle" fill="#1e40af" font-size="10">Node groups: t3.large (arm-dev) · t3.xlarge (arm-int) · min=2, max=6 nodes</text>
+
+  <!-- Namespace: arm-dev -->
+  <rect x="20" y="198" width="740" height="290" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="390" y="218" text-anchor="middle" font-weight="bold" fill="#1e3a8a">Namespace: arm-dev</text>
+
+  <!-- Pods in arm-dev (grid) -->
+  <!-- Row 1 -->
+  <rect x="30" y="228" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="95" y="248" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">event-service</text>
+  <text x="95" y="262" text-anchor="middle" fill="#1e3a8a" font-size="9">:8081 · HPA 1-5</text>
+  <text x="95" y="272" text-anchor="middle" fill="#1e3a8a" font-size="9">CPU target 80%</text>
+
+  <rect x="170" y="228" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="235" y="248" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">sportsbook-service</text>
+  <text x="235" y="262" text-anchor="middle" fill="#1e3a8a" font-size="9">:8082 · HPA 1-5</text>
+  <text x="235" y="272" text-anchor="middle" fill="#1e3a8a" font-size="9">WebSocket connections</text>
+
+  <rect x="310" y="228" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="375" y="248" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">bet-manager-service</text>
+  <text x="375" y="262" text-anchor="middle" fill="#1e3a8a" font-size="9">HPA 1-5</text>
+  <text x="375" y="272" text-anchor="middle" fill="#1e3a8a" font-size="9">@Retryable / idempotency</text>
+
+  <rect x="450" y="228" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="515" y="248" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">auth-service</text>
+  <text x="515" y="262" text-anchor="middle" fill="#1e3a8a" font-size="9">:8080 · HPA 1-3</text>
+  <text x="515" y="272" text-anchor="middle" fill="#1e3a8a" font-size="9">JWT issuance</text>
+
+  <rect x="590" y="228" width="156" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="668" y="248" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">pricing-service</text>
+  <text x="668" y="262" text-anchor="middle" fill="#1e3a8a" font-size="9">HPA 1-5</text>
+  <text x="668" y="272" text-anchor="middle" fill="#1e3a8a" font-size="9">Redis: 12h TTL cache</text>
+
+  <!-- Row 2 -->
+  <rect x="30" y="290" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="95" y="310" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">advisory-service</text>
+  <text x="95" y="324" text-anchor="middle" fill="#1e3a8a" font-size="9">HPA 1-5</text>
+  <text x="95" y="336" text-anchor="middle" fill="#1e3a8a" font-size="9">risk evaluation</text>
+
+  <rect x="170" y="290" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="235" y="310" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">settlement-service</text>
+  <text x="235" y="324" text-anchor="middle" fill="#1e3a8a" font-size="9">HPA 1-3</text>
+  <text x="235" y="336" text-anchor="middle" fill="#1e3a8a" font-size="9">batch settlement</text>
+
+  <rect x="310" y="290" width="130" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="375" y="310" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">audit-service</text>
+  <text x="375" y="324" text-anchor="middle" fill="#1e3a8a" font-size="9">HPA 1-2</text>
+  <text x="375" y="336" text-anchor="middle" fill="#1e3a8a" font-size="9">immutable log</text>
+
+  <rect x="450" y="290" width="130" height="50" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="1"/>
+  <text x="515" y="310" text-anchor="middle" font-weight="bold" fill="#14532d" font-size="10">feed-handler-*</text>
+  <text x="515" y="324" text-anchor="middle" fill="#14532d" font-size="9">18 pods</text>
+  <text x="515" y="336" text-anchor="middle" fill="#14532d" font-size="9">one per bookmaker</text>
+
+  <rect x="590" y="290" width="156" height="50" rx="4" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="668" y="310" text-anchor="middle" font-weight="bold" fill="#1e3a8a" font-size="10">bet-recommendation</text>
+  <text x="668" y="324" text-anchor="middle" fill="#1e3a8a" font-size="9">:8100 · HPA 1-3</text>
+  <text x="668" y="336" text-anchor="middle" fill="#1e3a8a" font-size="9">ML recommendations</text>
+
+  <!-- HPA label -->
+  <rect x="30" y="350" width="716" height="28" rx="3" fill="#eff6ff" stroke="#93c5fd" stroke-dasharray="3,2"/>
+  <text x="388" y="368" text-anchor="middle" fill="#1e40af" font-size="9">HPA: minReplicas=1 · maxReplicas=5 · targetCPUUtilizationPercentage=80</text>
+  <text x="388" y="378" text-anchor="middle" fill="#1e40af" font-size="9">ConfigMap: arm-config.yml (app config) · Secret: db-credentials, kafka-tls</text>
+
+  <!-- Readiness / Liveness probes -->
+  <text x="388" y="396" text-anchor="middle" fill="#1e40af" font-size="9">Liveness probe: GET /actuator/health · Readiness probe: GET /actuator/health/readiness</text>
+  <text x="388" y="408" text-anchor="middle" fill="#1e40af" font-size="9">Resources: requests cpu=250m mem=512Mi · limits cpu=2000m mem=2Gi (varies per service)</text>
+  <text x="388" y="420" text-anchor="middle" fill="#1e40af" font-size="9">Ingress: NGINX ingress controller · TLS termination · /api/* → svc routing</text>
+  <text x="388" y="432" text-anchor="middle" fill="#1e40af" font-size="9">ServiceAccount: arm-sa · IRSA (IAM Roles for Service Accounts) → MSK, S3, SecretsManager</text>
+  <text x="388" y="444" text-anchor="middle" fill="#1e40af" font-size="9">Service type: ClusterIP (internal) · LoadBalancer (sportsbook-service, auth-service)</text>
+
+  <!-- Namespace: arm-int -->
+  <rect x="20" y="498" width="740" height="108" rx="6" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="390" y="518" text-anchor="middle" font-weight="bold" fill="#0c4a6e">Namespace: arm-int (integration — release/* branches only)</text>
+  <text x="390" y="536" text-anchor="middle" fill="#0369a1" font-size="9">Identical deployment spec to arm-dev</text>
+  <text x="390" y="550" text-anchor="middle" fill="#0369a1" font-size="9">Dedicated PostgreSQL schema (arm_int) · same Redis cluster (different DB index)</text>
+  <text x="390" y="564" text-anchor="middle" fill="#0369a1" font-size="9">MSK: arm-int.* topic prefix · separate consumer groups</text>
+  <text x="390" y="578" text-anchor="middle" fill="#0369a1" font-size="9">Purpose: manual E2E testing before prod gate</text>
+  <text x="390" y="594" text-anchor="middle" fill="#0369a1" font-size="9">Danger bot posts PR diff to Slack for review; Datadog monitors diff vs dev alerts</text>
+
+  <!-- ════════════════════════════════════════
+       PROD EKS CLUSTER
+  ════════════════════════════════════════ -->
+  <rect x="790" y="148" width="440" height="470" rx="8" fill="#fff1f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="1010" y="172" text-anchor="middle" font-weight="bold" fill="#7f1d1d" font-size="13">EKS Cluster: prod-eu-west-1</text>
+  <text x="1010" y="188" text-anchor="middle" fill="#991b1b" font-size="10">Node groups: m5.xlarge · min=3, max=12 nodes · Multi-AZ (eu-west-1a/b/c)</text>
+
+  <!-- Namespace: arm-prod -->
+  <rect x="800" y="198" width="420" height="408" rx="6" fill="#fecaca" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="1010" y="218" text-anchor="middle" font-weight="bold" fill="#7f1d1d">Namespace: arm-prod</text>
+
+  <!-- Prod pods -->
+  <rect x="810" y="228" width="180" height="50" rx="4" fill="#fca5a5" stroke="#dc2626" stroke-width="1"/>
+  <text x="900" y="248" text-anchor="middle" font-weight="bold" fill="#7f1d1d" font-size="10">event-service</text>
+  <text x="900" y="262" text-anchor="middle" fill="#7f1d1d" font-size="9">:8081 · HPA 2-10</text>
+  <text x="900" y="274" text-anchor="middle" fill="#7f1d1d" font-size="9">PDB minAvailable=2</text>
+
+  <rect x="1000" y="228" width="200" height="50" rx="4" fill="#fca5a5" stroke="#dc2626" stroke-width="1"/>
+  <text x="1100" y="248" text-anchor="middle" font-weight="bold" fill="#7f1d1d" font-size="10">sportsbook-service</text>
+  <text x="1100" y="262" text-anchor="middle" fill="#7f1d1d" font-size="9">:8082 · HPA 3-15</text>
+  <text x="1100" y="274" text-anchor="middle" fill="#7f1d1d" font-size="9">PDB minAvailable=3</text>
+
+  <rect x="810" y="288" width="180" height="50" rx="4" fill="#fca5a5" stroke="#dc2626" stroke-width="1"/>
+  <text x="900" y="308" text-anchor="middle" font-weight="bold" fill="#7f1d1d" font-size="10">bet-manager-service</text>
+  <text x="900" y="322" text-anchor="middle" fill="#7f1d1d" font-size="9">HPA 2-10</text>
+  <text x="900" y="334" text-anchor="middle" fill="#7f1d1d" font-size="9">SELECT pre-check (sportsbookRef+tenantId)</text>
+
+  <rect x="1000" y="288" width="200" height="50" rx="4" fill="#fca5a5" stroke="#dc2626" stroke-width="1"/>
+  <text x="1100" y="308" text-anchor="middle" font-weight="bold" fill="#7f1d1d" font-size="10">feed-handler-* (18)</text>
+  <text x="1100" y="322" text-anchor="middle" fill="#7f1d1d" font-size="9">HPA 1-3 per bookie</text>
+  <text x="1100" y="334" text-anchor="middle" fill="#7f1d1d" font-size="9">WOODS cluster consumer</text>
+
+  <text x="1010" y="366" text-anchor="middle" fill="#7f1d1d" font-size="9">PodDisruptionBudget: minAvailable=2 on critical services</text>
+  <text x="1010" y="378" text-anchor="middle" fill="#7f1d1d" font-size="9">TopologySpreadConstraint: spread across AZs</text>
+  <text x="1010" y="390" text-anchor="middle" fill="#7f1d1d" font-size="9">Resource limits: 4× of dev values</text>
+  <text x="1010" y="402" text-anchor="middle" fill="#7f1d1d" font-size="9">ImagePullPolicy: IfNotPresent (ECR prod: 168953832003.dkr.ecr.eu-west-1.amazonaws.com)</text>
+
+  <!-- ECR -->
+  <rect x="810" y="420" width="390" height="50" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="1005" y="442" text-anchor="middle" font-weight="bold" fill="#7f1d1d">ECR Prod: 168953832003.dkr.ecr.eu-west-1.amazonaws.com</text>
+  <text x="1005" y="456" text-anchor="middle" fill="#991b1b" font-size="9">Image scan on push · lifecycle policy: keep last 10 images · immutable tags</text>
+
+  <rect x="810" y="480" width="390" height="50" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="1005" y="502" text-anchor="middle" font-weight="bold" fill="#7f1d1d">Route 53 → NGINX Ingress (nginx-cloudflare / nginx-public)</text>
+  <text x="1005" y="516" text-anchor="middle" fill="#991b1b" font-size="9">arm.bettingcosports.com → sportsbook-service</text>
+  <text x="1005" y="528" text-anchor="middle" fill="#991b1b" font-size="9">cerberus.bettingcosports.com → cerberus-ui (Vercel/CDN)</text>
+
+  <rect x="810" y="540" width="390" height="54" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="1005" y="562" text-anchor="middle" font-weight="bold" fill="#7f1d1d">Observability (prod)</text>
+  <text x="1005" y="578" text-anchor="middle" fill="#991b1b" font-size="9">Datadog APM: distributed traces across all services</text>
+  <text x="1005" y="590" text-anchor="middle" fill="#991b1b" font-size="9">Monitors: error rate &gt;1% → Slack alert · p99 latency &gt;500ms → PagerDuty</text>
+
+  <!-- ════════════════════════════════════════
+       SHARED INFRASTRUCTURE (bottom band)
+  ════════════════════════════════════════ -->
+  <rect x="10" y="634" width="1220" height="260" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="620" y="658" text-anchor="middle" font-weight="bold" fill="#374151" font-size="13">Shared Infrastructure (eu-west-1)</text>
+
+  <!-- BETTINGCO MSK -->
+  <rect x="20" y="670" width="220" height="80" rx="6" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="130" y="690" text-anchor="middle" font-weight="bold" fill="#9a3412">BETTINGCO MSK</text>
+  <text x="130" y="706" text-anchor="middle" fill="#c2410c" font-size="9">msk-broker-1.dev.bettingcosport.com</text>
+  <text x="130" y="718" text-anchor="middle" fill="#c2410c" font-size="9">msk-broker-2.dev.bettingcosport.com</text>
+  <text x="130" y="730" text-anchor="middle" fill="#c2410c" font-size="9">msk-broker-3.dev.bettingcosport.com</text>
+  <text x="130" y="742" text-anchor="middle" fill="#c2410c" font-size="9">:9092 · TLS · SASL/SCRAM-SHA-512</text>
+
+  <!-- WOODS Kafka -->
+  <rect x="250" y="670" width="200" height="80" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="350" y="690" text-anchor="middle" font-weight="bold" fill="#92400e">WOODS Kafka</text>
+  <text x="350" y="706" text-anchor="middle" fill="#78350f" font-size="9">192.168.26.101:9092</text>
+  <text x="350" y="718" text-anchor="middle" fill="#78350f" font-size="9">192.168.26.102:9092</text>
+  <text x="350" y="730" text-anchor="middle" fill="#78350f" font-size="9">192.168.26.103:9092</text>
+  <text x="350" y="742" text-anchor="middle" fill="#78350f" font-size="9">external feeds isolation</text>
+
+  <!-- Redis Cluster -->
+  <rect x="460" y="670" width="230" height="80" rx="6" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+  <text x="575" y="690" text-anchor="middle" font-weight="bold" fill="#0c4a6e">Redis Cluster</text>
+  <text x="575" y="706" text-anchor="middle" fill="#0369a1" font-size="9">6 nodes: 3 primary + 3 replica</text>
+  <text x="575" y="718" text-anchor="middle" fill="#0369a1" font-size="9">bitnami/redis-cluster Helm chart</text>
+  <text x="575" y="730" text-anchor="middle" fill="#0369a1" font-size="9">websocketEventMessageCache 15m</text>
+  <text x="575" y="742" text-anchor="middle" fill="#0369a1" font-size="9">streamOutcomePricesCache 12h · default 1m</text>
+
+  <!-- RabbitMQ -->
+  <rect x="700" y="670" width="220" height="80" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="810" y="690" text-anchor="middle" font-weight="bold" fill="#4c1d95">RabbitMQ Cluster</text>
+  <text x="810" y="706" text-anchor="middle" fill="#5b21b6" font-size="9">3-node cluster</text>
+  <text x="810" y="718" text-anchor="middle" fill="#5b21b6" font-size="9">AMQP :5672 · STOMP :61613</text>
+  <text x="810" y="730" text-anchor="middle" fill="#5b21b6" font-size="9">Management UI :15672</text>
+  <text x="810" y="742" text-anchor="middle" fill="#5b21b6" font-size="9">HAProxy load balancer (3 backends)</text>
+
+  <!-- PostgreSQL -->
+  <rect x="930" y="670" width="200" height="80" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="1030" y="690" text-anchor="middle" font-weight="bold" fill="#14532d">PostgreSQL</text>
+  <text x="1030" y="706" text-anchor="middle" fill="#166534" font-size="9">event-service schema (events)</text>
+  <text x="1030" y="718" text-anchor="middle" fill="#166534" font-size="9">bet-manager schema (bets)</text>
+  <text x="1030" y="730" text-anchor="middle" fill="#166534" font-size="9">Liquibase migrations</text>
+  <text x="1030" y="742" text-anchor="middle" fill="#166534" font-size="9">arm-dev: arm_dev db · prod: arm_prod</text>
+
+  <!-- ECR Dev -->
+  <rect x="1140" y="670" width="90" height="80" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="1185" y="690" text-anchor="middle" font-weight="bold" fill="#374151" font-size="10">ECR Dev</text>
+  <text x="1185" y="706" text-anchor="middle" fill="#4b5563" font-size="8">47162...</text>
+  <text x="1185" y="718" text-anchor="middle" fill="#4b5563" font-size="8">1320.dkr</text>
+  <text x="1185" y="730" text-anchor="middle" fill="#4b5563" font-size="8">.ecr.eu-</text>
+  <text x="1185" y="742" text-anchor="middle" fill="#4b5563" font-size="8">west-1</text>
+
+  <!-- Terraform IaC label -->
+  <rect x="20" y="762" width="1210" height="42" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-dasharray="3,2"/>
+  <text x="625" y="782" text-anchor="middle" font-weight="bold" fill="#374151" font-size="11">Terraform (arm-config/) — Infrastructure as Code</text>
+  <text x="625" y="798" text-anchor="middle" fill="#4b5563" font-size="9">Modules: vpc · eks · msk · ecr · redis-cluster · route53 · iam-irsa  |  State: S3 backend + DynamoDB lock  |  Workspaces: dev / int / prod</text>
+
+  <!-- AWS Secrets Manager label -->
+  <rect x="20" y="812" width="1210" height="42" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-dasharray="3,2"/>
+  <text x="625" y="832" text-anchor="middle" font-weight="bold" fill="#374151" font-size="11">Secrets Management &amp; Observability</text>
+  <text x="625" y="848" text-anchor="middle" fill="#4b5563" font-size="9">HashiCorp Vault (VaultStaticSecret CRD): DB creds, Kafka TLS certs, JWT keys — 60s refresh  |  IRSA: pods assume IAM role — no long-lived AWS credentials  |  Datadog Agent DaemonSet: metrics/logs/traces</text>
+
+  <!-- ════════════════════════════════════════
+       DEPLOYMENT ARROWS
+  ════════════════════════════════════════ -->
+
+  <!-- CI → dev EKS -->
+  <line x1="710" y1="130" x2="390" y2="148" stroke="#16a34a" stroke-width="2" marker-end="url(#arr-green)"/>
+  <text x="530" y="142" text-anchor="middle" fill="#16a34a" font-size="9">auto (trunk)</text>
+
+  <!-- CI → prod EKS -->
+  <line x1="1120" y1="130" x2="1010" y2="148" stroke="#dc2626" stroke-width="2" marker-end="url(#arr-red)"/>
+  <text x="1065" y="142" text-anchor="middle" fill="#dc2626" font-size="9">manual gate</text>
+
+  <!-- clusters → shared infra -->
+  <line x1="390" y1="618" x2="390" y2="634" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+  <line x1="1010" y1="618" x2="810" y2="634" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+</svg>
+</div>
+
+<h2>Infrastructure Reference</h2>
+<table>
+  <thead><tr><th>Resource</th><th>Detail</th><th>Interview talking point</th></tr></thead>
+  <tbody>
+    <tr><td>EKS dev cluster</td><td>dev-2-eu-west-1 · t3.large · namespaces: arm-dev, arm-int</td><td>Shared cluster saves cost; namespace isolation provides equivalent security to separate clusters at this scale</td></tr>
+    <tr><td>EKS prod cluster</td><td>prod-eu-west-1 · m5.xlarge · Multi-AZ · arm-prod namespace</td><td>Separate prod cluster = blast radius isolation; Multi-AZ (eu-west-1a/b/c) = no single AZ failure takes down prod</td></tr>
+    <tr><td>HPA</td><td>dev: min=1, max=5, CPU=80%; prod override: min=2, max=3; no behavior block (K8s defaults: 0s scaleUp stabilization, 300s scaleDown)</td><td>CPU-based HPA works for compute-bound services; custom metrics (lag-based) would be better for Kafka consumers — common interview improvement point</td></tr>
+    <tr><td>PodDisruptionBudget</td><td>minAvailable=2 on critical services in prod</td><td>Ensures rolling updates and node drains never take all pods down simultaneously; required for zero-downtime deploys</td></tr>
+    <tr><td>IRSA</td><td>IAM Roles for Service Accounts — pods get AWS credentials via projected service account tokens</td><td>Eliminates long-lived AWS access keys in pods; role is scoped per service account → least privilege</td></tr>
+    <tr><td>MSK</td><td>3 brokers, TLS, SASL/SCRAM-SHA-512</td><td>Managed Kafka — AWS handles broker upgrades, storage expansion, monitoring; dev uses plain text for simplicity, prod enforces mTLS</td></tr>
+    <tr><td>Redis cluster</td><td>6 nodes (bitnami/redis-cluster): 3 primary + 3 replica</td><td>Cluster mode = hash slots spread across primaries; replica per primary = reads scale + failover; no single point of failure</td></tr>
+    <tr><td>RabbitMQ + HAProxy</td><td>3-node cluster, HAProxy for STOMP :61613 load balancing</td><td>HAProxy distributes STOMP connections across RabbitMQ nodes; sticky sessions not needed because STOMP subscriptions are per-connection</td></tr>
+    <tr><td>Secrets management</td><td>HashiCorp Vault via VaultStaticSecret CRD (Vault Secrets Operator); 60s refresh into K8s Secrets injected via envFrom; not AWS Secrets Manager</td><td>Vault + VSO = GitOps-friendly; secrets declared as CRDs, synced automatically; 60s TTL means rotated creds propagate quickly without pod restart</td></tr>
+    <tr><td>Terraform state</td><td>S3 backend + DynamoDB lock table</td><td>S3 for durable state; DynamoDB conditional write = only one terraform plan/apply runs at a time → prevents concurrent state corruption</td></tr>
+    <tr><td>GitLab CI stages</td><td>build → unit-tests → docker push ECR → helm deploy</td><td>Build and test are always fast (no Testcontainers); helm upgrade --install = idempotent; prod gate is manual human approval in GitLab</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Production debugging — how you investigate an incident</strong>
+  1. Datadog APM: find the failing trace — every HTTP request and Kafka message is traced with distributed trace IDs. 2. Kafka consumer group lag: <code>kafka-consumer-groups.sh --describe</code> — if lag is growing, consumer is behind. 3. Pod logs: <code>kubectl logs -n arm-prod &lt;pod&gt; --previous</code> for crashed pods. 4. HPA events: <code>kubectl describe hpa -n arm-prod</code> — shows scale-up/down events. 5. Redis memory: <code>redis-cli INFO memory</code> — check eviction policy if cache is full. This is the hands-on debugging depth expected at senior level.
+</div>
+
+<div class="callout">
+  <strong>API evolution without downtime</strong>
+  New API versions are deployed via helm upgrade as a rolling update: Kubernetes spins up new pods (v2) while old pods (v1) still serve traffic. During the rollout, the Service load balances across both versions. Only once all new pods pass their readiness probe (/actuator/health/readiness) does Kubernetes terminate old pods. For Kafka: consumers use consumer group IDs — adding a new consumer group for a new version allows both old and new consumers to process messages in parallel until the old version is drained and removed.
+</div>
+
+<footer>ARM BettingCo Study Guide · Architecture Diagram 4 of 4 · Infrastructure &amp; K8s Topology</footer>
+</body>
+</html>

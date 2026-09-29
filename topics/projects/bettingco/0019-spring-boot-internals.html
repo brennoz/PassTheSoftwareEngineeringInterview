@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Spring Boot Internals</title>
+<style>
+  :root { --ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn)}
+  .callout.pass{border-color:var(--pass)}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.84rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.88em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  .diagram{font-family:'Menlo','Consolas',monospace;font-size:.78rem;background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;line-height:1.5;margin:1rem 0 1.5rem;overflow-x:auto;white-space:pre}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{background:var(--sidebar);text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border)}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>Spring Boot Internals</h1>
+<div class="meta">Gap Topic — Interview depth expected at Senior level · ARM BettingCo examples throughout</div>
+
+<p>Senior engineers are expected to explain Spring Boot beyond "it auto-configures things". Interviewers probe the mechanism: how does autoconfiguration decide what to create, what happens between your <code>main()</code> call and first request, how does the Security filter chain work, and what does Actuator actually expose. This lesson covers each with ARM BettingCo code as the anchor.</p>
+
+<h2>1. Autoconfiguration — How It Actually Works</h2>
+
+<p>When Spring Boot starts it reads <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code> (Spring Boot 2.7+) — a flat list of hundreds of configuration classes. Each class carries <code>@Conditional</code> annotations that decide whether it fires.</p>
+
+<div class="diagram">main()
+  │
+  └─ SpringApplication.run()
+       │
+       ├─ load spring.factories / AutoConfiguration.imports
+       │    → list of ~150 AutoConfiguration classes
+       │
+       ├─ evaluate @Conditional on each class
+       │    @ConditionalOnClass(DataSource.class)     → only if DataSource on classpath
+       │    @ConditionalOnMissingBean(DataSource.class) → only if YOU haven't defined one
+       │    @ConditionalOnProperty("spring.datasource.url") → only if property set
+       │
+       ├─ instantiate passing configurations
+       │    → creates beans: DataSourceAutoConfiguration
+       │                     KafkaAutoConfiguration
+       │                     SecurityAutoConfiguration
+       │                     ActuatorAutoConfiguration
+       │                     ...
+       │
+       └─ application context ready → first request accepted</div>
+
+<div class="callout">
+  <strong>Why this matters in interview</strong>
+  "Spring Boot auto-configures your application" is a junior answer. Senior answer: "Spring Boot reads AutoConfiguration.imports, evaluates @Conditional annotations on each class, and only creates beans that aren't already user-defined. @ConditionalOnMissingBean is what lets you override defaults — define your own DataSource bean and Spring Boot's auto-configured one is skipped entirely."
+</div>
+
+<h3>ARM BettingCo — Real @ConditionalOnProperty</h3>
+<pre>// BetSettlementListener.java — only registers the Kafka listener if property is true
+// This lets ARM disable settlement consumption per environment without redeployment
+@ConditionalOnProperty(name = "kafka.consumer.settlement.enabled", havingValue = "true")
+@Component
+public class BetSettlementListener {
+    @KafkaListener(id = ARM_BET_SETTLEMENT, idIsGroup = false,
+                   topics = "${kafka.consumer.settlement.topic}",
+                   containerFactory = "settlementContainerFactory")
+    public void consumeBets(final List&lt;BetStatusDto&gt; bets) { ... }
+}</pre>
+
+<h2>2. Bean Lifecycle — The Full Sequence</h2>
+<div class="diagram">1. Instantiate  → constructor called
+2. Populate     → @Autowired / constructor injection filled
+3. BeanNameAware.setBeanName()        (if implemented)
+4. BeanFactoryAware.setBeanFactory()  (if implemented)
+5. BeanPostProcessor.postProcessBeforeInitialization()  ← @Cacheable proxy wired HERE
+6. @PostConstruct method              ← your init logic
+7. InitializingBean.afterPropertiesSet()
+8. Custom init-method (if declared)
+9. Bean is READY — in use
+   ...application running...
+10. @PreDestroy method                ← cleanup: close connections, drain queues
+11. DisposableBean.destroy()
+12. Custom destroy-method</div>
+
+<div class="callout warn">
+  <strong>Step 5 is the one interviewers trip candidates on</strong>
+  BeanPostProcessor runs BEFORE @PostConstruct. This is where Spring AOP proxies are created. If TenantService has @Cacheable, the proxy wraps the real bean at step 5. Calling <code>this.getTenant()</code> directly bypasses the proxy — which is why ARM's TenantService self-injects (<code>TenantService self</code>) to route calls through the proxy and hit the cache.
+</div>
+
+<h3>ARM BettingCo — Self-Injection for @Cacheable Proxy</h3>
+<pre>// TenantService.java — self-injection is the correct solution when @Cacheable
+// must apply to an internal call (calling 'this.method()' bypasses the AOP proxy)
+@Service
+@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
+public class TenantService {
+    private final TenantsApi tenantsApi;
+    private final TenantService self;  // injected proxy, not 'this'
+
+    public TenantService(TenantsApi tenantsApi, TenantService self) {
+        this.tenantsApi = tenantsApi;
+        this.self = self;
+    }
+
+    @Cacheable(cacheNames = TENANTS_SDK_CACHE, key = "#tenantId",
+               cacheManager = REDIS_CACHE_MANAGER_BEAN)
+    public TenantDto getTenant(final long tenantId) {
+        return tenantsApi.getTenant(tenantId);  // cache miss → real HTTP call
+    }
+
+    public void doSomethingThatNeedsTenant(long tenantId) {
+        TenantDto t = self.getTenant(tenantId); // ← goes through proxy → cached
+        // NOT: this.getTenant(tenantId) ← bypasses proxy, no cache
+    }
+}</pre>
+
+<h2>3. Spring Security Filter Chain</h2>
+
+<p>Spring Security inserts a <code>DelegatingFilterProxy</code> into the Servlet filter chain. It delegates to a Spring-managed <code>FilterChainProxy</code>, which routes requests to the matching <code>SecurityFilterChain</code>. Each chain contains ordered filters.</p>
+
+<div class="diagram">HTTP Request
+     │
+     ▼
+[Servlet Container filter chain]
+     │
+     ├─ DelegatingFilterProxy (Spring Security entry point)
+     │    │
+     │    └─ FilterChainProxy
+     │         │
+     │         └─ SecurityFilterChain (matches /api/**)
+     │              │
+     │              ├─ SecurityContextPersistenceFilter
+     │              ├─ UsernamePasswordAuthenticationFilter (form login — if configured)
+     │              ├─ JwtAuthenticationTokenFilter  ← ARM custom (extends OncePerRequestFilter)
+     │              │    reads Authorization: Bearer header
+     │              │    validates JWT
+     │              │    sets SecurityContextHolder
+     │              ├─ ExceptionTranslationFilter
+     │              └─ FilterSecurityInterceptor (authorization check)
+     │
+     ▼
+DispatcherServlet → @RestController</div>
+
+<h3>ARM BettingCo — Real JWT Filter</h3>
+<pre>// JwtAuthenticationTokenFilter.java
+// OncePerRequestFilter guarantees exactly one execution per request
+// (Servlet spec allows multiple dispatches — FORWARD, ERROR, etc.)
+public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse res,
+                                    FilterChain chain) throws IOException, ServletException {
+        final String header = req.getHeader("Authorization");
+
+        if (header != null &amp;&amp; header.startsWith("Bearer ")) {
+            final String token = header.substring(7);
+            // validate → extract claims → build SecurityUserDetails
+            final SecurityUserDetails user = tokenProvider.validateAndBuild(token);
+            final var auth = new UsernamePasswordAuthenticationToken(
+                user, null, user.getAuthorities());
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+        chain.doFilter(req, res);  // always continue chain
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest req) {
+        return req.getServletPath().startsWith("/login");  // bypass for login endpoint
+    }
+}</pre>
+
+<h2>4. @Transactional — What Interviewers Probe</h2>
+<table>
+  <thead><tr><th>Propagation</th><th>Behaviour</th><th>ARM use case</th></tr></thead>
+  <tbody>
+    <tr><td>REQUIRED (default)</td><td>Join existing tx; create new if none</td><td>Most service methods — ensures DB ops in same tx</td></tr>
+    <tr><td>REQUIRES_NEW</td><td>Suspend current tx; create new independent tx</td><td>Audit logging — must commit even if outer tx rolls back</td></tr>
+    <tr><td>MANDATORY</td><td>Must run in existing tx; throw if none</td><td>Internal helpers that must not be called outside a tx</td></tr>
+    <tr><td>NOT_SUPPORTED</td><td>Suspend tx; run non-transactionally</td><td>Read-only Redis lookups — don't need tx overhead</td></tr>
+    <tr><td>NEVER</td><td>Throw if tx exists</td><td>Cache-only reads that must not be in a tx</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>The most common @Transactional bug in interviews</strong>
+  Calling a <code>@Transactional</code> method from within the same class bypasses the proxy — the transaction never opens. Example: <code>serviceA.methodA()</code> calls <code>this.methodB()</code> where <code>methodB</code> is <code>@Transactional</code>. The <code>this</code> call goes to the real object, not the proxy. Fix: inject the service into itself (same self-injection pattern as @Cacheable above), or restructure.
+</div>
+
+<h2>5. Actuator — What's Available and Why</h2>
+<pre>management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, info, env, beans, loggers
+  endpoint:
+    health:
+      show-details: when-authorized  # never expose full health to anonymous</pre>
+
+<table>
+  <thead><tr><th>Endpoint</th><th>Purpose in ARM</th><th>Senior detail</th></tr></thead>
+  <tbody>
+    <tr><td>/actuator/health</td><td>K8s liveness + readiness probes</td><td>HealthIndicator chain — DB, Redis, Kafka all checked; DOWN if any fail</td></tr>
+    <tr><td>/actuator/metrics</td><td>Prometheus scrape target</td><td>Exposes JVM GC, HTTP latency, Kafka consumer lag as Micrometer metrics</td></tr>
+    <tr><td>/actuator/env</td><td>Debug config values</td><td>Shows resolved property sources — useful to verify @Value injection</td></tr>
+    <tr><td>/actuator/beans</td><td>Debug bean graph</td><td>Shows all beans, their types, and dependencies — good for diagnosing missing beans</td></tr>
+    <tr><td>/actuator/loggers</td><td>Change log level at runtime</td><td>POST {configuredLevel:"DEBUG"} — no restart; invaluable in production debugging</td></tr>
+  </tbody>
+</table>
+
+<div class="callout pass">
+  <strong>Production tip: change log level without restart</strong>
+  <code>curl -X POST http://svc:8080/actuator/loggers/com.bettingcosports.bet -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'</code> — enables DEBUG logs on the running pod for one service class, without restart. Resets on pod restart. Used in ARM to diagnose advisory-service decisions without noise from other classes.
+</div>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. TenantService uses self-injection to route calls through the @Cacheable proxy. What happens if you remove the self field and call <code>this.getTenant(tenantId)</code> instead?</p>
+  <ul class="options" data-correct="2">
+    <li>The cache still works because @Cacheable intercepts at the method level regardless of caller</li>
+    <li>The cache is bypassed entirely — <code>this</code> refers to the real object, not the Spring AOP proxy. Every call hits the external API, with no Redis lookup. The @Cacheable annotation has no effect on direct internal calls.</li>
+    <li>Spring throws an exception at startup because self-injection is required for @Cacheable</li>
+    <li>The cache works only for the first call, then expires immediately</li>
+  </ul>
+  <div class="explanation">Spring AOP proxies work by wrapping the bean. When code outside the class calls getTenant(), the call goes through the proxy and @Cacheable fires. When code inside the class calls this.getTenant(), it goes directly to the real object — the proxy is bypassed. Self-injection works because Spring injects the proxy (not this), so calls through self go through the proxy and hit @Cacheable.</div>
+</div>
+
+<div class="question">
+  <p>Q2. In production, bet-manager-service is throwing NullPointerExceptions sporadically under load. You need to enable DEBUG logging for com.bettingcosports.bet without restarting the pod. How?</p>
+  <ul class="options" data-correct="2">
+    <li>Edit application.yml and trigger a config reload via @RefreshScope</li>
+    <li>POST to /actuator/loggers/com.bettingcosports.bet with body {"configuredLevel":"DEBUG"}. No restart needed. Resets when pod restarts.</li>
+    <li>Increase log level in the Helm chart values.yml and run helm upgrade</li>
+    <li>SSH into the pod and edit the logback.xml file directly</li>
+  </ul>
+  <div class="explanation">Spring Actuator's /loggers endpoint accepts POST requests to change log levels on a running JVM. This is a critical production debugging tool — you can enable verbose logging for a specific package without restarting the service (which would lose the NPE context). The change is in-memory only and resets on pod restart.</div>
+</div>
+
+<div class="question">
+  <p>Q3. @ConditionalOnMissingBean is on Spring Boot's DataSourceAutoConfiguration. What does this mean for ARM BettingCo services that define their own DataSource bean?</p>
+  <ul class="options" data-correct="3">
+    <li>Spring Boot throws a conflict exception — you cannot have two DataSource beans</li>
+    <li>Both beans are created; Spring uses the one with @Primary annotation</li>
+    <li>Spring Boot's auto-configured DataSource is skipped entirely. @ConditionalOnMissingBean means: only create this bean if the application context does not already contain a bean of that type. Your custom DataSource takes precedence.</li>
+    <li>The auto-configured bean is created first; your custom bean overrides it at runtime</li>
+  </ul>
+  <div class="explanation">@ConditionalOnMissingBean is the mechanism that makes Spring Boot's autoconfiguration "overridable by convention." Define your own bean of the same type and the autoconfiguration class evaluates the condition as false — its bean factory method is never called. This is how you customise HikariCP settings, add SSL to a DataSource, or configure a read-replica routing DataSource without modifying framework code.</div>
+</div>
+
+<div class="question">
+  <p>Q4. BetSettlementListener uses @ConditionalOnProperty(name = "kafka.consumer.settlement.enabled", havingValue = "true"). In the arm-int namespace, this property is false. What is the effect at runtime?</p>
+  <ul class="options" data-correct="1">
+    <li>The BetSettlementListener bean is never registered in the application context. No Kafka consumer is started for the settlement topic in arm-int. Settlement messages queue up unconsumed in Kafka — consumer group lag grows, but no processing error occurs.</li>
+    <li>Spring throws a BeanCreationException at startup because the Kafka topic still exists</li>
+    <li>The listener registers but immediately throws an exception on first message</li>
+    <li>Settlement messages are silently dropped by the Kafka broker</li>
+  </ul>
+  <div class="explanation">@ConditionalOnProperty is evaluated at application context startup. If the condition is false, the bean is never created — no listener is registered, no consumer group joins the topic. Messages accumulate in the Kafka partition and consumer group lag grows. When the property is set to true (e.g., in prod), the consumer starts and processes messages from its last committed offset. This lets ARM run integration tests without triggering settlement side-effects.</div>
+</div>
+</div>
+
+<footer>ARM BettingCo Study Guide · Gap Topics · Spring Boot Internals</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{
+      li.addEventListener('click',()=>{
+        if(answered)return;answered=true;
+        if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

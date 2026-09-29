@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safe Refactor Playbook — PairingCo Pairing</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.7; color: var(--ink);
+    max-width: 860px; margin: 0 auto; padding: 3rem 2rem 6rem;
+    background: #fefefe;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1.02rem; margin: 1.2rem 0 0.4rem; font-weight: bold; }
+  p  { margin: 0.5rem 0; }
+  ul, ol { padding-left: 1.5rem; margin: 0.4rem 0; }
+  li { margin: 0.3rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto;
+    margin: 0.5rem 0; line-height: 1.55;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.86rem; }
+  th { background: var(--bg-soft); text-align: left; padding: 0.4rem 0.7rem; border: 1px solid var(--border); }
+  td { padding: 0.4rem 0.7rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .callout { background: var(--bg-note); border-left: 4px solid var(--accent); padding: 0.9rem 1.1rem; margin: 1.2rem 0; border-radius: 0 4px 4px 0; }
+  .callout-warn { background: var(--bg-warn); border-left-color: #d97706; }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: 'Menlo', monospace; font-size: 0.8rem; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+  .loop { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 1.5rem; }
+  .loop span { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 20px; padding: 0.4rem 1rem; font-size: 0.85rem; font-weight: bold; }
+  .loop span.arrow { border: none; background: none; padding: 0.4rem 0.2rem; color: var(--muted); font-weight: normal; }
+  .badge { display: inline-block; font-size: 0.76rem; padding: 0.1em 0.5em; border-radius: 3px; font-weight: bold; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 2rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e0e0e0; --muted: #aaa; --border: #444;
+      --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+      --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+    }
+    body { background: #1a1a1a; }
+    pre { background: #111 !important; }
+    table th { background: #2a2a2a; }
+    table tr:nth-child(even) { background: #222; }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e0e0e0; --muted: #aaa; --border: #444;
+    --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+    --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+  }
+  :root[data-theme="light"] {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+</style>
+</head>
+<body>
+
+<div class="lesson-nav">
+  <a href="../../">&#8592; Topics</a> &nbsp;&middot;&nbsp;
+  <a href="0001-format-and-rubric.html">&#8592; Previous: Format &amp; Rubric</a>
+</div>
+
+<h1>Safe Refactor Playbook</h1>
+<p class="meta">
+  <span class="badge badge-blue">PairingCo</span>
+  <span class="badge badge-amber">Technique</span>
+  &nbsp;&middot;&nbsp; The repeatable loop to run live &middot; Lesson 2 of 3
+</p>
+
+<p>One loop, run on every smell you touch. The loop itself is the deliverable &mdash; interviewers are watching whether you have one, not whether you memorised a catalogue of refactorings.</p>
+
+<div class="loop">
+  <span>Understand</span><span class="arrow">&rarr;</span>
+  <span>Protect</span><span class="arrow">&rarr;</span>
+  <span>Smallest safe step</span><span class="arrow">&rarr;</span>
+  <span>Verify</span><span class="arrow">&rarr;</span>
+  <span>Narrate</span><span class="arrow">&rarr;</span>
+  <span>Repeat</span>
+</div>
+
+<h2>1. Understand Before Touching</h2>
+<p>Read the method/class fully before proposing anything. State out loud what it currently does &mdash; not what's wrong with it yet. This separates "I understand this" from "I'm pattern-matching on smells I've seen before," which is exactly what a rubric on <em>reading unfamiliar code</em> is checking.</p>
+
+<div class="callout">
+  <strong>Script</strong>
+  "Before I change anything &mdash; let me say back what this does, so you can correct me if I've misread it: it takes a &lt;X&gt;, does &lt;Y&gt;, and returns &lt;Z&gt;. Is that right?"
+</div>
+
+<h2>2. Protect Current Behaviour</h2>
+<p>If there's no test covering the path you're about to touch, that's the first thing to fix &mdash; before the "real" refactor. This is a <strong>characterization test</strong>: a test that pins down what the code <em>currently</em> does (bugs included), not what it should do. It's your rollback net.</p>
+
+<div class="callout callout-warn">
+  <strong>Why this matters more than the refactor itself</strong>
+  A candidate who refactors confidently but breaks untested behaviour looks worse than one who writes one characterization test and makes a smaller change. "Leading safely" is graded explicitly &mdash; this is the single highest-leverage move in the whole session.
+</div>
+
+<h3>Fast pattern (say it, don't just do it)</h3>
+<pre>// 1. Call the method with realistic inputs, assert on whatever it currently returns
+// 2. Run it, read the actual output, paste that as the expected value
+// 3. Now you have a net — any refactor that changes behaviour goes red immediately
+@Test
+void pinsCurrentBehaviourBeforeRefactor() {
+    BigDecimal result = auditService.calculateRiskScore(sampleAudit);
+    assertEquals(0, EXPECTED_CURRENT_VALUE.compareTo(result));  // captured from a real run, not derived
+}</pre>
+
+<h2>3. Smallest Safe Step</h2>
+<p>Don't plan the end-state and type toward it. Take one mechanical, low-risk step, run tests, then decide the next step based on what you now see. Typical order of moves, cheapest/safest first:</p>
+<ol>
+  <li><strong>Rename</strong> &mdash; free, zero behaviour risk, immediately improves readability for everyone watching</li>
+  <li><strong>Extract method</strong> &mdash; pull a cohesive chunk out, no logic change</li>
+  <li><strong>Extract class / introduce parameter object</strong> &mdash; group data that's always passed together (fixes primitive obsession)</li>
+  <li><strong>Replace magic value with named constant/enum</strong></li>
+  <li><strong>Replace conditional with polymorphism / strategy</strong> &mdash; only once you've seen the same <code>if/when</code> branch shape repeat at least twice</li>
+</ol>
+
+<div class="callout">
+  <strong>Script when picking a step</strong>
+  "I could jump straight to a Strategy pattern here, but I only have one real branch in front of me right now &mdash; I'll extract the method first and see if a second case shows up before I introduce that abstraction."
+</div>
+
+<h2>4. Verify, Every Step</h2>
+<p>Re-run the test(s) after every mechanical step, not just at the end. Say the result out loud even when it passes &mdash; silence after a change reads as uncertainty, not confidence.</p>
+
+<h2>5. Prioritization Framework</h2>
+<p>When you see 3+ smells at once (you will), rank instead of going top-to-bottom in the file:</p>
+<table>
+  <tr><th>Factor</th><th>Question</th></tr>
+  <tr><td>Impact</td><td>Is this code hot (touched often / bug-prone) or cold (rarely changes)?</td></tr>
+  <tr><td>Risk</td><td>How much blast radius if this breaks &mdash; one caller or twenty?</td></tr>
+  <tr><td>Relevance</td><td>Does fixing this unblock whatever the "task" in front of you actually asks for?</td></tr>
+</table>
+<div class="callout">
+  <strong>Script for parking something</strong>
+  "I also see &lt;smell Y&gt; over here &mdash; I'm not touching it today because it's not on the path of what we're changing and it's low-risk as-is. Flagging it, not fixing it."
+</div>
+
+<h2>6. The Over-Engineering Line</h2>
+<p>"Balanced engineering" is graded explicitly &mdash; the failure mode isn't just under-refactoring, it's building an abstraction the current code doesn't justify.</p>
+<div class="callout callout-warn">
+  <strong>YAGNI check, said out loud</strong>
+  "I could make this generic over any status type, but I only have one caller and no evidence a second is coming &mdash; I'll keep it concrete and leave a comment on why, rather than build the abstraction now."
+</div>
+
+<h2>7. When You're Wrong Mid-Session</h2>
+<p>It will happen. The recovery, not the mistake, is what's graded.</p>
+<div class="callout">
+  <strong>Script</strong>
+  "Actually &mdash; that assumption doesn't hold, I can see it breaks &lt;case&gt;. Let me back that last step out and take a smaller one."
+</div>
+
+<div class="footer">Lesson 2 of 3 &middot; PairingCo Pairing Prep &middot; PassTheSoftwareEngineeringInterview</div>
+</body>
+</html>

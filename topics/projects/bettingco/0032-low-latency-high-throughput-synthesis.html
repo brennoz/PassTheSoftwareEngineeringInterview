@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Low Latency &amp; High Throughput Synthesis</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:.9rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+
+  .technique{border:2px solid var(--border);border-radius:10px;margin:2rem 0;overflow:hidden}
+  .technique-header{padding:.9rem 1.2rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--border);background:#eff6ff}
+  .technique-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:.9rem;color:#fff;background:#2563eb;flex-shrink:0}
+  .technique-title{font-size:1.05rem;font-weight:bold}
+  .technique-tag{font-family:monospace;font-size:.8rem;color:var(--muted)}
+  .technique-body{padding:1.2rem}
+
+  .cite{font-family:monospace;font-size:.78rem;color:var(--accent);background:#eff6ff;padding:.1em .4em;border-radius:3px}
+  .what-breaks{background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:.8rem 1rem;margin:.8rem 0;font-size:.9rem}
+  .what-breaks strong{display:block;color:var(--fail);font-family:monospace;font-size:.8rem;margin-bottom:.3rem}
+  .gap{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.8rem 1rem;margin:.8rem 0;font-size:.9rem}
+  .gap strong{display:block;color:var(--warn);font-family:monospace;font-size:.8rem;margin-bottom:.3rem}
+  .opayo-eq{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:.8rem 1rem;margin:.8rem 0;font-size:.9rem}
+  .opayo-eq strong{display:block;color:var(--pass);font-family:monospace;font-size:.8rem;margin-bottom:.3rem}
+
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>Low Latency &amp; High Throughput — How ARM Actually Did It</h1>
+<div class="meta">Synthesis across pricing-service, feed-handler-betfair, event-service, MSK/Kafka config, Helm values · every claim below cites a real file · cross-refs: 0005 · 0008 · 0009 · 0011 · 0030</div>
+
+<div class="callout">
+  <strong>Why this question gets asked as one question, not five</strong>
+  "How did you achieve low latency and high throughput?" is the single most common technical-deep-dive question for a real-time risk/pricing system. A weak answer lists buzzwords (Kafka, Redis, caching). A strong answer names the specific tradeoff made at each layer, why it was correct for <em>this</em> domain (live odds must reflect the newest state, stale data is actively dangerous), and is honest about what wasn't built. This lesson assembles that answer from verified source, not from a generic system-design template.
+</div>
+
+<div class="callout warn">
+  <strong>The one-sentence version</strong>
+  ARM didn't chase raw speed — it chose <strong>freshness over completeness</strong> everywhere on the hot path (drop stale data rather than queue it), and used <strong>ordering guarantees to avoid needing horizontal scale</strong> on the core pricing pipeline (keyed Kafka partitions instead of more replicas).
+</div>
+
+<!-- 1 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">1</div><div><div class="technique-title">Kafka ordering via event-ID keying, not partition count</div><div class="technique-tag">lib-events/Broadcaster.java:131-133</div></div></div>
+  <div class="technique-body">
+    <p>Every event/odds update is published with the event's own ID as the Kafka key:</p>
+<pre>var key = String.valueOf(eventDto.getId());
+kafkaEventsTemplate.send(topic, key, message);</pre>
+    <p>Kafka guarantees ordering only <em>within</em> a partition. Keying by <code>eventId</code> means every update for one race always lands on the same partition and is consumed in the order it was produced — without a lock, a sequence number, or a distributed coordinator. This is the single load-bearing decision that makes the rest of the architecture possible: because ordering is solved per-event by the key, most topics only need <span class="cite">1-4 partitions</span> (<code>arm-config/prod/msk/topics.tf:12-192</code>). The one outlier is <code>arm-prod.bet-builder-service.simulations</code> at <strong>128 partitions</strong> (<code>topics.tf:77-82</code>) — an embarrassingly-parallel Monte-Carlo-style workload with no per-race ordering requirement, so it gets brute-force parallelism instead.</p>
+    <div class="what-breaks">
+      <strong>WHAT BREAKS WITHOUT THIS</strong>
+      Round-robin partitioning (no key) spreads one race's updates across all partitions. Two consumers could then process "runner scratched" and "race suspended" out of order — the UI briefly shows a scratched runner as active, or a bet gets accepted on a suspended market. In a betting platform that's not a display bug, it's a liability.
+    </div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">2</div><div><div class="technique-title">Producer tuned for latency, not durability</div><div class="technique-tag">application.yml — pricing-service, sportsbook-service, event-service-odds-matrix, feed-handler-betfair</div></div></div>
+  <div class="technique-body">
+    <p><code>KAFKA_PRODUCER_ACKS: 1</code> (not <code>all</code>) and <code>KAFKA_PRODUCER_ENABLE_IDEMPOTENCE: false</code>, set consistently across the hot-path services. <code>acks=1</code> only waits for the partition leader to write the record — not for in-sync replica acknowledgement — which is faster but means a leader crash before replication can lose the last unreplicated message.</p>
+    <p>No <code>linger.ms</code>, <code>batch.size</code>, or <code>compression.type</code> override was found anywhere in the repo — these run on Kafka client defaults. <strong>Throughput here comes from partitioning and consumer-side batching (technique 3), not producer-side batching.</strong> That's a deliberate structural choice: batching on the producer trades per-message latency for fewer, bigger requests; ARM instead keeps producer latency low and does the batching downstream, closer to where CPU-heavy processing happens anyway.</p>
+    <div class="opayo-eq">
+      <strong>WHY THIS IS DEFENSIBLE, NOT SLOPPY</strong>
+      A momentary live-odds message loss is self-healing — the next GPS/price tick a fraction of a second later supersedes it (see technique 5, freshness-over-completeness). A payments platform would make the opposite tradeoff (<code>acks=all</code>, idempotent producer) because a lost payment event is not self-healing. Naming this contrast is exactly the kind of domain-aware answer a senior interview is listening for.
+    </div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">3</div><div><div class="technique-title">Consumer batching sized per feed criticality</div><div class="technique-tag">feed-handler-betfair/application.yml:24-31,124 · event-service-woods/application.yml:73-74</div></div></div>
+  <div class="technique-body">
+<pre># feed-handler-betfair — highest-volume live exchange feed
+max-poll-records: 50000
+fetch-max-wait: 3s
+fetch-min-size: 5242880        # 5MB
+fetch-max-bytes: 102428800     # ~100MB
+concurrency: 3                 # concurrent listener threads per pod
+
+# event-service-liability-multiplier — lower volume, tuned down accordingly
+max-poll-records: 50
+fetch.max.wait.ms: 3000
+fetch.min.bytes: 256</pre>
+    <p>This isn't one blanket config copy-pasted everywhere — <code>max-poll-records</code> ranges from 25 (racecards handler) to 50,000 (Betfair/woods exchange feeds), matched to actual per-feed message volume. All three <code>ConcurrentKafkaListenerContainerFactory</code> beans in <code>feed-handler-betfair/config/KafkaConsumerConfiguration.java:48-105</code> use <code>setBatchListener(true)</code> — the listener receives a <code>List&lt;ConsumerRecord&gt;</code>, not one record at a time, which is what makes technique 4 possible.</p>
+  </div>
+</div>
+
+<!-- 4 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">4</div><div><div class="technique-title">Squashing — freshness over completeness on ingest</div><div class="technique-tag">feed-handler-betfair/kafka/AbstractSquashingListener.java:32-124</div></div></div>
+  <div class="technique-body">
+    <p>Given a batch of Betfair records, the listener groups by event → market → runner and keeps only the <strong>last</strong> record per runner before processing ("Squashed {} messages to 1", line 85). A runner can emit many price ticks per second during a live race; only the newest one matters for pricing. Each surviving event-group is then dispatched via <code>CompletableFuture.supplyAsync(..., taskExecutor)</code> — fork/join over a bounded pool, not reactive streams.</p>
+    <div class="what-breaks">
+      <strong>WHAT BREAKS WITHOUT THIS</strong>
+      Processing every tick serially means the pricing pipeline falls permanently behind during a busy race — by the time tick #40 is priced, tick #200 has already arrived. Squashing guarantees the pipeline is always working on the <em>latest known state</em>, even under load, at the cost of intentionally discarding intermediate ticks that were already stale by the time they'd be processed.
+    </div>
+  </div>
+</div>
+
+<!-- 5 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">5</div><div><div class="technique-title">RxJava backpressure inside pricing-service — same principle, different layer</div><div class="technique-tag">pricing-service — see 0005 for full source</div></div></div>
+  <div class="technique-body">
+    <p>Technique 4 squashes at the Kafka-consumption boundary. Inside <code>pricing-service</code> the identical philosophy repeats one layer deeper, using RxJava 3:</p>
+    <ul style="margin:0 0 1rem 1.4rem">
+      <li><code>buffer()</code> collects GPS ticks into a fixed <strong>1-second window</strong> before running the (expensive, HTTP-bound) pricing algorithm — trading up to 1s of latency for a large cut in algorithm-service calls.</li>
+      <li>Race-state snapshots use <code>BackpressureStrategy.LATEST</code> — if the processor falls behind, queued snapshots are dropped and only the newest survives, because each snapshot is a complete state (processing a stale one after a newer one arrived would be actively wrong, e.g. treating a resumed race as still suspended).</li>
+      <li>Writes back to the ARM platform are sharded by <code>groupBy(id % 997)</code> (prime, minimises collisions) with <code>onBackpressureBuffer(1, DROP_OLDEST)</code> per shard and <code>prefetch=1</code> — at most one pending, always-freshest update per event in flight at a time.</li>
+    </ul>
+    <p>Full source walkthrough with the design-choice table (why <code>buffer()</code> not <code>debounce()</code> or <code>window()</code>) is in <a href="0005-pricing-service.html">0005-pricing-service.html</a>. The point to make in an interview: this is <strong>the same architectural decision made twice</strong>, at the transport layer (Kafka squashing) and the compute layer (RxJava backpressure) — a consistent, repeated principle, not two unrelated tricks.</p>
+  </div>
+</div>
+
+<!-- 6 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">6</div><div><div class="technique-title">Near-cache: Caffeine (L1) + Redis (L2) + Kafka-broadcast invalidation</div><div class="technique-tag">lib-utils/caching/CompositeRedisCacheWriter.java:23-131</div></div></div>
+  <div class="technique-body">
+    <p><code>CompositeRedisCacheWriter</code> wraps Spring's Redis cache writer with a Caffeine layer in front. Reads check Caffeine first, fall back to Redis on miss and warm the local cache. Every write (<code>put</code>/<code>remove</code>/<code>clean</code>) calls <code>evictLocalCache(...)</code>, which publishes an eviction event through <code>CompositeCacheBroadcaster</code> onto a dedicated Kafka topic (<code>arm-prod.local-cache</code>, <code>arm-config/prod/msk/topics.tf:194-196</code>) — so a write on one pod invalidates every other pod's Caffeine copy without sticky routing or a shared-lock scheme.</p>
+    <p>This is a genuinely different pattern from the <a href="0005-pricing-service.html">Caffeine-only websocket caches</a> covered in 0030/0011 — those are single-pod, short-TTL, eventually-stale-is-fine caches. This one is a coherent cross-pod near-cache for config/pricing lookups where staleness after a write would actually be wrong.</p>
+  </div>
+</div>
+
+<!-- 7 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">7</div><div><div class="technique-title">Redis as shared live state, not just a cache</div><div class="technique-tag">liability-scheduler-service/processor/impl/LiabilityCacheBetProcessor.java:22-89</div></div></div>
+  <div class="technique-body">
+    <p>Individual bet DTOs are written into a Redis <strong>hash</strong> keyed per event (<code>liabilityBetsCache::&lt;eventId&gt;</code>, field = betId) via <code>opsForHash().put</code>/<code>.delete</code>. Every pod reads and incrementally updates the same canonical, low-latency liability-exposure structure — instead of recomputing total exposure from Postgres on every bet. This is the throughput technique for a write-heavy, cross-instance-shared number (total exposure per outcome), as distinct from technique 6's read-heavy config lookups.</p>
+  </div>
+</div>
+
+<!-- 8 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">8</div><div><div class="technique-title">Java 21 virtual threads for I/O fan-out; fixed pools for CPU/DB work</div><div class="technique-tag">event-service/config/ThreadConfig.java:20-95 · sportsbook-service/config/AppConfig.java:35-55</div></div></div>
+  <div class="technique-body">
+    <p>Virtual threads (<code>VirtualThreadTaskExecutor</code>) are used specifically for I/O-bound fan-out work: <code>participantNameUpdateExecutor</code>, <code>eventExecutor</code>, <code>betRecommendationExecutor</code>, <code>liabilityMultiplierExecutor</code>. Meanwhile CPU/DB-bound work stays on tuned fixed-size <code>ThreadPoolTaskExecutor</code>s (<code>feeds-pricing-executor</code>, <code>in-running-executor</code>, <code>transaction-executor</code>) with externalised core-size config. This is the correct split — virtual threads help when a thread spends most of its life blocked waiting on I/O; they don't help (and can even hide) CPU-bound contention, so ARM didn't blanket-apply them.</p>
+    <p>A custom <code>ArmExecutor</code> abstraction (<code>lib-utils/execution/ArmExecutor.java:16-111</code>) wraps <code>CompletableFuture</code> fan-out with a config-driven on/off switch — ops can force synchronous execution in an incident without a redeploy. Notably: <strong>no Spring WebFlux / Project Reactor anywhere in the repo</strong> — the HTTP stack is blocking Spring MVC; reactive-style processing is confined to pricing-service's internal RxJava pipeline (technique 5), not the web layer.</p>
+  </div>
+</div>
+
+<!-- 9 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">9</div><div><div class="technique-title">Container-aware JVM sizing + fast cold start</div><div class="technique-tag">arm-chart/values.yaml:137 · sportsbook-service/Dockerfile:6,14,18</div></div></div>
+  <div class="technique-body">
+<pre>JAVA_OPTS: "-XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=75"</pre>
+    <p>Heap is 75% of whatever the container's memory <em>limit</em> is — not a fixed <code>-Xmx</code> — so heap scales automatically when a service's Helm values change memory limits, with no separate JVM config to keep in sync. <code>ExitOnOutOfMemoryError</code> fails the pod fast on OOM rather than degrading silently through GC thrashing; Kubernetes just restarts it. No explicit GC algorithm flag is set anywhere (implicit G1 on the base JRE image) — only heap fraction and OOM behaviour are tuned explicitly.</p>
+    <p>Separately, several services use <strong>AppCDS</strong> (Class Data Sharing): <code>-XX:ArchiveClassesAtExit=./application.jsa</code> at build time, <code>-XX:SharedArchiveFile=application.jsa</code> at runtime. This cuts JVM cold-start time — not a steady-state throughput win, but directly relevant to technique 10 below, where some hot-path services run at exactly one replica and a slow-starting rolling restart is a real availability risk.</p>
+  </div>
+</div>
+
+<!-- 10 — the surprising one -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">10</div><div><div class="technique-title">The core pricing pipeline does NOT horizontally scale in prod</div><div class="technique-tag">pricing-service, event-service-odds-matrix, feed-handler-betfair — .helm/values-prod.yaml</div></div></div>
+  <div class="technique-body">
+    <p>This is the fact most candidates would not guess, and the one worth leading with in an interview because it shows you understand your own system's real constraints rather than reciting "just add more pods":</p>
+<pre>pricing-service:            autoscaling.minReplicas: 1, maxReplicas: 1
+event-service-odds-matrix:  autoscaling.minReplicas: 1, maxReplicas: 1
+feed-handler-betfair:       autoscaling.minReplicas: 1, maxReplicas: 1
+feed-handler-betting-world: minReplicas: 1 (maxReplicas inherits chart default = 5)
+sportsbook-service:         no autoscaling override — inherits min:1 max:5 @ 80% CPU</pre>
+    <p>The chart default (<code>arm-chart/values.yaml:165-170</code>) supports scaling to 5 replicas. Every hot pricing/odds/feed service explicitly overrides that down to a pinned single replica in prod. <code>pdb.enabled: false</code> is also set on these — no PodDisruptionBudget protects the single pod during a node drain, a real availability tradeoff being made deliberately, not by omission.</p>
+    <p>Why this is coherent rather than a mistake: technique 1 (event-ID keyed ordering) means correctness already depends on one consumer owning one partition at a time per race. Adding replicas to a service pinned to consume the same low-partition-count topics wouldn't increase throughput — it would just add idle pods, or require re-partitioning (an operationally expensive, hard-to-reverse change, per <a href="0005-pricing-service.html">0005</a>'s partition-planning note). Instead, throughput headroom comes from vertical sizing + in-process concurrency (techniques 3, 4, 5, 8). The one hot-path service that <em>does</em> scale — <code>sportsbook-service</code> — is the client-facing WebSocket fan-out layer, where load is proportional to connected browsers, not to race-event count, so horizontal replicas behind the RabbitMQ STOMP relay (0009) genuinely help.</p>
+    <div class="what-breaks">
+      <strong>WHAT THIS COSTS</strong>
+      A single pricing-service pod is a single point of failure for the entire live-pricing pipeline during its own restart window (mitigated by AppCDS fast startup, technique 9, and rolling-update <code>maxUnavailable</code> settings — but not eliminated). This is a real, named tradeoff to be honest about in the interview, not glossed over.
+    </div>
+  </div>
+</div>
+
+<!-- 11 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">11</div><div><div class="technique-title">Postgres: pooled + batched, not sharded or replicated</div><div class="technique-tag">application.yml HikariCP + Hibernate blocks, near-identical across services</div></div></div>
+  <div class="technique-body">
+<pre># HikariCP — repeated pattern across services
+maximum-pool-size: 20-30      # varies by service
+minimum-idle: 5
+cachePrepStmts: true
+prepStmtCacheSize: 250
+useServerPrepStmts: true
+leak-detection-threshold: 60000ms
+
+# Hibernate — write-throughput tuning
+hibernate.jdbc.batch_size: 30
+order_inserts: true
+order_updates: true
+connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION</pre>
+    <p><code>DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION</code> holds the physical DB connection for the minimum necessary window, freeing it back to the (bounded, 20-30 connection) Hikari pool faster under concurrent load — important because every pod has its own pool and Postgres has a hard <code>max_connections</code> ceiling shared across all of them.</p>
+    <div class="gap">
+      <strong>HONEST GAP</strong>
+      No read-replica configuration exists anywhere in the repo (verified by repo-wide search). Read throughput scaling relies entirely on the cache tiers (techniques 6, 7), not on offloading reads to a replica. Worth naming unprompted: it shows you know where the actual scaling ceiling is, not just where the caching is.
+    </div>
+  </div>
+</div>
+
+<!-- 12 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">12</div><div><div class="technique-title">Domain-level circuit breakers instead of resilience4j</div><div class="technique-tag">FeedPriceService.java:82-87 · Broadcaster.java:111-119 · LatencyService.java:86-117</div></div></div>
+  <div class="technique-body">
+    <p>No resilience4j, <code>@CircuitBreaker</code>, or <code>@TimeLimiter</code> exists anywhere in the codebase (verified). What ARM built instead are three <strong>domain-shaped</strong> substitutes that protect latency/throughput at the point where staleness or redundancy would otherwise propagate:</p>
+    <ul style="margin:0 0 1rem 1.4rem">
+      <li><strong>Feed staleness cutoff</strong> — if an incoming market snapshot's <code>snapshotTime</code> is older than <code>now - maxFeedAge</code> (default <code>PT2S</code>), the odds are discarded entirely rather than priced. Protects downstream risk logic from acting on data that's already too old to trust.</li>
+      <li><strong>Revision-based dedup</strong> — before broadcasting an event update, <code>Broadcaster</code> compares the event's revision against the last-broadcast revision; if not newer, the send is skipped. Prevents redundant/out-of-order broadcasts from re-triggering downstream pricing recomputation on every subscriber.</li>
+      <li><strong>Latency-triggered auto-suspension</strong> — a scheduled job compares ARM-received time vs. upstream time per event; if the gap exceeds a configured threshold, the event's markets are automatically suspended (<code>StatusReason.LATENCY_ARM_PROCESS</code>). This is the closest thing in the repo to a hard SLA-breach circuit breaker, and it's wired directly into the domain risk model rather than being a generic library.</li>
+    </ul>
+    <p>What ARM does have from a library is narrower: Spring Retry (<code>@Retryable</code>, not resilience4j) on the STOMP broadcast path and one named outbound client, plus a shared Kafka consumer exponential-backoff auto-configuration (<code>maxRetries=5</code>) applied to every listener container — retry-with-backoff substitutes for a circuit breaker on the consume side. An aggressive <code>connect-timeout: PT1S</code> on the internal <code>arm.template</code> HTTP client (pricing-service → event-service) is also notable: fail fast rather than hang on a down dependency.</p>
+    <div class="gap">
+      <strong>HONEST GAP</strong>
+      A generic resilience4j circuit breaker around synchronous inter-service REST calls (e.g. settlement-service → bet-manager, described in <a href="0030-nfr-deep-dive.html">0030</a>) is genuinely absent from the code the repo actually contains — 0030's circuit-breaker section describes the <em>correct</em> pattern to use, not a verified-present one. If asked directly, the honest answer is "we relied on tight timeouts + Kafka backoff + domain-level staleness checks; a formal circuit breaker on the synchronous settlement call would have been the next resilience investment."
+    </div>
+  </div>
+</div>
+
+<!-- 13 -->
+<div class="technique">
+  <div class="technique-header"><div class="technique-num">13</div><div><div class="technique-title">JSON over the wire, no schema registry</div><div class="technique-tag">verified via repo-wide grep — zero avro/schema-registry hits</div></div></div>
+  <div class="technique-body">
+    <p>Every Kafka message uses Spring Kafka's <code>JsonSerializer</code>/<code>JsonDeserializer</code>. No Avro, no Protobuf, no schema registry anywhere in <code>lib-events</code> or <code>pa-model</code> — confirmed by repo-wide search, not just an omission from what was read. This explains the deliberately large <code>max.message.bytes</code> overrides (2-3MB) on event/odds topics: JSON payloads carrying full event/market/runner trees are bigger than an equivalent binary encoding would be. Schema/contract enforcement instead happens at the REST/SDK layer via the separate <code>arm-interface-contracts/*-api</code> OpenAPI modules, not at the event-streaming layer.</p>
+    <div class="gap">
+      <strong>HONEST GAP</strong>
+      JSON is human-debuggable and fast to iterate on (a real advantage during incident response — you can read a message off a topic without a schema registry lookup), but offers no compile-time or registry-enforced compatibility checking. A schema registry (Avro/Protobuf + Confluent/AWS Glue Schema Registry) would be the natural next investment if payload size or accidental breaking changes became a problem.
+    </div>
+  </div>
+</div>
+
+<div class="callout pass">
+  <strong>60-second interview answer</strong>
+  "Our biggest single decision was keying every Kafka message by event ID — that gave us per-race ordering for free, which meant we didn't need horizontal scale-out on the core pricing pipeline; pricing-service actually runs pinned at one replica in production. Throughput instead came from consumer-side batching tuned per feed volume, and squashing — dropping superseded price ticks and keeping only the latest, both at the Kafka-consumption layer and again inside pricing-service with RxJava backpressure. For state, we ran a two-tier cache — Caffeine locally, Redis as source of truth, invalidated across pods over a dedicated Kafka topic — plus a separate Redis hash for shared, incrementally-updated liability exposure. On the honesty side: we didn't have a formal circuit breaker library, we leaned on tight timeouts, Kafka retry-with-backoff, and domain-specific staleness cutoffs instead — and we never added Postgres read replicas or a Kafka schema registry, both of which would be the next investments if the platform kept scaling."
+</div>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. Why can pricing-service run at exactly one replica in production without becoming a throughput bottleneck, when the chart default supports scaling to 5?</p>
+  <ul class="options" data-correct="2">
+    <li>Kubernetes automatically load-balances a single pod across all available CPU cores, so one replica is functionally equivalent to five smaller ones</li>
+    <li>Kafka messages are keyed by event ID, so ordering per race already requires one consumer per partition at a time — adding replicas without re-partitioning wouldn't add usable parallelism, so throughput instead comes from consumer batching, squashing, and in-process concurrency on that one pod</li>
+    <li>pricing-service doesn't do any CPU-bound work, so replica count is irrelevant to its performance</li>
+    <li>Redis handles all the actual pricing computation, so pricing-service itself is just a thin proxy that doesn't need to scale</li>
+  </ul>
+  <div class="explanation">The event-ID keying (technique 1) is what makes this coherent rather than an oversight: ordering correctness already depends on single-consumer-per-partition-per-race semantics. Given that, more replicas consuming the same low-partition-count topics would sit mostly idle rather than add throughput — you'd need to increase partition count first, which is an expensive, hard-to-reverse operation. ARM instead invested in vertical sizing and in-process concurrency (virtual threads, tuned thread pools, large consumer poll batches, RxJava backpressure) to get throughput out of the one pod it does run.</div>
+</div>
+
+<div class="question">
+  <p>Q2. The Betfair feed handler's squashing listener collapses a batch of price ticks down to one record per runner before processing, discarding the rest. Why is this the correct tradeoff for live-odds pricing specifically, rather than a risky shortcut?</p>
+  <ul class="options" data-correct="4">
+    <li>Discarding messages is always fine because Kafka's <code>acks=1</code> setting means message loss is expected and already tolerated everywhere in the system</li>
+    <li>Betfair sends duplicate messages by design, so squashing is really just deduplication with no information loss at all</li>
+    <li>It reduces network bandwidth costs, which was the primary motivation according to the code comments</li>
+    <li>Each price tick for a runner is a complete snapshot of that runner's current odds, not an incremental delta — so once a newer tick has arrived, every older tick for that runner is already stale and acting on it would produce an outdated price. Discarding superseded ticks and processing only the latest keeps the pipeline working on current information even under high message volume, which matters more for correctness than processing every historical tick would</li>
+  </ul>
+  <div class="explanation">This is the same principle as RxJava's <code>BackpressureStrategy.LATEST</code> in pricing-service (technique 5) — both rely on messages being full-state snapshots rather than deltas. If Betfair ticks were incremental deltas (e.g. "odds moved +0.1"), squashing would silently corrupt state by skipping intermediate changes. Because they're full snapshots, only the newest one is ever needed, and discarding older ones is free correctness-wise while being a large throughput win under load.</div>
+</div>
+
+<div class="question">
+  <p>Q3. ARM's Kafka producers use <code>acks=1</code> and no idempotence, while a payments platform would typically use <code>acks=all</code> with an idempotent producer. What domain difference justifies ARM's choice, and would it still be correct at a payments company like Opayo?</p>
+  <ul class="options" data-correct="1">
+    <li>ARM's choice is justified specifically because live odds are self-healing — a lost price-update message is superseded by the next tick a fraction of a second later, so the brief inconsistency has no lasting effect. That reasoning does not transfer to payments: a lost payment or settlement event is not self-healing, there is no "next tick" that corrects a missed charge, so a payments platform needs <code>acks=all</code> and idempotent producers to guarantee no event is silently dropped</li>
+    <li>The choice is purely a performance micro-optimisation with no domain justification either way — Opayo should copy the exact same producer settings for consistency</li>
+    <li>ARM's choice is a mistake that should be fixed regardless of domain, since <code>acks=all</code> is strictly better in every scenario</li>
+    <li><code>acks=1</code> only affects consumer-side read performance, not producer durability, so the comparison to payments durability requirements doesn't apply</li>
+  </ul>
+  <div class="explanation">This question tests whether you can articulate *why* a tradeoff was correct for one domain and would be wrong for another — the exact framing a payments-company interviewer is listening for when they ask about a betting-platform project. The technical mechanism (acks=1 = leader-only ack, faster but can lose the last unreplicated message on a leader crash) is domain-neutral; whether that's acceptable is entirely about whether the data is self-correcting.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Opayo Interview Prep · Low Latency &amp; High Throughput Synthesis — every citation verified against real source in ~/LABS/LAB_BETTINGCO, cross-referenced with 0005, 0008, 0009, 0011, 0030</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>

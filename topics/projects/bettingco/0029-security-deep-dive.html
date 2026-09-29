@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Security Deep Dive</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6;--sec-fn:#7c3aed;--sec-nf:#059669}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;padding-bottom:.3rem;border-bottom:3px solid}
+  h2.fn{border-color:var(--sec-fn);color:var(--sec-fn)}
+  h2.nf{border-color:var(--sec-nf);color:var(--sec-nf)}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:.9rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.fn{border-color:var(--sec-fn);background:#f5f3ff}
+  .callout.nf{border-color:var(--sec-nf);background:#f0fdf4}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.honest{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+
+  /* divider */
+  .section-divider{text-align:center;margin:3rem 0 2rem;position:relative}
+  .section-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border)}
+  .section-divider span{position:relative;background:var(--bg);padding:0 1.5rem;font-family:monospace;font-size:.9rem;color:var(--muted)}
+
+  /* quiz */
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>Security Deep Dive</h1>
+<div class="meta">Functional security (what the system does) · Non-functional security (how the system resists attack)</div>
+
+<div class="callout">
+  <strong>The distinction that matters at Opayo</strong>
+  Interviewers at a payment platform will probe security harder than most. The key distinction: <strong>functional security</strong> = features you built (authentication, authorisation, tenant isolation). <strong>Non-functional security</strong> = properties of the system (no PAN in logs, encrypted at rest, least-privilege pod permissions). Confusing the two is a red flag. Knowing both — and honestly knowing where the gaps are — is the senior answer.
+</div>
+
+<h2 class="fn">Functional Security — What ARM BettingCo Does</h2>
+
+<h3>1. JWT Authentication — JwtAuthenticationTokenFilter</h3>
+
+<pre>// Every request passes through JwtAuthenticationTokenFilter
+// Extends OncePerRequestFilter — Spring guarantees single execution per request
+
+public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse res,
+                                    FilterChain chain) throws ServletException, IOException {
+        String header = req.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7);
+            try {
+                Claims claims = jwtService.parseToken(token);
+                Long tenantId = claims.get("tenantId", Long.class);
+                String role = claims.get("role", String.class);
+
+                // Validate tenant exists — prevents JWT with deleted tenant
+                tenantService.validateTenant(tenantId);
+
+                UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(tenantId, null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (JwtException e) {
+                res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+        }
+        chain.doFilter(req, res);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Login and health endpoints skip authentication
+        String path = request.getRequestURI();
+        return path.startsWith("/login") || path.startsWith("/actuator/health");
+    }
+}</pre>
+
+<div class="callout fn">
+  <strong>Why OncePerRequestFilter not a regular Filter?</strong>
+  Spring's filter chain can invoke a filter multiple times per request in some configurations (forward, include). OncePerRequestFilter guarantees exactly one invocation per logical request — essential for authentication to prevent double-processing or bypass. This is the correct base class for any security filter in Spring Boot.
+</div>
+
+<h3>2. Multi-Tenant Isolation — Data Layer Enforcement</h3>
+
+<pre>// Tenant isolation is NOT enforced at the service deployment level —
+// all tenants share pods. Isolation is at the data layer: every query scoped by tenantId.
+
+@Repository
+public interface BetRepository extends JpaRepository&lt;Bet, Long&gt; {
+    // tenantId injected from SecurityContext in service layer
+    List&lt;Bet&gt; findByEventIdAndTenantId(Long eventId, Long tenantId);
+
+    // Service extracts tenantId from SecurityContext — never trusts request body
+    // A tenant cannot query another tenant's bets even with a valid JWT
+}
+
+@Service
+public class BetService {
+    public List&lt;Bet&gt; getBetsForEvent(Long eventId) {
+        Long tenantId = SecurityContextHolder.getContext()
+            .getAuthentication().getPrincipal();  // from JWT claim, not request
+        return betRepository.findByEventIdAndTenantId(eventId, tenantId);
+    }
+}</pre>
+
+<h3>3. Role-Based Authorisation</h3>
+
+<pre>@RestController
+@RequestMapping("/api/v1/admin")
+@PreAuthorize("hasRole('ADMIN')")   // entire controller requires ADMIN role
+public class AdminController { ... }
+
+@RestController
+@RequestMapping("/api/v1/bets")
+public class BetController {
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    public List&lt;BetResponse&gt; getBets() { ... }
+
+    @PostMapping("/settle")
+    @PreAuthorize("hasRole('SETTLEMENT_SERVICE')")  // service-to-service only
+    public void settleBets(@RequestBody List&lt;Long&gt; betIds) { ... }
+}</pre>
+
+<h3>4. HTTPS and TLS Termination</h3>
+
+<pre># TLS terminates at the Kubernetes ingress controller (nginx-based)
+# ARM uses multiple nginx ingress classes: nginx-internal, nginx-cloudflare,
+# nginx-public (whitelisted), nginx-protected — not AWS ALB Ingress.
+# Traffic inside the cluster is plain HTTP — services communicate on port 8080
+# This is acceptable because:
+# 1. K8s network policies restrict pod-to-pod traffic (only allowed routes)
+# 2. AWS VPC controls external access
+# 3. The trade-off: no mTLS overhead on internal calls
+
+# ingress.yaml excerpt (internal ingress):
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx-internal
+spec:
+  rules:
+  - host: internal-api.dev.bettingcosport.com
+    http:
+      paths:
+      - path: /
+        backend:
+          service:
+            name: event-service
+            port:
+              number: 8080
+
+# Cloudflare-exposed services use:
+#   kubernetes.io/ingress.class: nginx-cloudflare
+# Public (protected) services use:
+#   kubernetes.io/ingress.class: nginx-protected</pre>
+
+<h3>5. Secret Management</h3>
+
+<pre># Secrets managed via HashiCorp Vault (not plain K8s Secrets)
+# ARM uses the Vault Secrets Operator: VaultStaticSecret CRD syncs secrets
+# from Vault into K8s Secrets, then mounted into pods via envFrom.
+# Protected by:
+# - Vault policy: only authorised service accounts can read specific paths
+# - K8s RBAC: only correct namespace service accounts can access synced secrets
+# - GitLab CI: Vault tokens injected as env vars, never committed to git
+
+# Helm chart pattern (vault-static-secrets.yaml + deployment.yaml):
+# 1. VaultStaticSecret CRD creates a K8s Secret from Vault kv-v2 path:
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+spec:
+  path: secrets/bet-manager-service/db
+  type: kv-v2
+  mount: secrets
+  refreshAfter: 60s    # auto-rotates without pod restart
+  destination:
+    create: true
+    name: bet-manager-service-secrets
+
+# 2. Deployment consumes via envFrom (bulk inject all keys from secret):
+spec:
+  containers:
+  - name: bet-manager-service
+    envFrom:
+    - secretRef:
+        name: bet-manager-service-secrets
+
+# AWS MSK access: IAM role assigned to EKS service account (IRSA)
+# Pod inherits AWS permissions from the role — no static AWS keys in the pod</pre>
+
+<div class="section-divider"><span>─── functional → non-functional ───</span></div>
+
+<h2 class="nf">Non-Functional Security — How ARM Resists Attack</h2>
+
+<h3>1. No PII in Logs</h3>
+
+<pre>// ARM logs are shipped to Datadog — accessible to multiple engineers.
+// Rule: no user-identifiable data in logs at INFO or above.
+
+// BAD: logs tenant name, bet amount (financial data)
+log.info("Processing bet for tenant {} amount {}", tenant.getName(), bet.getAmount());
+
+// GOOD: log IDs and operational context only
+log.info("Processing bet betId={} tenantId={} eventId={}",
+    bet.getId(), bet.getTenantId(), bet.getEventId());
+
+// Why this matters at Opayo:
+// PCI-DSS requires PAN never appears in logs.
+// GDPR requires PII (name, email, account number) never in cleartext logs.
+// Same principle ARM uses (tenant name = PII) applies to cardholder name at Opayo.</pre>
+
+<h3>2. Kubernetes Pod Security</h3>
+
+<pre># ARM Helm chart — pod security context
+# Note: the base values.yaml leaves securityContext as {} (empty) by default.
+# These hardening fields are the recommended additions for a payment platform.
+# In production, resource limits are service-specific (not a global default):
+spec:
+  securityContext: {}     # base chart default — override per service in practice
+  containers:
+  - name: event-service
+    securityContext: {}   # base chart default — hardening applied per service
+
+# Recommended hardening (apply per service, not global default):
+# securityContext:
+#   runAsNonRoot: true          # container cannot run as root
+#   runAsUser: 1000             # explicit non-root UID
+#   readOnlyRootFilesystem: true   # container filesystem is read-only
+#   allowPrivilegeEscalation: false
+#   capabilities:
+#     drop: ["ALL"]           # drop ALL Linux capabilities (including NET_RAW)
+
+# JVM memory control via JAVA_OPTS (actual ARM config):
+JAVA_OPTS: "-XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=75"
+# UseContainerSupport: JVM reads cgroup limits (respects K8s memory limit)
+# ExitOnOutOfMemoryError: pod crashes cleanly instead of hanging zombie
+# MaxRAMPercentage=75: heap = 75% of container memory limit</pre>
+
+<h3>3. Network Policies — Namespace Isolation</h3>
+
+<pre># arm-dev pods CANNOT reach arm-prod pods (different namespaces, NetworkPolicy)
+# Prevents a dev environment compromise from accessing prod data
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: arm-dev-isolation
+  namespace: arm-dev
+spec:
+  podSelector: {}    # applies to all pods in arm-dev
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: dev    # only accept traffic from dev namespace
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          environment: dev    # only send traffic to dev namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0      # allow external (MSK, ECR, etc.)
+        except:
+        - 10.0.0.0/8          # block internal prod VPC CIDR</pre>
+
+<h3>4. Rate Limiting on External Feed Ingestion</h3>
+
+<pre>// resilience4j RateLimiter on WOODS cluster consumers
+// Prevents a misbehaving feed handler from overwhelming the internal BETTINGCO cluster
+
+@Component
+public class BetfairFeedHandler extends AbstractFeedHandler {
+
+    private final RateLimiter rateLimiter;
+
+    public BetfairFeedHandler(RateLimiterRegistry registry) {
+        this.rateLimiter = registry.rateLimiter("betfair-ingestion");
+        // config: 1000 events/second, refresh every 1 second
+    }
+
+    @Override
+    public void onMessage(FeedMessage message) {
+        RateLimiter.waitForPermission(rateLimiter);  // blocks if over limit
+        super.processMessage(message);
+    }
+}</pre>
+
+<h3>5. Dependency Scanning in GitLab CI</h3>
+
+<pre># .gitlab-ci.yml excerpt:
+dependency-scanning:
+  stage: unit-tests       # runs alongside tests, blocks promotion if critical CVE found
+  image: registry.gitlab.com/security-products/dependency-scanning
+  script:
+    - gradle dependencyCheckAnalyze
+  artifacts:
+    reports:
+      dependency_scanning: gl-dependency-scanning-report.json
+  allow_failure: false    # critical CVE = pipeline fails = no deploy</pre>
+
+<div class="callout honest">
+  <strong>Honest answer: what ARM didn't have (and what you'd add at Opayo)</strong>
+  No mTLS between services — internal traffic is plain HTTP. At a payment platform you'd add Istio or Linkerd service mesh for mTLS, providing encryption and mutual authentication between every service. Secrets rotation: ARM uses HashiCorp Vault with a 60-second refresh interval on VaultStaticSecret — better than static K8s Secrets, but not automatic rotation triggered on compromise. At Opayo you'd add Vault dynamic secrets with lease revocation for true rotation. No WAF (Web Application Firewall) in front of the ingress — at Opayo, AWS WAF with rate rules and OWASP ruleset would be mandatory. No runtime security scanning (Falco) — at Opayo, container runtime anomaly detection would be expected for PCI-DSS compliance. No pod security hardening in the base chart (securityContext defaults to empty) — at Opayo, readOnlyRootFilesystem and capability dropping would be enforced via Pod Security Admission. Being honest about these gaps and knowing how to close them is a stronger answer than claiming the platform was perfectly secure.
+</div>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. An Opayo interviewer asks: "What's the difference between functional and non-functional security? Give me an example of each from your project." What's the correct answer?</p>
+  <ul class="options" data-correct="3">
+    <li>Functional security = unit tests that test security logic. Non-functional security = penetration testing and vulnerability scans done after deployment.</li>
+    <li>Functional security = the security features users interact with (login, logout, password reset). Non-functional security = TLS encryption and HTTPS enforcement. Functional is user-facing; non-functional is infrastructure.</li>
+    <li>Functional security = features I built to implement security requirements: JWT authentication filter (OncePerRequestFilter), role-based @PreAuthorize, tenant isolation enforcing tenantId on every DB query. Non-functional security = properties that make the system resistant to attack regardless of whether a security feature is used: no PII in logs, readOnlyRootFilesystem on pods, network policies preventing arm-dev from reaching arm-prod, rate limiting on feed ingestion to prevent cascade. Functional answers "what security does the system provide?" Non-functional answers "how hard is the system to attack?"</li>
+    <li>Functional security = authentication and authorisation. Non-functional security = everything else including HTTPS and encryption.</li>
+  </ul>
+  <div class="explanation">The correct distinction: functional security = security requirements expressed as features (auth, authz, data isolation, audit log). Non-functional security = systemic properties that make the system harder to attack or compromise regardless of application-level security (least-privilege pods, no PII in logs, network isolation, runtime scanning). Both are required for a complete security posture. Option B is incomplete — HTTPS is a non-functional property but not the full picture. Option D conflates authentication with functional security (auth is one category of functional security, not the whole definition).</div>
+</div>
+
+<div class="question">
+  <p>Q2. ARM BettingCo's JWT contains the tenantId claim. A malicious actor signs their own JWT with tenantId=999 (a different client's tenant). Why does this fail, and what's the defence?</p>
+  <ul class="options" data-correct="1">
+    <li>Two defences make this fail: (1) JWT signature verification — the JWT is signed with a server-side secret (HS256). A self-signed JWT with a different key produces a signature that doesn't verify against the server's secret — JwtAuthenticationTokenFilter throws JwtException → 401. (2) Even if a valid JWT were obtained (e.g. stolen token), TenantService.validateTenant(tenantId) checks the claimed tenantId against the DB and verifies the authenticated user belongs to that tenant. Tenant data is also always scoped by tenantId at query level — a valid JWT for tenant 1 cannot retrieve tenant 2's data even if the DB query ran. Multiple layers, each independently failing closed.</li>
+    <li>The JWT is encrypted so the tenantId cannot be read or forged by an attacker</li>
+    <li>HTTPS prevents the JWT from being intercepted, so a malicious JWT cannot reach the server</li>
+    <li>The K8s network policy blocks requests from unknown IP addresses before they reach the JWT filter</li>
+  </ul>
+  <div class="explanation">JWT is typically signed (not encrypted) — the payload is base64-encoded and readable, but the signature makes it tamper-proof. An attacker can read the claims in an intercepted JWT but cannot modify them without invalidating the signature. A self-crafted JWT with a different signing key produces a signature that fails verification. The second defence layer — tenantId scoped DB queries — provides defence-in-depth: even a valid-looking JWT (e.g. if the secret were compromised) can only access data for the claimed tenant.</div>
+</div>
+
+<div class="question">
+  <p>Q3. Opayo asks: "How would you ensure no card data (PAN) ever appears in your application logs?" What is the complete answer?</p>
+  <ul class="options" data-correct="4">
+    <li>Use DEBUG log level only in production — lower log verbosity reduces the chance of PAN appearing in logs</li>
+    <li>Encrypt all log output using AES-256 — even if PAN appears in a log line, it cannot be read without the decryption key</li>
+    <li>Configure Logback to mask any string matching a card number regex before writing — a regex pattern on all log output catches accidental PAN logging without requiring every developer to remember to mask manually</li>
+    <li>Three layers: (1) Never log PAN — code review checklist item, static analysis rule (Checkstyle custom rule: flag log statements containing cardNumber/pan/cvv variables). (2) Tokenise on ingestion — PAN enters the system at one point, is immediately tokenised (PAN → token), and the token is what flows through the rest of the system. No downstream code ever has PAN to accidentally log. (3) Log masking as safety net — Logback PatternLayout with a custom converter that detects and masks 13-16 digit sequences matching Luhn algorithm before writing to any appender. Defence in depth: policy + architecture + tooling.</li>
+  </ul>
+  <div class="explanation">Tokenisation is the architectural answer — it removes PAN from the data flow entirely so downstream services never have it to log. This is the PCI-DSS preferred approach. But tokenisation alone doesn't cover the initial ingestion point (the gateway controller that first receives the card number). That's where code review rules and static analysis apply. Log masking as a safety net catches accidental logging in any layer. Using only log level control (option A) doesn't prevent PAN logging — it just reduces log volume. Encryption (option B) doesn't prevent compliance issues — PCI-DSS requires PAN not be stored unmasked, even in encrypted logs, because the encryption key becomes a compliance scope expander.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Opayo Interview Prep · Security Deep Dive</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — SQL Performance Investigation</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn)}
+  .callout.pass{border-color:var(--pass)}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.84rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.88em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{background:var(--sidebar);text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border)}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>SQL Performance Investigation</h1>
+<div class="meta">Gap Topic — Interview depth expected at Senior level · ARM BettingCo examples throughout</div>
+
+<p>Interviewers expect senior engineers to walk through a slow query end-to-end: find it, read its execution plan, identify the bottleneck (missing index, sequential scan, N+1, bad join), fix it, and verify the fix. This lesson covers the full investigation toolkit using ARM BettingCo's PostgreSQL schema as the example.</p>
+
+<h2>1. Finding Slow Queries</h2>
+
+<h3>PostgreSQL slow query log</h3>
+<pre>-- postgresql.conf (or alter system)
+log_min_duration_statement = 100   -- log queries taking >100ms
+log_line_prefix = '%t [%p]: [%l-1] '
+log_statement = 'none'             -- don't log ALL statements, only slow ones
+
+-- In AWS RDS: set via parameter group
+-- log_min_duration_statement = 100</pre>
+
+<h3>pg_stat_statements — the most useful view</h3>
+<pre>-- Enable extension once:
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Find the top 10 slowest queries by total execution time:
+SELECT
+    substring(query, 1, 80)   AS query_snippet,
+    calls,
+    round(mean_exec_time::numeric, 2) AS avg_ms,
+    round(total_exec_time::numeric, 2) AS total_ms,
+    rows
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+
+-- In ARM: this would surface the events table range scan that
+-- runs every time sportsbook-service loads all active events</pre>
+
+<h2>2. Reading EXPLAIN ANALYZE</h2>
+
+<h3>Example: slow query on ARM's bets table</h3>
+<pre>-- Scenario: bet-manager-service queries all PENDING bets for an event
+-- before settlement. Without an index on (event_id, status), this is slow.
+
+EXPLAIN ANALYZE
+SELECT * FROM bets
+WHERE event_id = 12345 AND status = 'PENDING';
+
+-- BAD output (no index):
+-- Seq Scan on bets  (cost=0.00..4820.00 rows=23 width=128)
+--                   (actual time=0.043..48.231 rows=23 loops=1)
+--   Filter: ((event_id = 12345) AND (status = 'PENDING'))
+--   Rows Removed by Filter: 199977
+-- Planning Time: 0.8 ms
+-- Execution Time: 48.3 ms   ← scans 200k rows to return 23
+
+-- After adding index:
+CREATE INDEX idx_bets_event_status ON bets(event_id, status)
+    WHERE status = 'PENDING';  -- partial index: only indexes PENDING rows
+
+-- GOOD output:
+-- Index Scan using idx_bets_event_status on bets
+--   (cost=0.29..8.42 rows=23 width=128)
+--   (actual time=0.021..0.089 rows=23 loops=1)
+-- Planning Time: 0.4 ms
+-- Execution Time: 0.1 ms    ← 480x faster</pre>
+
+<div class="callout">
+  <strong>How to read EXPLAIN ANALYZE output</strong>
+  <strong>cost=A..B</strong> — A is startup cost (cost before first row), B is total cost (arbitrary planner units). <strong>actual time=X..Y</strong> — X=ms to first row, Y=ms for all rows. <strong>rows=N</strong> — estimated rows (before ANALYZE); check against actual rows. Large discrepancy = stale statistics → run ANALYZE. <strong>loops=N</strong> — node executed N times (nested loop joins). Multiply actual time × loops for true cost.
+</div>
+
+<h2>3. Index Design Rules</h2>
+
+<table>
+  <thead><tr><th>Index type</th><th>When to use</th><th>ARM example</th></tr></thead>
+  <tbody>
+    <tr><td>B-tree (default)</td><td>Equality and range: =, &lt;, &gt;, BETWEEN, ORDER BY</td><td>events(event_id), bets(placed_at)</td></tr>
+    <tr><td>Partial index</td><td>Filter on a subset of rows that changes rarely</td><td>bets(event_id) WHERE status='PENDING' — only ~5% of rows</td></tr>
+    <tr><td>Composite index</td><td>Multi-column WHERE — column order matters: put equality columns first</td><td>bets(event_id, status) — event_id first because it has higher cardinality</td></tr>
+    <tr><td>Covering index (INCLUDE)</td><td>Avoid table heap fetch — put SELECT columns in index</td><td>CREATE INDEX ON bets(event_id) INCLUDE (amount, odds) — index-only scan</td></tr>
+    <tr><td>UNIQUE index</td><td>Enforce uniqueness + fast equality lookup</td><td>events(feed_name, feed_code) — prevents duplicate event ingestion from same feed; note: ARM bet idempotency uses SELECT pre-check on (sportsbookTenantId, sportsbookRef), not a UNIQUE constraint</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Index column order — the most common design mistake</strong>
+  For a composite index <code>(a, b)</code>: queries on <code>a</code> alone use the index. Queries on <code>b</code> alone do NOT use the index. Queries on <code>a AND b</code> use the index. Rule: put the column used in equality conditions first; range conditions last. In ARM's <code>bets(event_id, status)</code>: event_id is equality (always specific), status could be range — correct order.
+</div>
+
+<h2>4. The N+1 Problem in JPA</h2>
+
+<pre>// BAD: N+1 — loads all events, then for each event loads its races
+// This generates 1 + N SQL queries where N = number of events
+List&lt;Event&gt; events = eventRepository.findAll();  // SELECT * FROM events (1 query)
+for (Event e : events) {
+    List&lt;Race&gt; races = e.getRaces();  // SELECT * FROM races WHERE event_id=? (N queries)
+    // If 200 events: 201 SQL queries total
+}
+
+// GOOD option 1: JOIN FETCH in JPQL
+@Query("SELECT e FROM Event e JOIN FETCH e.races WHERE e.status = :status")
+List&lt;Event&gt; findWithRaces(@Param("status") EventStatus status);
+// Generates: SELECT e.*, r.* FROM events e JOIN races r ON r.event_id = e.id
+// WHERE e.status = ?  — 1 query
+
+// GOOD option 2: @EntityGraph
+@EntityGraph(attributePaths = {"races", "races.runners"})
+List&lt;Event&gt; findByStatus(EventStatus status);
+
+// GOOD option 3: Batch size (2nd-level cache strategy)
+@OneToMany(fetch = FetchType.LAZY)
+@BatchSize(size = 50)  // loads 50 races per query instead of 1
+private List&lt;Race&gt; races;</pre>
+
+<div class="callout pass">
+  <strong>How to detect N+1 in development</strong>
+  Add <code>spring.jpa.show-sql=true</code> and <code>spring.jpa.properties.hibernate.format_sql=true</code> to application.yml. Watch the log for repeated <code>SELECT</code> statements with different IDs. Production: Datadog APM shows "N database calls" per HTTP request — a spike to 200 DB calls for one /events endpoint is the signature.
+</div>
+
+<h2>5. Connection Pool Sizing (HikariCP)</h2>
+
+<pre>spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10      # default: 10 — usually correct
+      minimum-idle: 5
+      connection-timeout: 30000  # 30s — how long to wait for a connection from pool
+      idle-timeout: 600000       # 10min — how long idle connection stays in pool
+      max-lifetime: 1800000      # 30min — rotate connections to avoid stale DB state
+
+# Pool sizing formula (HikariCP docs):
+# pool_size = (core_count * 2) + effective_spindle_count
+# For a t3.large (2 vCPU) talking to RDS (SSD):
+# pool_size = (2 * 2) + 1 = 5 connections — often LESS than default is better
+
+# ARM: each pod has pool_size=10. With 5 pods (HPA max) per service:
+# = 50 connections to PostgreSQL per service.
+# RDS max_connections ~ 100-500 depending on instance class.
+# Miscalculate and you get "HikariPool-1 - Connection is not available" errors.</pre>
+
+<div class="callout warn">
+  <strong>Interview question: Why does more connections hurt performance?</strong>
+  PostgreSQL spawns one OS process per connection. With 200 connections, the DB context-switches between 200 processes under load — CPU wasted on scheduling. HikariCP's job is to queue requests in the JVM rather than opening thousands of DB connections. Fewer, longer-lived connections outperform many short-lived ones. The formula above is empirically derived from PostgreSQL's internal architecture.
+</div>
+
+<h2>6. ARM BettingCo — Actual Index Decisions</h2>
+<pre>-- events table (event-service PostgreSQL schema)
+CREATE TABLE events (
+    id          BIGSERIAL PRIMARY KEY,
+    feed_name   VARCHAR(50) NOT NULL,
+    feed_code   VARCHAR(50) NOT NULL,
+    status      VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+    meeting_id  BIGINT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes supporting ARM queries:
+CREATE UNIQUE INDEX idx_events_feed_unique ON events(feed_name, feed_code);
+-- ^ prevents duplicate events from same feed source; supports lookup by external ID
+
+CREATE INDEX idx_events_status ON events(status) WHERE status != 'DELETED';
+-- ^ partial: active events only; settlement queries filter FINISHED events fast
+
+-- bets table (bet-manager-service PostgreSQL schema)
+CREATE TABLE bets (
+    id               BIGSERIAL PRIMARY KEY,
+    idempotency_key  UUID NOT NULL,
+    event_id         BIGINT NOT NULL,
+    status           VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    amount           NUMERIC(12,2) NOT NULL,
+    odds             VARCHAR(10) NOT NULL,
+    placed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_bets_idempotency ON bets(idempotency_key);
+-- ^ supports fast idempotency lookup; idempotency itself is enforced via SELECT pre-check
+
+CREATE INDEX idx_bets_event_status ON bets(event_id, status)
+    WHERE status IN ('PENDING', 'SETTLED');
+-- ^ settlement query: fast lookup of all PENDING bets for event X</pre>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. EXPLAIN ANALYZE shows "Seq Scan on bets (actual time=0.043..892.4 rows=47 loops=1)" with "Rows Removed by Filter: 2100000". What is happening and what is the fix?</p>
+  <ul class="options" data-correct="2">
+    <li>The query is joining two large tables without a join condition — fix by adding ON clause</li>
+    <li>PostgreSQL is scanning all 2.1 million rows in the bets table to find 47 matching rows. The filter column has no index. Fix: CREATE INDEX on the filter column(s). If filtering on (event_id, status), a composite index on bets(event_id, status) would let PostgreSQL find the 47 rows directly — reducing scan from 2.1M to ~47 rows.</li>
+    <li>The table statistics are stale — run VACUUM ANALYZE and the planner will choose a better plan automatically</li>
+    <li>The query needs a LIMIT clause to prevent the full table scan</li>
+  </ul>
+  <div class="explanation">Sequential scan = PostgreSQL reads every row in the table. "Rows Removed by Filter: 2100000" = 2.1M rows read and discarded to find 47 matches. This is the textbook missing index symptom. Adding an index on the WHERE clause columns lets PostgreSQL use an index scan — reading only the index B-tree to find the 47 row pointers, then fetching just those rows. The actual time drops from ~900ms to &lt;1ms.</div>
+</div>
+
+<div class="question">
+  <p>Q2. bet-manager-service's /bets endpoint has p99 latency of 800ms in production. Datadog shows 150 DB queries per HTTP request. What is the root cause?</p>
+  <ul class="options" data-correct="3">
+    <li>The HikariCP connection pool is exhausted — increase maximum-pool-size</li>
+    <li>The PostgreSQL server is under-provisioned — scale up RDS instance</li>
+    <li>N+1 query problem: JPA loads a list of bets (1 query) then for each bet loads a related entity (e.g. event details) in a separate query. With 149 bets, this generates 1+149=150 queries. Fix: use @EntityGraph or JOIN FETCH to load bets with their related entities in a single query.</li>
+    <li>Missing database index — add a composite index on bets(event_id, status)</li>
+  </ul>
+  <div class="explanation">150 DB queries for one HTTP request is the N+1 signature. The number 150 = 1 (load bets) + 149 (load something for each bet). The fix is to eager-load the association in one JOIN query. In JPA: add JOIN FETCH in a @Query method, or annotate the repository method with @EntityGraph(attributePaths = {"event"}). This collapses 150 queries into 1, reducing latency from 800ms to ~5ms.</div>
+</div>
+
+<div class="question">
+  <p>Q3. ARM has a composite index on bets(event_id, status). A new query WHERE status = 'SETTLED' (no event_id filter) is added. Does this query use the index?</p>
+  <ul class="options" data-correct="2">
+    <li>Yes — composite indexes are usable by any column in the index regardless of order</li>
+    <li>No. For bets(event_id, status), PostgreSQL can use the index for: WHERE event_id=X, or WHERE event_id=X AND status=Y. It cannot use it for WHERE status=Y alone because the leading column (event_id) is not in the filter. PostgreSQL would need to scan the entire index to find all status='SETTLED' entries — not better than a table scan. Fix: add a separate index on bets(status) or bets(status, event_id).</li>
+    <li>Yes, but only if the query has ORDER BY event_id</li>
+    <li>It depends on the table statistics — run ANALYZE first</li>
+  </ul>
+  <div class="explanation">B-tree composite indexes work like a phone book sorted by (last_name, first_name). You can look up by last name alone (prefix), or by last name + first name (full prefix), but not by first name alone — you'd have to scan the whole book. The "leftmost prefix rule" governs composite index usage. event_id is the leading column, so queries without event_id in the WHERE clause cannot use bets(event_id, status) efficiently.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Gap Topics · SQL Performance Investigation</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>

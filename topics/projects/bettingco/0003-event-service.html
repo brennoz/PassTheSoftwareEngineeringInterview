@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>event-service — Deep Dive (Port 8081)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 780px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>event-service — Deep Dive (Port 8081)</h1>
+<div class="meta">Category: Projects · Topic: ARM BettingCo · Est. time: 25 min · Lesson 3 of 14 · Deep Dive</div>
+
+<h2>Role</h2>
+<p><code>event-service</code> is the single source of truth for all racing events in the ARM platform. It owns all data about race meetings (horse and dog racing), individual races within a meeting, runners (horses/dogs), betting markets, and outcomes (odds). All consumers — sportsbook-service, pricing-service, event-monitoring — read from this service via its Kafka output topics or via REST. No other service stores the authoritative event state.</p>
+
+<h2>PostgreSQL Schema</h2>
+<p>The database is called <code>events</code>. Each developer works in a named schema (e.g. <code>roberto</code>, <code>vladimir</code>, <code>suranga</code>) to avoid conflicts. Migrations are managed by Liquibase, applied automatically on service startup from changelogs in <code>src/main/db/changelog/</code>.</p>
+
+<div class="diagram">Database: events
+
+┌──────────────────┐
+│     events       │   ← a race meeting (e.g. Ascot 14:30, Tuesday)
+│ ─────────────── │
+│ id (PK, UUID)    │
+│ external_id      │   ← bookie's own ID for this event
+│ sport_type       │   ← HORSE | DOG
+│ country_code     │
+│ status           │   ← ACTIVE | DELETED | DORMANT | FINISHED | IN_RUNNING | SUSPENDED
+│ meeting_date     │
+└────────┬─────────┘
+         │ 1:N
+┌────────▼─────────┐
+│     races        │   ← individual race within the meeting
+│ ─────────────── │
+│ id (PK)          │
+│ event_id (FK)    │
+│ race_number      │
+│ race_name        │
+│ distance         │
+│ going            │   ← track condition: FIRM | GOOD | SOFT | HEAVY
+│ status           │
+└────────┬─────────┘
+         │ 1:N
+┌────────▼─────────┐     ┌─────────────────────┐
+│     runners      │     │      markets         │   ← betting markets per race
+│ ─────────────── │     │ ──────────────────── │
+│ id (PK)          │     │ id (PK)              │
+│ race_id (FK)     │     │ race_id (FK)         │
+│ runner_number    │     │ market_type          │   ← WIN | PLACE | EACH_WAY
+│ runner_name      │     │ status               │   ← ACTIVE | DELETED | DORMANT | FINISHED | IN_RUNNING | SUSPENDED | MARKET_SERVICE_FAILED
+│ trainer          │     │ overround            │   ← sum(1/price) > 100%
+│ jockey           │     └──────────┬──────────┘
+│ draw             │                │ 1:N
+│ weight           │     ┌──────────▼──────────┐
+└──────────────────┘     │      outcomes        │   ← odds per runner per market
+                         │ ──────────────────── │
+                         │ id (PK)              │
+                         │ market_id (FK)       │
+                         │ runner_id (FK)       │
+                         │ win_price (BigDecimal)│  ← exact decimal — never double
+                         │ place_price (BigDecimal)│
+                         │ sp_price (BigDecimal) │  ← Starting Price
+                         └─────────────────────┘</div>
+
+<div class="callout warn">
+  <strong>Why BigDecimal, not double, for prices?</strong>
+  Floating-point arithmetic (double/float) cannot represent 0.1 exactly in binary. A price of 3.50 might be stored as 3.4999999999999996. Multiplied across millions of payout calculations, the rounding error adds up to real money. Regulatory audits in gambling catch this. BigDecimal uses exact decimal arithmetic — 3.50 is exactly 3.50. Never use double for money.
+</div>
+
+<h3>Code: Real EventStatus enum (generated from OpenAPI spec)</h3>
+<p>Event and market statuses are Java enums generated from the OpenAPI specification at build time. They live in <code>common-enums-api</code>. The six status values reflect the lifecycle of a race meeting in the real platform:</p>
+<pre>// Source: workspace/build/common-enums-api/generated-resources/src/main/java/
+//         com/bettingcosports/common/enums/EventStatus.java
+public enum EventStatus {
+    ACTIVE,      // meeting is live and accepting odds updates
+    DELETED,     // removed from the platform
+    DORMANT,     // created but not yet taking feeds
+    FINISHED,    // race is over, settlement pending
+    IN_RUNNING,  // race is in progress (in-play)
+    SUSPENDED    // temporarily halted (e.g. stewards inquiry)
+}
+
+// MarketStatus adds one extra value for infrastructure failures:
+public enum MarketStatus {
+    ACTIVE, DELETED, DORMANT, FINISHED, IN_RUNNING, SUSPENDED,
+    MARKET_SERVICE_FAILED  // downstream pricing service error
+}</pre>
+
+<h3>Code: StatusService — real status transition logic</h3>
+<p><code>StatusService</code> in <code>com.bettingcosports.eventservice.app.service.status</code> is the service that drives status changes. It uses <code>@Transactional</code>, reads the event from <code>EventService</code>, computes a <code>StatusOptions</code> object, and updates the event and its markets before broadcasting via Kafka:</p>
+<pre>// Source: event-service/.../service/status/StatusService.java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class StatusService {
+
+    private final Broadcaster broadcaster;           // Kafka publish to arm-dev.event-service.json
+    private final EventService eventService;         // reads authoritative event state
+    private final MarketRepository marketRepository; // Spring Data JPA
+    private final StatusOptionsService statusOptionsService; // computes next allowed status
+
+    @Transactional
+    public void updateEvent(final long eventId) {
+        final Optional&lt;Event&gt; optional = eventService.findEventById(eventId)
+                                                     .filter(Predicate.not(Event::isCompleted));
+        if (optional.isPresent()) {
+            final Event event = optional.get();
+            final var options = statusOptionsService.build(event);
+            updateEvent(event, options);  // applies status changes, saves, broadcasts
+        }
+    }
+}</pre>
+
+<h3>Code: Real Kafka Publisher — Broadcaster</h3>
+<p><code>Broadcaster</code> in <code>lib-events</code> is the shared Kafka publisher for event-service. After every status change, it publishes the full event state as a <code>MessageDto</code> to <code>arm-dev.event-service.json</code>. The key is the event ID — all updates for one event go to the same Kafka partition, guaranteeing ordering:</p>
+<pre>// Source: lib-events/.../kafka/Broadcaster.java
+@Transactional
+public void broadcast(KafkaOperation operation, Changes changes) {
+    DtoCache dtoCache = new DtoCache();
+    String timestamp = DateUtils.format(Instant.now(armClock()));
+
+    changes.getEvents()
+           .forEach(e -&gt; send(kafkaTopic, timestamp, e, operation,
+                              changes.getPriorityForEvent(e), dtoCache));
+}
+
+private UUID send(String topic, String timestamp, EventDto eventDto,
+                  KafkaOperation operation, KafkaMessagePriority priority, int revision) {
+    var messageId = UUID.randomUUID();
+
+    // Revision cache: skip if a newer version was already broadcast (prevents out-of-order publishes)
+    if (eventRevisionCacheEnabled) {
+        int latestRevision = eventRevisionCacheService.getLatestCacheRevision(eventDto.getId());
+        if (shouldSkipBroadcast(revision, latestRevision)) {
+            log.warn("Skipping broadcast: eventId={}, rev={}, latest={}",
+                     eventDto.getId(), revision, latestRevision);
+            return null;
+        }
+        eventRevisionCacheService.setLatestCacheRevision(eventDto.getId(), revision);
+    }
+
+    MessageDto message = new MessageDto();
+    message.setUuid(messageId.toString());
+    message.setTimestamp(timestamp);
+    message.setOperation(operation);   // KafkaOperation: UPDATE, DELETE, etc.
+    message.setEventDto(eventDto);
+    message.setPriority(priority);
+
+    var key = String.valueOf(eventDto.getId());  // event ID as partition key → ordering
+    kafkaEventsTemplate.send(topic, key, message);
+    return messageId;
+}
+// @Transactional on broadcast(): Kafka send is part of the same TX as the DB update
+// that triggered it — if DB commit fails, Kafka send does not happen (via KafkaTransactionManager)</pre>
+
+<h2>Kafka Topics Owned</h2>
+<table>
+  <thead>
+    <tr><th>Topic</th><th>Role</th><th>Consumer Group</th><th>Consumers</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>arm-dev.event-service.json</code></td><td>Producer</td><td>—</td><td>sportsbook-service, pricing-service, event-monitoring</td></tr>
+    <tr><td><code>arm-dev.event-service-inplay.json</code></td><td>Producer</td><td>—</td><td>sportsbook-service, pricing-service</td></tr>
+    <tr><td><code>arm-dev.event-service.cerberus-meeting-update</code></td><td>Producer</td><td>—</td><td>sportsbook-service</td></tr>
+    <tr><td><code>arm-dev.event-service.price-histories</code></td><td>Producer</td><td>—</td><td>event-monitoring</td></tr>
+    <tr><td><code>arm-dev.commands.json</code></td><td>Consumer</td><td>test-local-arm.event-service-armdev</td><td>Internal commands</td></tr>
+    <tr><td><code>betfair.racecard.*</code></td><td>Consumer</td><td>test-local-arm.event-service-armdev</td><td>From feed handlers (WOODS)</td></tr>
+  </tbody>
+</table>
+
+<h2>REST Controllers</h2>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>EventController</code> — <code>GET/POST/PUT /events</code> — CRUD, filter by sport/date/status</li>
+  <li><code>CompetitionController</code> — <code>/competitions</code> — meeting-level data</li>
+  <li><code>OutcomeFeedCodeController</code> — <code>/feed-codes</code> — bookie outcome code mappings</li>
+  <li>All endpoints guarded by JWT via the <code>lib-security</code> Spring Security filter chain</li>
+</ul>
+
+<h2>Quartz Scheduler</h2>
+<p>event-service uses Quartz (not Spring <code>@Scheduled</code>) to manage timed tasks: automatically suspending markets at race start time, triggering resulted-event processing when a race finishes, archiving old events overnight.</p>
+
+<div class="callout">
+  <strong>Why Quartz over @Scheduled?</strong>
+  Spring's <code>@Scheduled</code> is in-memory — if the pod restarts, scheduled jobs are lost. Quartz persists job state to the database (PostgreSQL). If event-service crashes mid-race and Kubernetes reschedules it, Quartz picks up exactly where it left off. For a live betting platform where a missed market suspension means customers can bet at wrong odds, this persistence is critical.
+</div>
+
+<h2>Standard Spring Boot Layered Architecture</h2>
+
+<p>event-service uses a standard Spring Boot layered architecture — not hexagonal. All layers use Spring annotations throughout. Domain entities are JPA <code>@Entity</code> classes and live in the shared <code>lib-events</code> library alongside the Kafka publisher and JPA repositories.</p>
+
+<div class="diagram">event-service package structure (actual)
+
+com.bettingcosports.eventservice.app/
+  controller/        EventController, MarketController, RaceController
+                     CompetitionController, OutcomeFeedCodeController
+  service/           EventService, MarketService, AuditService
+    status/          StatusService, StatusSchedulerService, StatusExecutorService
+    pricing/         EventPricingService, PricingExecutorService
+    scheduling/      ...
+  config/            AppConfig, JpaConfig, QuartzConfig, WebSecurityConfig
+                     PriceScheduleCacheConfig (Caffeine — in-memory, NOT Redis)
+  mapper/            EventMapper, MarketMapper, OutcomeMapper (MapStruct)
+  kafka/             CommandListener  ← consumes arm-dev.commands.json
+  builder/           MarketBuilder, InRunningPriceHistoryBuilder
+  facade/            ...
+
+lib-events (shared library)/
+  domain/            Event, Race, Market, Runner  ← JPA @Entity, NOT pure Java
+  repository/        MarketRepository (Spring Data JPA interface)
+  kafka/             Broadcaster  ← KafkaTemplate&lt;String, MessageDto&gt;
+  service/           EventStatusHistoryService, EventRevisionCacheService</div>
+
+<div class="callout warn">
+  <strong>No hexagonal architecture — no use-case classes</strong>
+  Classes like <code>CreateEventUseCase</code>, <code>UpdateOddsUseCase</code>, or <code>EventRepository</code> as a domain port interface do not exist. Domain entities are Spring JPA <code>@Entity</code> classes. Services use <code>@Service</code> and <code>@Transactional</code> throughout. The architecture is pragmatic layered Spring Boot: controller → service → JPA repository → PostgreSQL.
+</div>
+
+<h2>Spring Annotations Used</h2>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>@KafkaListener(topics = "arm-dev.commands.json")</code> — consumes internal commands</li>
+  <li><code>@RestController</code> — all three controllers</li>
+  <li><code>@Transactional</code> — service methods that modify state (e.g. <code>StatusService.updateEvent()</code>, <code>MarketService</code>)</li>
+  <li><code>@Entity</code> — JPA entities in the infrastructure layer</li>
+  <li><code>@DisallowConcurrentExecution</code> — Quartz annotation preventing concurrent job runs</li>
+  <li><code>@EnableJpaRepositories</code> — activates Spring Data JPA</li>
+  <li>Liquibase auto-applied on startup via Spring Boot autoconfiguration</li>
+</ul>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. event-service uses Quartz scheduler instead of Spring @Scheduled. Why does this matter in a Kubernetes environment?</p>
+  <ul class="options" data-correct="2">
+    <li>@Scheduled consumes more CPU than Quartz under load</li>
+    <li>Quartz persists job state to the database — if the pod is killed and rescheduled, jobs resume; @Scheduled is in-memory and loses all scheduled tasks on pod restart</li>
+    <li>Quartz is always faster than @Scheduled for high-frequency tasks</li>
+    <li>@Scheduled does not support cron expression syntax</li>
+  </ul>
+  <div class="explanation">In Kubernetes, pods can be killed and rescheduled at any time (rolling deployments, OOMKills, node failures). @Scheduled jobs vanish when the pod dies. For a live betting platform, a missed market suspension means customers can place bets after a race starts — real money at stake. Quartz stores job state in PostgreSQL and resumes correctly after restarts.</div>
+</div>
+
+<div class="question">
+  <p>Q2. The outcomes table stores win_price as BigDecimal. What is the concrete risk of using double instead?</p>
+  <ul class="options" data-correct="2">
+    <li>double cannot represent negative numbers, causing issues for place bets</li>
+    <li>Floating-point binary cannot represent 0.1 exactly — 3.50 may become 3.4999999999; multiplied across millions of payout calculations, the rounding error loses real money and fails regulatory audits</li>
+    <li>PostgreSQL does not natively support the double type in Java JDBC</li>
+    <li>double is too slow for the high-throughput odds update volume</li>
+  </ul>
+  <div class="explanation">Binary floating-point (IEEE 754) cannot represent most decimal fractions exactly. 0.1 + 0.2 = 0.30000000000000004 in double arithmetic. For odds and payouts, multiply this error across millions of bets and you get a measurable discrepancy. UK Gambling Commission audits require exact payout calculations. BigDecimal uses base-10 arithmetic — 3.50 is exactly 3.50.</div>
+</div>
+
+<div class="question">
+  <p>Q3. sportsbook-service and pricing-service both consume arm-dev.event-service.json. How does Kafka ensure both services receive every message independently?</p>
+  <ul class="options" data-correct="2">
+    <li>event-service sends each message twice, once per consumer</li>
+    <li>Each service belongs to a different consumer group — Kafka delivers the full topic to every consumer group independently; messages are not shared between groups</li>
+    <li>They share one consumer group and alternate processing messages</li>
+    <li>event-service publishes to two different topic names, one per consumer</li>
+  </ul>
+  <div class="explanation">Kafka's consumer group model: all consumers in the same group share the topic (each message processed once by one consumer). Consumers in different groups each get every message independently. sportsbook-service group: test-local-arm.sportsbook-service-armdev; pricing-service group: test-local-arm.pricing-service-armdev — both receive every event update.</div>
+</div>
+
+<div class="question">
+  <p>Q4. The <code>PriceScheduleCacheConfig</code> in event-service uses Caffeine, not Redis, for its internal price cache. What does this mean operationally?</p>
+  <ul class="options" data-correct="2">
+    <li>Caffeine is slower than Redis but cheaper to operate in Kubernetes</li>
+    <li>Caffeine is an in-process heap cache — each pod has its own independent copy. If two event-service pods run, their price caches are not shared. Redis (external cluster) would be shared across all pods</li>
+    <li>Caffeine uses the Redis wire protocol, so it can be replaced with Redis transparently</li>
+    <li>Caffeine stores data on disk; Redis stores data in memory — Caffeine is safer for large price schedules</li>
+  </ul>
+  <div class="explanation">Caffeine (com.github.ben-manes.caffeine) is an in-JVM cache — zero network hops, nanosecond reads. The event-service price schedule cache is read very frequently from the same service, so local memory beats Redis for latency. The trade-off: if event-service scales to multiple pods, each pod caches independently (no consistency guarantee across pods). Redis would give a shared, consistent cache at the cost of a network call per read. event-service accepts per-pod divergence for the price schedule because the data is refreshed frequently from the authoritative database.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Lesson 3 of 14</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

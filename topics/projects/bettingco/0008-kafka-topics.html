@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Kafka Topics Reference</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 780px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.5; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.85rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.4rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo — Kafka Topics Reference</h1>
+<div class="meta">Category: Projects · Topic: ARM BettingCo · Est. time: 15 min · Lesson 8 of 14</div>
+
+<h2>Topic Naming Convention</h2>
+<p>Internal ARM topics follow the pattern <code>{env}.{service}.{type}</code>. Examples: <code>arm-dev.event-service.json</code>, <code>arm-dev.bet-updates.json</code>. External topics use the bookie name: <code>betfair.odds.horse.uk</code>. All-caps strings such as <code>ARM_BET_SETTLEMENT</code> and <code>ARM_BET_MANAGER_SERVICE_EVENT</code> are <strong>Java constants that name <code>@KafkaListener</code> container IDs</strong> — they are <em>not</em> Kafka topic names. The actual topic names are always the lowercase dotted strings resolved from <code>application.yml</code>.</p>
+
+<h2>Two Clusters</h2>
+
+<div class="diagram">External (WOODS cluster)
+  Brokers: 192.168.26.101:9092, 192.168.26.102:9092, 192.168.26.103:9092 (UKDC)
+           172.30.24.111:9092, 172.30.24.112:9092, 172.30.24.113:9092  (AWS)
+  Producers: external bookmaker systems (Betfair, SIS, etc.) — outside ARM control
+             They publish their own Kafka topics directly
+  Consumers: ARM feed handler services
+             (all consumer factories use KafkaWoodsBootstrapServerSupplier)
+  Example topics consumed by ARM:
+    exchange.betfair.horse_racing
+    exchange.betfair.greyhound_racing
+    exchange.betfair.uk_ire.horse_racing.avgwgtodds
+    exchange.betfair.uk_ire.horse_racing.market_info
+
+      │  feed handlers normalise + publish FeedRaceDto
+      ▼
+
+Internal (BETTINGCO MSK cluster)
+  Brokers: msk-broker-1.dev.bettingcosport.com:9092
+           msk-broker-2.dev.bettingcosport.com:9092
+           msk-broker-3.dev.bettingcosport.com:9092
+  Producers: feed handlers (test-local.arm-dev.prices),
+             event-service (arm-dev.event-service.json),
+             bet-manager-service (arm-dev.bet-updates.json),
+             settlement-service (test-local.arm-dev.bet-settlement), etc.
+  Consumers: event-service, sportsbook-service, pricing-service, bet-manager, etc.</div>
+
+<h2>Complete Topic Table</h2>
+
+<table>
+  <thead>
+    <tr><th>Topic</th><th>Cluster</th><th>Producer</th><th>Consumer(s)</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>arm-dev.event-service.json</code></td>
+      <td>BETTINGCO</td>
+      <td>event-service</td>
+      <td>sportsbook-service, pricing-service, event-monitoring</td>
+      <td>All event state changes</td>
+    </tr>
+    <tr>
+      <td><code>arm-dev.event-service-inplay.json</code></td>
+      <td>BETTINGCO</td>
+      <td>event-service</td>
+      <td>sportsbook-service, pricing-service</td>
+      <td>Live in-play updates only</td>
+    </tr>
+    <tr>
+      <td><code>arm-dev.event-service.cerberus-meeting-update</code></td>
+      <td>BETTINGCO</td>
+      <td>event-service</td>
+      <td>sportsbook-service</td>
+      <td>Meeting-level card changes</td>
+    </tr>
+    <tr>
+      <td><code>arm-dev.event-service.price-histories</code></td>
+      <td>BETTINGCO</td>
+      <td>pricing-service</td>
+      <td>event-monitoring</td>
+      <td>Historical price stream</td>
+    </tr>
+    <tr>
+      <td><code>arm-dev.bet-updates.json</code></td>
+      <td>BETTINGCO</td>
+      <td>bet-manager-service</td>
+      <td>sportsbook-service, liability-scheduler-service</td>
+      <td>Bet status updates → push to browser; liability tracking</td>
+    </tr>
+    <tr>
+      <td><code>test-local.arm-dev.bet-recommendations</code></td>
+      <td>BETTINGCO</td>
+      <td>bet-recommendation-service</td>
+      <td>sportsbook-service</td>
+      <td>Advisory recommendations for display</td>
+    </tr>
+    <tr>
+      <td><code>test-local.arm-dev.audit-service.changes</code></td>
+      <td>BETTINGCO</td>
+      <td>multiple services</td>
+      <td>audit-service</td>
+      <td>Immutable audit log</td>
+    </tr>
+    <tr>
+      <td><code>test-local.advisories.messages</code></td>
+      <td>BETTINGCO</td>
+      <td>event-service (and event-service sub-services)</td>
+      <td>advisory-service</td>
+      <td>Advisory messages published by event-service, consumed by advisory-service</td>
+    </tr>
+    <tr>
+      <td><code>test-local.arm-dev.bet-settlement</code></td>
+      <td>BETTINGCO</td>
+      <td>settlement-service</td>
+      <td>bet-manager-service</td>
+      <td>Settlement results batch → bet-manager applies SETTLED status</td>
+    </tr>
+    <tr>
+      <td><code>betfair.odds.horse.uk</code></td>
+      <td>WOODS</td>
+      <td>Betfair feed handler</td>
+      <td>event-service processors</td>
+      <td>Raw Betfair horse odds</td>
+    </tr>
+    <tr>
+      <td><code>betfair.odds.dog.uk</code></td>
+      <td>WOODS</td>
+      <td>Betfair feed handler</td>
+      <td>event-service processors</td>
+      <td>Raw Betfair greyhound odds</td>
+    </tr>
+    <tr>
+      <td><code>{bookie}.racecard.*</code></td>
+      <td>WOODS</td>
+      <td>Feed handlers</td>
+      <td>event-service-racecards-handler</td>
+      <td>Racecard data per bookie</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Consumer Group ID Pattern</h2>
+<p>There is no single uniform pattern — group IDs vary by service. Common forms seen in source:</p>
+<ul style="margin: 0 0 1rem 1.5rem;">
+  <li><code>test-local-arm.sportsbook-service-armdev</code> (sportsbook-service)</li>
+  <li><code>test-local-arm-dev.bet-manager-service</code> (bet-manager-service)</li>
+  <li><code>test-local-arm-dev.settlement-service</code> (settlement-service)</li>
+  <li><code>test-local.{spring.application.name}-armdev</code> (advisory-service — uses Spring property interpolation)</li>
+  <li><code>test-local-arm.event-service-armdev</code> (event-service main consumer)</li>
+</ul>
+<p>The <code>test-local-</code> or <code>test-local.</code> prefix makes it clear which environment owns the group; multiple environments can coexist on the same Kafka cluster with separate consumer groups and independent offsets. The exact group ID is controlled by the <code>KAFKA_GROUP_ID</code> environment variable per service.</p>
+
+<h2>At-Least-Once Delivery</h2>
+<p>Kafka commits consumer offsets after processing (not before). If a pod crashes mid-processing, the next pod picks up from the last committed offset — the message is redelivered. This means every consumer must be <strong>idempotent</strong>: processing the same message twice must produce the same result as processing it once.</p>
+
+<div class="callout warn">
+  <strong>Why at-least-once, not exactly-once?</strong>
+  Kafka's exactly-once semantics (Kafka transactions) require the producer and consumer to share a transactional context. In ARM, each service has its own PostgreSQL database and its own transaction manager — there is no distributed transaction spanning the Kafka consume, DB write, and Kafka produce. At-least-once delivery + service-level idempotency (idempotency_key, check-before-process) is the pragmatic and correct choice for this architecture.
+</div>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. sportsbook-service and pricing-service both consume arm-dev.event-service.json. How does Kafka ensure both receive every message?</p>
+  <ul class="options" data-correct="2">
+    <li>event-service publishes each message twice, once per consumer service</li>
+    <li>Each service belongs to a different consumer group; Kafka delivers the full topic independently to every consumer group — no message sharing between groups</li>
+    <li>They share one consumer group and a load balancer routes messages between them</li>
+    <li>event-service maintains separate topic copies for each consumer</li>
+  </ul>
+  <div class="explanation">Kafka's consumer group model: consumers in the same group share partitions (each message processed once). Consumers in different groups each get every message independently. sportsbook-service and pricing-service have separate group IDs (test-local-arm.sportsbook-service-armdev vs test-local-arm.pricing-service-armdev), so both receive every event published to arm-dev.event-service.json.</div>
+</div>
+
+<div class="question">
+  <p>Q2. bet-manager-service crashes while processing a <code>test-local.arm-dev.bet-settlement</code> message from settlement-service. The offset was not yet committed. What happens?</p>
+  <ul class="options" data-correct="2">
+    <li>The message is permanently lost — it was already acknowledged by the broker</li>
+    <li>Kafka redelivers the message to the next available bet-manager-service pod; bet-manager-service must be idempotent (check if the bet is already SETTLED before processing)</li>
+    <li>Kafka sends the message to a configured dead-letter topic automatically</li>
+    <li>The pod auto-restarts and processes the message from its in-memory buffer</li>
+  </ul>
+  <div class="explanation">At-least-once delivery: Kafka only advances the committed offset when the consumer explicitly commits after processing. A crash before commit means the message will be redelivered to the next consumer. bet-manager-service (the consumer of test-local.arm-dev.bet-settlement) must handle this: if bet.status is already SETTLED, skip the redelivered message without writing duplicate settlement records or paying the customer twice.</div>
+</div>
+
+<div class="question">
+  <p>Q3. Why are external bookie feeds on the WOODS cluster rather than the BETTINGCO MSK cluster?</p>
+  <ul class="options" data-correct="2">
+    <li>AWS MSK does not support connections from external IP addresses</li>
+    <li>External bookmaker brokers can be unreliable (slow, unavailable, malformed messages); isolating them on WOODS prevents their failures from cascading into the internal BETTINGCO MSK cluster that all ARM services depend on</li>
+    <li>WOODS cluster is cheaper to run than MSK for external data volumes</li>
+    <li>Betfair requires all consuming clients to use their own Kafka brokers</li>
+  </ul>
+  <div class="explanation">Failure isolation is the core reason. If Betfair's Kafka brokers become slow or unavailable, WOODS absorbs the impact. Feed handlers bridge WOODS → BETTINGCO MSK after normalisation. Internal services (event-service, pricing-service, sportsbook-service) only connect to the reliable, ARM-managed BETTINGCO MSK cluster. The design contains 3rd-party unreliability behind the feed handler boundary.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Lesson 8 of 14</footer>
+
+<script>
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correct = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   answered = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        if (i === correct) { li.classList.add('correct'); }
+        else { li.classList.add('wrong'); opts[correct].classList.add('reveal'); }
+        expl.classList.add('visible');
+      });
+    });
+  });
+</script>
+</body>
+</html>

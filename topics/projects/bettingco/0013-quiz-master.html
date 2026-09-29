@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Quiz Master (25 Questions)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 780px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 0.5rem; color: var(--muted);
+       border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 0.75rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 2rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .progress-bar-wrap { background: var(--border); border-radius: 999px;
+                       height: 8px; margin: 1.5rem 0 2.5rem; }
+  .progress-bar { background: var(--accent); height: 8px; border-radius: 999px;
+                  width: 0%; transition: width 0.4s ease; }
+  .score-display { font-family: monospace; font-size: 0.88rem; color: var(--muted);
+                   text-align: right; margin-top: 0.3rem; }
+  .question { margin: 1.75rem 0; padding: 1.25rem 1.5rem;
+              border: 1px solid var(--border); border-radius: 8px;
+              background: #fff; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; font-size: 0.95rem; }
+  .question .tag { font-size: 0.72rem; font-family: monospace; color: var(--muted);
+                   text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.5rem; display: block; }
+  .options { list-style: none; }
+  .options li { padding: 0.55rem 0.9rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.9rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.65; }
+  .explanation { font-size: 0.85rem; color: var(--muted); margin-top: 0.6rem;
+                 display: none; padding: 0.5rem 0.8rem; background: var(--sidebar);
+                 border-radius: 4px; line-height: 1.55; }
+  .explanation.visible { display: block; }
+  .final-score { display: none; background: var(--sidebar); border: 2px solid var(--accent);
+                 border-radius: 10px; padding: 2rem; text-align: center; margin: 2rem 0; }
+  .final-score h2 { color: var(--accent); border: none; font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .final-score .big-num { font-size: 3.5rem; font-weight: bold; font-family: monospace;
+                          color: var(--accent); line-height: 1; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo — Quiz Master</h1>
+<div class="meta">25 questions · All topics · Click an answer to reveal explanation</div>
+
+<div class="progress-bar-wrap">
+  <div class="progress-bar" id="progressBar"></div>
+</div>
+<div class="score-display" id="scoreDisplay">0 / 25 answered</div>
+
+<!-- Q1 -->
+<div class="question">
+  <span class="tag">Architecture Overview</span>
+  <p>Q1. ARM uses two separate Kafka clusters: WOODS and BETTINGCO MSK. What is WOODS for?</p>
+  <ul class="options" data-correct="2">
+    <li>WOODS is the production MSK cluster; BETTINGCO is dev-only</li>
+    <li>WOODS receives raw external bookie feeds (Betfair, SIS, Tote) from external brokers; feed handlers normalise and bridge events into the internal BETTINGCO MSK cluster</li>
+    <li>WOODS handles bet placement; BETTINGCO handles settlement</li>
+    <li>WOODS is a RabbitMQ cluster for STOMP; BETTINGCO is Kafka for internal events</li>
+  </ul>
+  <div class="explanation">WOODS brokers sit at 192.168.26.101-103:9092 and receive data from external bookmaker systems. ARM does not control these producers. Feed handlers (one per bookmaker) consume from WOODS, normalise the raw odds data, and publish normalised ArmEvent objects to BETTINGCO MSK. BETTINGCO is fully ARM-owned and reliable; WOODS absorbs 3rd-party unreliability.</div>
+</div>
+
+<!-- Q2 -->
+<div class="question">
+  <span class="tag">Feed Handlers</span>
+  <p>Q2. ARM has 18 separate feed handler services, all sharing lib-feed-handlers. What does lib-feed-handlers provide, and how does it enable Open/Closed Principle?</p>
+  <ul class="options" data-correct="2">
+    <li>An abstract base class AbstractFeedHandler with template methods fetchOdds() and normalise() that subclasses override</li>
+    <li>FeedRaceBroadcaster (@Service) and MessageBuilder (@Component) — injectable components that handle Kafka publish and message envelope construction; each feed handler injects them, adding bookmaker 19 requires only a new service with the same two components injected, zero changes to lib-feed-handlers</li>
+    <li>A shared Kafka consumer group configuration so all 18 handlers subscribe as one group</li>
+    <li>A BetfairAdapter interface that all handlers implement to ensure protocol consistency</li>
+  </ul>
+  <div class="explanation">lib-feed-handlers provides FeedRaceBroadcaster (KafkaTemplate&lt;String, FeedRaceDto&gt;.sendDefault with key = feedName:feedCode) and MessageBuilder (builds KafkaMessage with timestamp + UUID). Each of the 18 feed handler services injects these two Spring beans. This is composition over inheritance — the shared behaviour is in concrete injectable components, not an abstract superclass. Open/Closed: lib-feed-handlers is closed for modification; new handlers extend the platform by creating new Spring Boot services that inject the same components.</div>
+</div>
+
+<!-- Q3 -->
+<div class="question">
+  <span class="tag">Event Service</span>
+  <p>Q3. event-service stores prices as BigDecimal, not double. Why does this matter for a betting platform?</p>
+  <ul class="options" data-correct="2">
+    <li>BigDecimal is faster than double for arithmetic on JVM 21</li>
+    <li>Floating-point double arithmetic accumulates rounding errors (e.g. 0.1 + 0.2 ≠ 0.3 in binary); for financial amounts where a fraction of a penny can affect profit/loss at scale, BigDecimal provides arbitrary-precision decimal arithmetic with no accumulated error</li>
+    <li>PostgreSQL only accepts BigDecimal from Java; double requires type casting</li>
+    <li>Spring Data JPA cannot serialize double to NUMERIC(19,4) columns</li>
+  </ul>
+  <div class="explanation">Double stores values in binary floating-point (IEEE 754). Values like 0.1 have no exact binary representation; tiny errors accumulate across thousands of calculations. For betting odds (e.g. 3.45), a slight error might cause incorrect payout calculations at scale — e.g. 1000 bets × tiny error = meaningful financial discrepancy. BigDecimal stores the exact decimal value with configurable precision and rounding mode, eliminating this class of bug entirely.</div>
+</div>
+
+<!-- Q4 -->
+<div class="question">
+  <span class="tag">Event Service</span>
+  <p>Q4. event-service uses Quartz scheduler for time-sensitive race tasks. Why Quartz and not Spring @Scheduled?</p>
+  <ul class="options" data-correct="2">
+    <li>@Scheduled does not work on Java 21 with sealed classes</li>
+    <li>@Scheduled fires on one pod in a single JVM; Quartz persists job state in PostgreSQL and coordinates across multiple pods — with HPA scaling event-service to 3 pods, Quartz prevents the same job from firing 3 times simultaneously</li>
+    <li>Quartz integrates with AWS MSK; @Scheduled does not support Kafka</li>
+    <li>@Scheduled cannot handle cron expressions; Quartz can</li>
+  </ul>
+  <div class="explanation">@Scheduled fires on whatever pod evaluates the annotation — in a 3-pod deployment, all 3 pods schedule independently and the same task fires 3 times. Quartz stores trigger state in PostgreSQL (via JDBCJobStore); pods compete for a distributed lock and only one pod executes each job. For race result processing (where double-execution could mean double settlement), Quartz is required. @Scheduled is only appropriate for tasks where duplicate execution is harmless.</div>
+</div>
+
+<!-- Q5 -->
+<div class="question">
+  <span class="tag">Bet Manager Service</span>
+  <p>Q5. bet-manager-service uses @EnableRetry (Spring Retry). Which failure scenario is Spring Retry designed for?</p>
+  <ul class="options" data-correct="2">
+    <li>Any exception thrown during bet processing — Spring Retry retries all exceptions by default</li>
+    <li>Transient infrastructure failures (network timeouts, temporary service unavailability) — Spring Retry retries on configured exception types with backoff, so a brief MSK hiccup during bet acceptance does not permanently fail the bet</li>
+    <li>Kafka consumer offset commit failures — Spring Retry handles this automatically</li>
+    <li>Database constraint violations — Spring Retry rolls back and retries the full transaction</li>
+  </ul>
+  <div class="explanation">Spring Retry is designed for transient failures: a momentary network blip when calling advisory-service, a brief Redis timeout, an intermittent MSK produce failure. You configure which exceptions to retry and a backoff policy (e.g. exponential backoff with max 3 attempts). Non-transient errors (ValidationException, business rule violations) must NOT be retried — you configure @Recover methods for those. @EnableRetry + @Retryable annotations implement this per-method.</div>
+</div>
+
+<!-- Q6 -->
+<div class="question">
+  <span class="tag">Bet Manager Service</span>
+  <p>Q6. lib-tenants stores tenantId in ThreadLocal. A service method annotated with @Async reads the tenant from ThreadLocal. What is the result?</p>
+  <ul class="options" data-correct="2">
+    <li>ThreadLocal is automatically inherited by Spring @Async threads — no action needed</li>
+    <li>@Async runs on a thread pool thread; ThreadLocal is not inherited — the async method sees null (or a stale previous tenant) and repository queries filter on the wrong tenant, causing data bleed between operators</li>
+    <li>Spring Security propagates ThreadLocal across all async contexts automatically</li>
+    <li>@Async and ThreadLocal cannot coexist — the JVM throws an InheritableThreadLocalException</li>
+  </ul>
+  <div class="explanation">ThreadLocal stores a value per-thread. The HTTP request thread sets the tenant; @Async spawns or borrows a different thread from the executor pool. That thread's ThreadLocal is either empty (null) or holds a leftover value from a previous request handled by the same thread. The JPA query proceeds with the wrong tenant context. Fix: wrap the @Async executor with a decorator that captures and propagates ThreadLocal values from the caller thread to the async task thread.</div>
+</div>
+
+<!-- Q7 -->
+<div class="question">
+  <span class="tag">Pricing Service</span>
+  <p>Q7. pricing-service caches odds in Redis with key streamOutcomePricesCache and TTL 12 hours. What risk does this TTL create?</p>
+  <ul class="options" data-correct="2">
+    <li>12 hours exceeds the Redis cluster's maximum TTL setting</li>
+    <li>Stale odds: if a runner is scratched (withdrawn) or odds change dramatically mid-race, the cache may serve 12-hour-old prices unless explicitly invalidated; this requires cache invalidation logic in addition to TTL expiry</li>
+    <li>Redis will evict the key earlier than 12 hours under memory pressure — this is always a risk</li>
+    <li>12-hour TTL causes Kafka consumer lag to accumulate</li>
+  </ul>
+  <div class="explanation">TTL is a safety net (eventual expiry), not a real-time consistency mechanism. streamOutcomePricesCache at 12 hours means: if pricing-service fails to publish an update, browsers could display 12-hour-old odds. In a live racing context, this is dangerous. The design relies on: (1) Kafka-driven active updates (TTL is just the fallback), (2) explicit cache invalidation when key events occur (race status changes, runner scratched). TTL alone is insufficient for high-frequency odds that change every few seconds.</div>
+</div>
+
+<!-- Q8 -->
+<div class="question">
+  <span class="tag">Pricing Service</span>
+  <p>Q8. pricing-service and sportsbook-service both consume arm-dev.event-service.json. How does Kafka deliver all events to both?</p>
+  <ul class="options" data-correct="2">
+    <li>event-service publishes twice — once per downstream consumer</li>
+    <li>Each service has its own consumer group ID (test-local-arm.pricing-service-armdev vs test-local-arm.sportsbook-service-armdev); Kafka delivers the full partition independently to each consumer group — neither group is aware of the other</li>
+    <li>They share a consumer group and Kafka round-robins messages between them</li>
+    <li>Kafka uses a broadcast topic type for arm-dev.event-service.json that auto-duplicates messages</li>
+  </ul>
+  <div class="explanation">Kafka consumer groups: consumers in the SAME group share partitions (load balancing — each message processed once by one consumer). Consumers in DIFFERENT groups each get the complete partition independently. arm-dev.event-service.json might have 12 partitions. pricing-service's group gets all 12. sportsbook-service's group also gets all 12 — independently. This is Kafka's fundamental pub/sub mechanism: one topic, many independent consumer groups, each with their own committed offset.</div>
+</div>
+
+<!-- Q9 -->
+<div class="question">
+  <span class="tag">Sportsbook Service</span>
+  <p>Q9. sportsbook-service has 3 pods. Why does using RabbitMQ as a STOMP relay solve the multi-pod problem for WebSocket?</p>
+  <ul class="options" data-correct="2">
+    <li>HAProxy automatically mirrors WebSocket sessions to all pods simultaneously</li>
+    <li>Without RabbitMQ, each pod's STOMP SimpleBroker only knows about its own subscribers; a Kafka event arriving at pod A would push to pod A's subscribers but not to pod B's or C's. RabbitMQ is a shared external broker — all pods publish to the same exchange and RabbitMQ fan-outs to all connected subscribers globally</li>
+    <li>Kubernetes HPA ensures only one sportsbook-service pod is active at any time</li>
+    <li>STOMP protocol automatically synchronises subscriber state across all pods</li>
+  </ul>
+  <div class="explanation">WebSocket connections are stateful and sticky to one pod (a client connects to pod A and stays there). If a Kafka odds update arrives at pod B, pod B's in-memory SimpleBroker pushes to its own subscribers — pod A and C subscribers miss the update. RabbitMQ decouples this: all pods subscribe as STOMP publishers to the same RabbitMQ exchange. When pod B receives a Kafka event, it publishes to RabbitMQ. RabbitMQ fans out to all subscribers across all pods. Shared state lives in the broker, not in any pod's memory.</div>
+</div>
+
+<!-- Q10 -->
+<div class="question">
+  <span class="tag">Bet Lifecycle</span>
+  <p>Q10. ARM_BET_MANAGER_SERVICE_EVENT carries an idempotency_key (UUID). settlement-service receives the same event twice due to Kafka redelivery. What should settlement-service do?</p>
+  <ul class="options" data-correct="2">
+    <li>Process both messages — Kafka redelivery means the first was not committed, so the second is the real event</li>
+    <li>Check if a settlement record with the same idempotency_key already exists in its database; if yes, skip processing and commit the offset; if no, process and persist — this makes settlement idempotent: the second delivery produces no additional effect</li>
+    <li>Return an error to Kafka so the topic offset is not advanced, preventing double processing</li>
+    <li>settlement-service does not receive ARM_BET_MANAGER_SERVICE_EVENT; it receives ARM_BET_SETTLEMENT</li>
+  </ul>
+  <div class="explanation">At-least-once delivery guarantees Kafka will redeliver messages that were not successfully committed. Every consumer of idempotency-sensitive operations must check before acting: "have I already processed this event?" Using the idempotency_key as a unique constraint (or explicit lookup), settlement-service detects duplicates and skips them. The Kafka offset is committed regardless — acknowledging the duplicate as "processed." Without this check, redelivery = double settlement = customer paid twice or double charged.</div>
+</div>
+
+<!-- Q11 -->
+<div class="question">
+  <span class="tag">Bet Lifecycle</span>
+  <p>Q11. A race result arrives. Describe the two-stage settlement flow: which service detects the result, what does it publish, and which service executes the actual bet settlement?</p>
+  <ul class="options" data-correct="1">
+    <li>settlement-service consumes arm-dev.event-service.json, detects a confirmed result, calculates which bets to settle, and publishes BetStatusDto records to test-local.arm-dev.bet-settlement; bet-manager-service (BetSettlementListener) then consumes that topic and calls SettlementService to settle each bet</li>
+    <li>bet-manager-service consumes arm-dev.event-service.json and publishes to test-local.arm-dev.bet-settlement; settlement-service consumes that topic and settles bets</li>
+    <li>event-service publishes ARM_BET_SETTLEMENT directly; settlement-service consumes it and settles bets without involving bet-manager-service</li>
+    <li>advisory-service detects the race result and publishes to ARM_ADVISORY_SERVICE; bet-manager-service consumes it and calls settlement-service via REST</li>
+  </ul>
+  <div class="explanation">Two-stage flow confirmed in source. Stage 1: settlement-service (EventServiceKafkaListener) consumes arm-dev.event-service.json, spots a confirmed race result, runs OutcomeSettlerService to identify winning/losing bets, then SettlementBroadcaster publishes List&lt;BetStatusDto&gt; to test-local.arm-dev.bet-settlement. Stage 2: bet-manager-service (BetSettlementListener, listener ID "arm-bet-settlement") consumes that topic and calls SettlementService.settleBetEarlyResult() or unsettleBet() for each bet. Note: "ARM_BET_SETTLEMENT" is a Spring Kafka listener ID in bet-manager, not a topic name — the actual topic is test-local.arm-dev.bet-settlement.</div>
+</div>
+
+<!-- Q12 -->
+<div class="question">
+  <span class="tag">Kafka Topics</span>
+  <p>Q12. arm-dev.event-service.json — what does the naming convention reveal about this topic?</p>
+  <ul class="options" data-correct="2">
+    <li>The topic is JSON-encoded and runs on the ARM development Kubernetes namespace</li>
+    <li>Pattern {env}.{service}.{type}: env=arm-dev, service=event-service, type=json — tells you which environment owns it, which service produces it, and the message format; allows multiple envs (arm-dev, arm-int) to coexist on the same Kafka cluster with separate topics</li>
+    <li>The topic is auto-created by event-service on startup and scoped to one developer</li>
+    <li>All ARM topics use arm-dev prefix regardless of environment</li>
+  </ul>
+  <div class="explanation">Naming convention is infrastructure documentation. arm-dev.event-service.json: arm-dev = environment (arm-int would be arm-int.event-service.json), event-service = producer service (you can find the code by searching for this producer), json = wire format (vs binary Avro or Protobuf). arm-int and arm-prod environments each have their own topic namespace on the same MSK cluster. Consumer group IDs also encode the environment: test-local-arm.sportsbook-service-armdev. You can reconstruct the full routing map from naming conventions alone.</div>
+</div>
+
+<!-- Q13 -->
+<div class="question">
+  <span class="tag">Kafka Topics</span>
+  <p>Q13. Why does ARM use at-least-once Kafka delivery rather than exactly-once (Kafka transactions)?</p>
+  <ul class="options" data-correct="2">
+    <li>AWS MSK does not support Kafka transactions</li>
+    <li>Kafka exactly-once requires the producer and consumer to share a transactional context across a common Kafka cluster; ARM's services each have their own PostgreSQL database — no distributed transaction can span Kafka consume + DB write + Kafka produce across independent services; at-least-once + service-level idempotency is the correct pragmatic design</li>
+    <li>Exactly-once is only 10% faster than at-least-once and not worth the complexity</li>
+    <li>Spring Kafka does not support exactly-once semantics</li>
+  </ul>
+  <div class="explanation">Kafka's exactly-once (transactions) requires a single transactional scope covering consume → process → produce, all on the same Kafka cluster. In ARM: event-service produces, betting-service consumes AND writes to PostgreSQL AND produces to another topic. There is no transaction manager that can atomically commit the Kafka offset AND the PostgreSQL write in one transaction. At-least-once + idempotent consumers is the industry-standard pattern for distributed microservices: design each consumer to be safe on redelivery.</div>
+</div>
+
+<!-- Q14 -->
+<div class="question">
+  <span class="tag">WebSocket / STOMP</span>
+  <p>Q14. cerberus-ui sends Authorization: Bearer {jwt} in the STOMP SUBSCRIBE frame headers. Why in STOMP headers rather than as an HTTP cookie?</p>
+  <ul class="options" data-correct="2">
+    <li>HTTP cookies are not supported by the SockJS WebSocket transport</li>
+    <li>After the initial HTTP upgrade, the WebSocket connection is a raw TCP stream — there are no HTTP headers to carry per-message auth. STOMP frames carry their own headers; the SUBSCRIBE frame's Authorization header is where cerberus-ui sends the JWT, and sportsbook-service's TopicSubscriptionInterceptor reads it from the SUBSCRIBE frame to validate access per topic</li>
+    <li>JWT tokens are too large to fit in an HTTP cookie header</li>
+    <li>Spring Security automatically extracts JWTs from STOMP CONNECT headers; cookie extraction requires custom code</li>
+  </ul>
+  <div class="explanation">After HTTP upgrades to WebSocket, the connection is a raw TCP stream with no further HTTP headers. STOMP provides its own header mechanism per frame. In ARM: cerberus-ui passes `{ Authorization: Bearer ${apiToken} }` as the third argument to client.subscribe(), making it a per-subscription header. sportsbook-service's TopicSubscriptionInterceptor (ChannelInterceptor) intercepts StompCommand.SUBSCRIBE frames, reads headerAccessor.getFirstNativeHeader(HttpHeaders.AUTHORIZATION), and validates the JWT before allowing the subscription. The auth check is on SUBSCRIBE, not CONNECT — so only authorized clients can subscribe to protected topics.</div>
+</div>
+
+<!-- Q15 -->
+<div class="question">
+  <span class="tag">WebSocket / STOMP</span>
+  <p>Q15. What is port 61613 used for in ARM?</p>
+  <ul class="options" data-correct="2">
+    <li>PostgreSQL database for sportsbook-service</li>
+    <li>RabbitMQ STOMP relay — sportsbook-service connects to RabbitMQ via STOMP protocol on port 61613 to use RabbitMQ as a shared pub/sub broker for WebSocket fan-out across multiple pods</li>
+    <li>The Kafka WOODS cluster external broker port</li>
+    <li>bet-recommendation-service REST API port</li>
+  </ul>
+  <div class="explanation">61613 is the standard STOMP protocol port. RabbitMQ listens on: 5672 (AMQP — internal service-to-broker), 15672 (Management UI), 61613 (STOMP). sportsbook-service configures spring.rabbitmq.relay-host and port 61613 to relay STOMP frames from browser WebSocket connections through RabbitMQ's exchange/routing. This is distinct from the AMQP port (5672) used by other services that publish via the Spring AMQP client.</div>
+</div>
+
+<!-- Q16 -->
+<div class="question">
+  <span class="tag">Infrastructure</span>
+  <p>Q16. ARM runs arm-dev and arm-int in one EKS cluster (dev-2-eu-west-1) but arm-prod in a separate cluster (prod-eu-west-1). Why separate clusters for prod?</p>
+  <ul class="options" data-correct="2">
+    <li>AWS limits one EKS cluster per environment by policy</li>
+    <li>Blast radius reduction: a misconfigured HPA, accidental node drain, or runaway process in the dev cluster cannot impact prod; separate clusters also allow different node types and IAM policies per environment</li>
+    <li>arm-dev and arm-prod cannot use the same VPC due to IP address conflicts</li>
+    <li>Helm requires separate clusters to deploy the same chart with different values files</li>
+  </ul>
+  <div class="explanation">Two clusters: dev side (dev-2-eu-west-1, namespaces arm-dev and arm-int) and prod side (prod-eu-west-1, namespace arm-prod). The cost is running two control planes, but the benefit is complete isolation: a developer running kubectl apply --dry-run on the wrong namespace in dev cannot affect prod. Different node groups (dev: cheaper instances; prod: production-grade) and separate IAM role assignments. Terraform manages both consistently, so the overhead is low.</div>
+</div>
+
+<!-- Q17 -->
+<div class="question">
+  <span class="tag">Infrastructure</span>
+  <p>Q17. ARM's Helm HPA is configured as minReplicas=1, maxReplicas=5, targetCPUUtilizationPercentage=80. A race meeting starts and CPU spikes to 95%. What happens?</p>
+  <ul class="options" data-correct="2">
+    <li>The pod is evicted and replaced with a larger instance type</li>
+    <li>HPA detects CPU above 80% target and adds pods up to maxReplicas=5; Kubernetes schedules new pods and begins routing traffic once they pass readiness probes; the scale-down happens automatically when CPU drops below target after a cool-down period</li>
+    <li>The pod is rate-limited by Kubernetes — no new pods are added until current CPU drops below 80%</li>
+    <li>HPA scales down to 1 replica to reduce competition for CPU</li>
+  </ul>
+  <div class="explanation">HPA controller runs a control loop (default every 15s). Observed CPU / target CPU = scale ratio. At 95% / 80% = 1.19 → scale up 19%, rounded up. If currently at 1 pod, scale to 2. If still high, next loop scales to 3, and so on up to 5. Each new pod goes through its readiness probe before receiving traffic. Scale-down has a configurable stabilization window (default 5 minutes) to avoid flapping. The arm-chart sets consistent HPA across all services so any service scales proportionally to load.</div>
+</div>
+
+<!-- Q18 -->
+<div class="question">
+  <span class="tag">Infrastructure</span>
+  <p>Q18. ARM uses trunk-based deployment to arm-dev with a manual gate for arm-prod. A critical hotfix is needed in production immediately. What is the process?</p>
+  <ul class="options" data-correct="2">
+    <li>Push directly to the prod EKS cluster with kubectl apply — bypassing GitLab CI for emergencies</li>
+    <li>Create a hotfix branch from the release/* branch (or trunk if already aligned), raise a MR with expedited review, merge to trigger build → docker push ECR → helm deploy to arm-int, then manually approve Deploy to Prod in GitLab CI</li>
+    <li>SSH into the running pod and patch the running JAR directly</li>
+    <li>Use the GitLab CI rollback pipeline which re-deploys the last known good state from ECR</li>
+  </ul>
+  <div class="explanation">Even for hotfixes, the GitLab CI pipeline is the deployment mechanism. The process is faster: shorter review cycle, skip arm-int if risk is low and the fix is isolated, click "Deploy to Prod" manually. The rollback path (re-run previous pipeline's Deploy to Prod stage) is also available if the hotfix makes things worse. Direct kubectl apply to prod is forbidden — it bypasses the image tag audit trail, Helm state reconciliation, and leaves the cluster in a state that the next Helm upgrade will overwrite unexpectedly.</div>
+</div>
+
+<!-- Q19 -->
+<div class="question">
+  <span class="tag">OOD Patterns</span>
+  <p>Q19. ARM's hexagonal architecture places @Transactional on the application layer (use cases), not on domain classes or infrastructure. Why?</p>
+  <ul class="options" data-correct="2">
+    <li>Spring's @Transactional does not work on non-Spring-managed classes</li>
+    <li>The application layer defines the transaction boundary: a use case represents one atomic business operation (e.g. CreateBetUseCase). Domain classes are pure logic with no awareness of transactions; infrastructure classes are called within the transaction the application layer opened — the boundary is a business decision, not an infrastructure detail</li>
+    <li>@Transactional on infrastructure causes Kafka producers to roll back with the PostgreSQL transaction</li>
+    <li>Domain classes use JPA optimistic locking instead of @Transactional</li>
+  </ul>
+  <div class="explanation">Transaction boundaries are business decisions. A use case says "these steps are one atomic unit of work." If CreateBetUseCase fails midway, the whole thing rolls back. Domain classes (Event, Market, Runner) contain pure business logic — they don't know about Spring, transactions, or persistence. Infrastructure classes (JpaEventRepository) execute within whatever transaction is active. The application layer coordinates: "open a transaction, call domain logic, call infrastructure, commit." This makes domain logic trivially testable without any transaction context.</div>
+</div>
+
+<!-- Q20 -->
+<div class="question">
+  <span class="tag">OOD Patterns</span>
+  <p>Q20. The bet lifecycle Saga uses choreography. advisory-service fails permanently (pod crash, not recoverable). What is the expected system behaviour after a compensating transaction?</p>
+  <ul class="options" data-correct="2">
+    <li>settlement-service detects the missing advisory step and settles the bet without advisory validation</li>
+    <li>bet-manager-service has a timeout-based compensating transaction: if advisory check is not confirmed within the SLA, the bet status transitions to VOID and the stake is refunded — the system remains consistent even though advisory-service is permanently down</li>
+    <li>The bet stays in PENDING forever until advisory-service recovers</li>
+    <li>Kafka automatically reroutes ARM_BET_MANAGER_SERVICE_EVENT to a backup service</li>
+  </ul>
+  <div class="explanation">A choreography Saga is correct when ALL success and failure paths are handled. bet-manager-service must implement a compensating transaction for the case where advisory-service never responds. After a timeout (e.g. 30 seconds), bet-manager transitions PENDING → VOID and refunds the stake. This is a compensating transaction: it undoes the bet creation to maintain system consistency. Without this, every advisory-service outage leaves thousands of bets stuck in PENDING — a customer and regulatory nightmare in a gambling platform.</div>
+</div>
+
+<!-- Q21 -->
+<div class="question">
+  <span class="tag">Security</span>
+  <p>Q21. ARM uses JWT_SECRET as a Kubernetes Secret for lib-security. How is this secret injected into service pods?</p>
+  <ul class="options" data-correct="2">
+    <li>JWT_SECRET is hardcoded in application.yml and encrypted with Jasypt</li>
+    <li>Kubernetes Secrets are mounted as environment variables (JWT_SECRET env var) via the Helm chart's deployment.yaml; Spring reads them via ${JWT_SECRET} in application.yml — the actual secret value never appears in code or version control</li>
+    <li>Terraform outputs the JWT_SECRET value and GitLab CI injects it as a build argument</li>
+    <li>lib-security generates a new JWT_SECRET on each pod startup — all pods share the same one via Redis pub/sub</li>
+  </ul>
+  <div class="explanation">Kubernetes Secrets are base64-encoded values stored in etcd (encrypted at rest). The Helm deployment.yaml references the secret: `env: [{name: JWT_SECRET, valueFrom: {secretKeyRef: {name: arm-secrets, key: jwt-secret}}}]`. The pod gets the env var at startup. Spring Boot reads `${JWT_SECRET}` from the environment. The secret value is never in code, never in git, never in a Docker image. Terraform provisions the Kubernetes Secret object; only Kubernetes nodes and pods with the right RBAC can read it.</div>
+</div>
+
+<!-- Q22 -->
+<div class="question">
+  <span class="tag">Security</span>
+  <p>Q22. ARM has an audit-service consuming arm-dev.audit-service.changes. Why is an immutable audit trail essential for a gambling platform specifically?</p>
+  <ul class="options" data-correct="2">
+    <li>Audit logs improve Kafka consumer lag metrics</li>
+    <li>Gambling is a regulated industry: regulators can demand evidence of every odds change, bet placement, and settlement calculation; an immutable Kafka-backed audit log proves what happened and when, satisfying legal requirements and providing investigation evidence for disputed bets</li>
+    <li>audit-service is used to debug WebSocket connection issues</li>
+    <li>The audit trail feeds the machine learning model for bet recommendation</li>
+  </ul>
+  <div class="explanation">Gambling operators are regulated in the UK (UK Gambling Commission), EU (national regulators), and other jurisdictions. Regulations require: (1) records of all bets placed, odds offered, and settlements made; (2) ability to reconstruct any transaction history on demand; (3) evidence in case of customer disputes. Kafka's durable event log (configurable retention) + audit-service (writes events to immutable audit table) provides a tamper-evident chain of events. Kafka topic retention can be set to years for regulatory compliance. This is a non-negotiable legal requirement, not an engineering nice-to-have.</div>
+</div>
+
+<!-- Q23 -->
+<div class="question">
+  <span class="tag">SDLC</span>
+  <p>Q23. Danger (dangerfile.js) runs on every GitLab Merge Request. A PR has 600 changed lines and no test changes. Where does the developer see this warning?</p>
+  <ul class="options" data-correct="2">
+    <li>The GitLab CI pipeline fails with exit code 1 — the PR cannot be merged</li>
+    <li>Danger posts a comment on the MR itself AND sends a Slack alert to #arm-code-review — human reviewers see the flag and decide whether to approve or request test coverage</li>
+    <li>The developer's local IDE shows the warning via a Danger webhook</li>
+    <li>Danger emails the team lead automatically</li>
+  </ul>
+  <div class="explanation">Danger is advisory, not a hard gate. A 600-line PR without tests might be: a large refactor where tests already exist and weren't changed, a DB migration with no testable logic, or genuinely missing tests. The developer and reviewer decide. Danger's job is to surface the signal so it's not accidentally missed — not to block merges autonomously. Two channels (MR comment + Slack) ensure visibility even if the reviewer skips reading PR comments.</div>
+</div>
+
+<!-- Q24 -->
+<div class="question">
+  <span class="tag">SDLC</span>
+  <p>Q24. ARM has no @SpringBootTest integration tests. An engineer claims this is a gap. How do you defend this architectural decision?</p>
+  <ul class="options" data-correct="2">
+    <li>Spring Boot 3.5 automatically runs integration tests in prod; @SpringBootTest is obsolete</li>
+    <li>@SpringBootTest adds 15-30 seconds per test class; at 43 services × many test classes, CI becomes too slow for rapid iteration; unit tests + Mockito cover business logic; real infrastructure (Redis, Kafka, PostgreSQL) is verified via docker-compose locally and in arm-dev post-deploy; WireMock stubs external APIs in unit tests</li>
+    <li>ARM uses Testcontainers instead of @SpringBootTest — equivalent coverage without Spring context overhead</li>
+    <li>Integration tests are run quarterly in a separate test environment</li>
+  </ul>
+  <div class="explanation">This is an explicit architectural trade-off, not an oversight. 43 services × even 10 @SpringBootTest classes per service × 20 seconds startup = 8600 seconds = 143 minutes of CI just for context startup. At a team of 50+ engineers merging frequently, this is untenable. The alternative: unit tests verify all business logic in milliseconds; docker-compose local testing verifies real infrastructure integration; arm-dev namespace (post-merge auto-deploy) catches integration issues. The key insight: @SpringBootTest tests the wiring, not the business logic. Hexagonal architecture ensures business logic is testable without the Spring context.</div>
+</div>
+
+<!-- Q25 -->
+<div class="question">
+  <span class="tag">Observability</span>
+  <p>Q25. A Datadog monitor definition lives in arm-config/prod/datadog_monitors/ as a Terraform resource. Why not just configure it in the Datadog UI?</p>
+  <ul class="options" data-correct="2">
+    <li>Datadog UI does not support MSK or EKS metric sources</li>
+    <li>UI-configured monitors are ephemeral and undocumented: they can be accidentally deleted with no rollback, they diverge between dev and prod without anyone noticing, and changes have no code review or audit trail; Terraform-managed monitors are version-controlled, reviewed, reproducible, and environment-diffable</li>
+    <li>Terraform automatically generates optimal alert thresholds from Prometheus metrics</li>
+    <li>Datadog requires Terraform for enterprise licensing — it's a billing requirement</li>
+  </ul>
+  <div class="explanation">Infrastructure as Code applies to monitoring configuration too. If someone accidentally deletes a "Kafka consumer lag > 1000" monitor in the Datadog UI, the team is flying blind without knowing it. With Terraform: the monitor definition is in git, deletion requires a PR + review, application is by CI, rollback is git revert. Dev and prod monitors are separate resources with environment-appropriate thresholds. `terraform plan` shows what changed before applying. This is exactly the same reasoning as managing EKS, MSK, and Redis in Terraform rather than the AWS console.</div>
+</div>
+
+<div class="final-score" id="finalScore">
+  <h2>Study session complete</h2>
+  <div class="big-num" id="bigNum">—</div>
+  <p style="color:var(--muted);margin-top:0.5rem">out of 25</p>
+  <p id="scoreVerdict" style="margin-top:1rem;font-size:1rem;"></p>
+</div>
+
+<footer>ARM BettingCo Study Guide · Lesson 13 of 14 — Quiz Master</footer>
+
+<script>
+(function() {
+  let answered = 0;
+  let correct  = 0;
+  const total  = document.querySelectorAll('.question').length;
+
+  function updateProgress() {
+    document.getElementById('progressBar').style.width = (answered / total * 100) + '%';
+    document.getElementById('scoreDisplay').textContent = answered + ' / ' + total + ' answered  ·  ' + correct + ' correct';
+    if (answered === total) {
+      const el = document.getElementById('finalScore');
+      el.style.display = 'block';
+      document.getElementById('bigNum').textContent = correct;
+      const pct = Math.round(correct / total * 100);
+      let verdict = pct >= 80 ? 'Solid. You know this system.' :
+                    pct >= 60 ? 'Review lessons where you stumbled, then retry.' :
+                    'Re-read the relevant lessons and come back.';
+      document.getElementById('scoreVerdict').textContent = pct + '% — ' + verdict;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  document.querySelectorAll('.question').forEach(q => {
+    const opts    = q.querySelectorAll('li');
+    const correctIdx = parseInt(q.querySelector('.options').dataset.correct) - 1;
+    const expl    = q.querySelector('.explanation');
+    let   done    = false;
+    opts.forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (done) return;
+        done = true;
+        answered++;
+        if (i === correctIdx) {
+          li.classList.add('correct');
+          correct++;
+        } else {
+          li.classList.add('wrong');
+          opts[correctIdx].classList.add('reveal');
+        }
+        expl.classList.add('visible');
+        updateProgress();
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

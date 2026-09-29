@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Kafka Data Flow Diagram</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd; --bg-code: #f7f7f5;
+    --accent: #2563eb; --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg); max-width: 1300px;
+         margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p  { margin-bottom: 1rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  .diagram-wrap { width: 100%; overflow-x: auto; margin: 1.5rem 0 2rem;
+                  border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .diagram-wrap svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin: 1rem 0 2rem;
+            font-size: 0.85rem; font-family: monospace; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+  .legend-swatch { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.88rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem;
+       border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); font-family: monospace; font-size: 0.82rem; }
+  td:first-child { font-weight: bold; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>ARM BettingCo — Kafka Data Flow</h1>
+<div class="meta">Category: Projects · Topic: ARM BettingCo · Diagram 2 of 4 · Kafka Topics &amp; Consumer Groups</div>
+
+<p>ARM uses two isolated Kafka clusters. The WOODS cluster receives raw bookmaker feeds from 18 external sources — it is intentionally quarantined from internal systems. The BETTINGCO cluster (AWS Managed Streaming for Kafka) carries all internal service-to-service events. No service consumes directly from WOODS except the feed handlers, which normalise and re-publish to BETTINGCO.</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border-color:#d97706"></div>WOODS cluster (external feeds)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#fff7ed;border-color:#ea580c"></div>BETTINGCO MSK (internal)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#dcfce7;border-color:#16a34a"></div>Producers</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#dbeafe;border-color:#2563eb"></div>Consumers</div>
+  <div class="legend-item" style="display:flex;align-items:center;gap:0.4rem">
+    <svg width="32" height="12"><line x1="0" y1="6" x2="26" y2="6" stroke="#6b7280" stroke-width="2" stroke-dasharray="4,2"/><polygon points="26,3 32,6 26,9" fill="#6b7280"/></svg>
+    Kafka publish
+  </div>
+  <div class="legend-item" style="display:flex;align-items:center;gap:0.4rem">
+    <svg width="32" height="12"><line x1="0" y1="6" x2="26" y2="6" stroke="#6b7280" stroke-width="2"/><polygon points="26,3 32,6 26,9" fill="#6b7280"/></svg>
+    REST / internal call
+  </div>
+</div>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 980" font-family="Menlo,Consolas,monospace" font-size="10.5">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6b7280"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#dc2626"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1240" height="980" fill="#fafafa"/>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COLUMN 1: PRODUCERS (left)
+  ═══════════════════════════════════════════════════════ -->
+
+  <!-- External bookmakers -->
+  <rect x="10" y="14" width="148" height="240" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="84" y="34" text-anchor="middle" font-weight="bold" fill="#92400e" font-size="11">External Bookmakers</text>
+  <text x="84" y="50" text-anchor="middle" fill="#78350f" font-size="9">WOODS cluster</text>
+  <text x="84" y="62" text-anchor="middle" fill="#78350f" font-size="9">192.168.26.101-103:9092</text>
+
+  <!-- bookie boxes -->
+  <rect x="20" y="70" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="82" text-anchor="middle" fill="#78350f">Betfair</text>
+  <rect x="20" y="90" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="102" text-anchor="middle" fill="#78350f">SIS</text>
+  <rect x="20" y="110" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="122" text-anchor="middle" fill="#78350f">Vermantia</text>
+  <rect x="20" y="130" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="142" text-anchor="middle" fill="#78350f">1st Exchange</text>
+  <rect x="20" y="150" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="162" text-anchor="middle" fill="#78350f">Sporting Life</text>
+  <rect x="20" y="170" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="182" text-anchor="middle" fill="#78350f">Racing Post</text>
+  <rect x="20" y="190" width="128" height="16" rx="2" fill="#fde68a" stroke="#d97706"/>
+  <text x="84" y="202" text-anchor="middle" fill="#78350f">+ 12 others</text>
+  <text x="84" y="226" text-anchor="middle" fill="#92400e" font-size="9">18 feed handlers total</text>
+  <text x="84" y="240" text-anchor="middle" fill="#92400e" font-size="9">one pod per bookmaker</text>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COLUMN 2: WOODS KAFKA TOPICS
+  ═══════════════════════════════════════════════════════ -->
+  <rect x="172" y="14" width="218" height="240" rx="6" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="281" y="34" text-anchor="middle" font-weight="bold" fill="#9a3412" font-size="11">WOODS Kafka Topics</text>
+  <text x="281" y="50" text-anchor="middle" fill="#9a3412" font-size="9">(external feed isolation cluster)</text>
+
+  <rect x="182" y="60" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="72" text-anchor="middle" fill="#9a3412">betfair.odds.horse.uk</text>
+  <rect x="182" y="80" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="92" text-anchor="middle" fill="#9a3412">betfair.odds.dog.uk</text>
+  <rect x="182" y="100" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="112" text-anchor="middle" fill="#9a3412">sis.racecard.horse.uk</text>
+  <rect x="182" y="120" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="132" text-anchor="middle" fill="#9a3412">vermantia.racecard.dog.uk</text>
+  <rect x="182" y="140" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="152" text-anchor="middle" fill="#9a3412">{bookie}.racecard.{sport}.{region}</text>
+  <rect x="182" y="160" width="198" height="16" rx="2" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="281" y="172" text-anchor="middle" fill="#9a3412">{bookie}.odds.{sport}.{region}</text>
+  <text x="281" y="210" text-anchor="middle" fill="#c2410c" font-size="9">at-least-once delivery</text>
+  <text x="281" y="224" text-anchor="middle" fill="#c2410c" font-size="9">key = feedName:feedCode</text>
+  <text x="281" y="238" text-anchor="middle" fill="#c2410c" font-size="9">revision cache prevents out-of-order</text>
+
+  <!-- bookmakers → WOODS topics -->
+  <line x1="158" y1="135" x2="172" y2="135" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COLUMN 3: FEED HANDLERS (bridge)
+  ═══════════════════════════════════════════════════════ -->
+  <rect x="404" y="14" width="188" height="240" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="498" y="34" text-anchor="middle" font-weight="bold" fill="#14532d" font-size="11">Feed Handlers</text>
+  <text x="498" y="50" text-anchor="middle" fill="#14532d" font-size="9">lib-feed-handlers · FeedRaceBroadcaster</text>
+
+  <rect x="414" y="60" width="168" height="16" rx="2" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="498" y="72" text-anchor="middle" fill="#14532d">feed-handler-betfair</text>
+  <rect x="414" y="80" width="168" height="16" rx="2" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="498" y="92" text-anchor="middle" fill="#14532d">feed-handler-sis</text>
+  <rect x="414" y="100" width="168" height="16" rx="2" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="498" y="112" text-anchor="middle" fill="#14532d">feed-handler-vermantia</text>
+  <rect x="414" y="120" width="168" height="16" rx="2" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="498" y="132" text-anchor="middle" fill="#14532d">feed-handler-1st-exchange</text>
+  <rect x="414" y="140" width="168" height="16" rx="2" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="498" y="152" text-anchor="middle" fill="#14532d">+ 14 others</text>
+
+  <text x="498" y="190" text-anchor="middle" fill="#14532d" font-size="9">Normalise → ArmEvent / FeedRaceDto</text>
+  <text x="498" y="204" text-anchor="middle" fill="#14532d" font-size="9">@Transactional broadcast()</text>
+  <text x="498" y="218" text-anchor="middle" fill="#14532d" font-size="9">revision check prevents replays</text>
+  <text x="498" y="232" text-anchor="middle" fill="#14532d" font-size="9">KafkaTemplate.sendDefault(key, dto)</text>
+
+  <!-- WOODS → feed handlers -->
+  <line x1="390" y1="135" x2="404" y2="135" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COLUMN 4: BETTINGCO MSK TOPICS (centre)
+  ═══════════════════════════════════════════════════════ -->
+  <rect x="606" y="14" width="260" height="940" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="736" y="40" text-anchor="middle" font-weight="bold" fill="#9a3412" font-size="13">BETTINGCO MSK</text>
+  <text x="736" y="58" text-anchor="middle" fill="#9a3412" font-size="10">msk-broker-1,2,3.dev.bettingcosport.com:9092</text>
+  <text x="736" y="73" text-anchor="middle" fill="#c2410c" font-size="9">at-least-once · consumer groups · keyed by eventId</text>
+
+  <!-- topic blocks -->
+  <!-- T1 -->
+  <rect x="616" y="90" width="240" height="46" rx="4" fill="#fed7aa" stroke="#ea580c" stroke-width="1.2"/>
+  <text x="736" y="108" text-anchor="middle" font-weight="bold" fill="#9a3412">arm-dev.event-service.json</text>
+  <text x="736" y="122" text-anchor="middle" fill="#9a3412" font-size="9">partitions: by eventId · all event state changes</text>
+  <text x="736" y="134" text-anchor="middle" fill="#c2410c" font-size="9">producer: event-service · consumers: sportsbook-service, pricing-service</text>
+
+  <!-- T2 -->
+  <rect x="616" y="148" width="240" height="46" rx="4" fill="#fed7aa" stroke="#ea580c" stroke-width="1.2"/>
+  <text x="736" y="166" text-anchor="middle" font-weight="bold" fill="#9a3412">arm-dev.event-service-inplay.json</text>
+  <text x="736" y="180" text-anchor="middle" fill="#9a3412" font-size="9">in-running events only · high frequency</text>
+  <text x="736" y="192" text-anchor="middle" fill="#c2410c" font-size="9">producer: event-service · consumers: sportsbook-service, pricing-service</text>
+
+  <!-- T3 -->
+  <rect x="616" y="206" width="240" height="46" rx="4" fill="#fed7aa" stroke="#ea580c" stroke-width="1.2"/>
+  <text x="736" y="224" text-anchor="middle" font-weight="bold" fill="#9a3412">arm-dev.event-service.cerberus-meeting-update</text>
+  <text x="736" y="238" text-anchor="middle" fill="#9a3412" font-size="9">trader UI meeting state · status changes</text>
+  <text x="736" y="250" text-anchor="middle" fill="#c2410c" font-size="9">producer: event-service · consumer: cerberus-ui (STOMP topic)</text>
+
+  <!-- T4 -->
+  <rect x="616" y="264" width="240" height="46" rx="4" fill="#fed7aa" stroke="#ea580c" stroke-width="1.2"/>
+  <text x="736" y="282" text-anchor="middle" font-weight="bold" fill="#9a3412">arm-dev.event-service.price-histories</text>
+  <text x="736" y="296" text-anchor="middle" fill="#9a3412" font-size="9">odds history snapshots · analytics</text>
+  <text x="736" y="308" text-anchor="middle" fill="#c2410c" font-size="9">producer: event-service · consumer: pricing-service</text>
+
+  <!-- T5 -->
+  <rect x="616" y="322" width="240" height="46" rx="4" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+  <text x="736" y="340" text-anchor="middle" font-weight="bold" fill="#7f1d1d">ARM_BET_MANAGER_SERVICE_EVENT</text>
+  <text x="736" y="354" text-anchor="middle" fill="#7f1d1d" font-size="9">bet placed · triggers advisory risk check</text>
+  <text x="736" y="366" text-anchor="middle" fill="#991b1b" font-size="9">producer: bet-manager-service · consumer: advisory-service</text>
+
+  <!-- T6 -->
+  <rect x="616" y="380" width="240" height="46" rx="4" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+  <text x="736" y="398" text-anchor="middle" font-weight="bold" fill="#7f1d1d">test-local.arm-dev.bet-settlement</text>
+  <text x="736" y="412" text-anchor="middle" fill="#7f1d1d" font-size="9">batch settlement trigger · List&lt;BetStatusDto&gt;</text>
+  <text x="736" y="424" text-anchor="middle" fill="#991b1b" font-size="9">producer: settlement-service · consumer: bet-manager-service</text>
+
+  <!-- T7 -->
+  <rect x="616" y="438" width="240" height="46" rx="4" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+  <text x="736" y="456" text-anchor="middle" font-weight="bold" fill="#7f1d1d">arm-dev.bet-updates.json</text>
+  <text x="736" y="470" text-anchor="middle" fill="#7f1d1d" font-size="9">settled bet result → browser push</text>
+  <text x="736" y="482" text-anchor="middle" fill="#991b1b" font-size="9">producer: bet-manager-service · consumer: sportsbook-service</text>
+
+  <!-- T8 -->
+  <rect x="616" y="496" width="240" height="46" rx="4" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/>
+  <text x="736" y="514" text-anchor="middle" font-weight="bold" fill="#4c1d95">test-local.advisories.messages</text>
+  <text x="736" y="528" text-anchor="middle" fill="#4c1d95" font-size="9">advisory recommendation log</text>
+  <text x="736" y="540" text-anchor="middle" fill="#5b21b6" font-size="9">producer: advisory-service · consumer: (analytics / logging)</text>
+
+  <!-- T9 -->
+  <rect x="616" y="554" width="240" height="46" rx="4" fill="#dbeafe" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="736" y="572" text-anchor="middle" font-weight="bold" fill="#1e3a8a">arm-dev.audit-service.changes</text>
+  <text x="736" y="586" text-anchor="middle" fill="#1e3a8a" font-size="9">immutable audit log · all domain changes</text>
+  <text x="736" y="598" text-anchor="middle" fill="#1e40af" font-size="9">producer: multiple services · consumer: audit-service</text>
+
+  <!-- T10 -->
+  <rect x="616" y="612" width="240" height="46" rx="4" fill="#dbeafe" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="736" y="630" text-anchor="middle" font-weight="bold" fill="#1e3a8a">arm-dev.commands.json</text>
+  <text x="736" y="644" text-anchor="middle" fill="#1e3a8a" font-size="9">internal commands → event-service</text>
+  <text x="736" y="656" text-anchor="middle" fill="#1e40af" font-size="9">producer: sportsbook-service · consumer: event-service</text>
+
+  <!-- T11 -->
+  <rect x="616" y="670" width="240" height="46" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="736" y="688" text-anchor="middle" font-weight="bold" fill="#14532d">betfair.odds.horse.uk (BETTINGCO copy)</text>
+  <text x="736" y="702" text-anchor="middle" fill="#14532d" font-size="9">mirrored via feed handler from WOODS</text>
+  <text x="736" y="714" text-anchor="middle" fill="#166534" font-size="9">producer: feed-handler-betfair · consumer: event-service</text>
+
+  <text x="736" y="756" text-anchor="middle" fill="#9a3412" font-size="10" font-weight="bold">Consumer Group IDs</text>
+  <text x="736" y="774" text-anchor="middle" fill="#9a3412" font-size="9">sportsbook-service: sportsbook-consumer-group</text>
+  <text x="736" y="788" text-anchor="middle" fill="#9a3412" font-size="9">bet-manager-service: test-local.arm-dev.bet-settlement (idIsGroup=false)</text>
+  <text x="736" y="802" text-anchor="middle" fill="#9a3412" font-size="9">advisory-service: advisory-consumer-group</text>
+  <text x="736" y="816" text-anchor="middle" fill="#9a3412" font-size="9">pricing-service: pricing-consumer-group</text>
+  <text x="736" y="830" text-anchor="middle" fill="#9a3412" font-size="9">audit-service: audit-consumer-group</text>
+  <text x="736" y="848" text-anchor="middle" fill="#c2410c" font-size="9" font-weight="bold">@ConditionalOnProperty: kafka.consumer.settlement.enabled=true</text>
+  <text x="736" y="864" text-anchor="middle" fill="#c2410c" font-size="9">batch listener: List&lt;BetStatusDto&gt; (settlementContainerFactory)</text>
+  <text x="736" y="882" text-anchor="middle" fill="#c2410c" font-size="9">key=eventId prevents cross-partition ordering issues</text>
+  <text x="736" y="900" text-anchor="middle" fill="#c2410c" font-size="9">KafkaTemplate.sendDefault → default topic from properties</text>
+
+  <!-- feed handlers → BETTINGCO -->
+  <line x1="592" y1="100" x2="606" y2="113" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-green)"/>
+  <text x="596" y="107" fill="#16a34a" font-size="9">racecard</text>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COLUMN 5: CONSUMERS (right)
+  ═══════════════════════════════════════════════════════ -->
+
+  <!-- event-service -->
+  <rect x="880" y="14" width="178" height="66" rx="5" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="969" y="36" text-anchor="middle" font-weight="bold" fill="#1e3a8a">event-service</text>
+  <text x="969" y="52" text-anchor="middle" fill="#1e3a8a" font-size="9">:8081 · PostgreSQL · Quartz</text>
+  <text x="969" y="66" text-anchor="middle" fill="#1e3a8a" font-size="9">owns events/races/markets/runners</text>
+
+  <!-- sportsbook-service -->
+  <rect x="880" y="94" width="178" height="66" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="969" y="116" text-anchor="middle" font-weight="bold" fill="#4c1d95">sportsbook-service</text>
+  <text x="969" y="130" text-anchor="middle" fill="#4c1d95" font-size="9">:8082 · STOMP hub</text>
+  <text x="969" y="144" text-anchor="middle" fill="#4c1d95" font-size="9">Redis cache → RabbitMQ → browser</text>
+
+  <!-- pricing-service -->
+  <rect x="880" y="174" width="178" height="66" rx="5" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="969" y="196" text-anchor="middle" font-weight="bold" fill="#713f12">pricing-service</text>
+  <text x="969" y="210" text-anchor="middle" fill="#713f12" font-size="9">Redis: streamOutcomePricesCache 12h</text>
+  <text x="969" y="224" text-anchor="middle" fill="#713f12" font-size="9">odds calculation · advisory input</text>
+
+  <!-- advisory-service -->
+  <rect x="880" y="254" width="178" height="52" rx="5" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="969" y="272" text-anchor="middle" font-weight="bold" fill="#713f12">advisory-service</text>
+  <text x="969" y="286" text-anchor="middle" fill="#713f12" font-size="9">risk evaluation · bet approval</text>
+  <text x="969" y="300" text-anchor="middle" fill="#713f12" font-size="9">publishes advisories topic</text>
+
+  <!-- bet-manager-service (consumer of settlement) -->
+  <rect x="880" y="320" width="178" height="66" rx="5" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="969" y="342" text-anchor="middle" font-weight="bold" fill="#7f1d1d">bet-manager-service</text>
+  <text x="969" y="356" text-anchor="middle" fill="#7f1d1d" font-size="9">bet placement · @Retryable</text>
+  <text x="969" y="370" text-anchor="middle" fill="#7f1d1d" font-size="9">settlement consumer · SELECT pre-check</text>
+
+  <!-- settlement-service -->
+  <rect x="880" y="400" width="178" height="52" rx="5" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="969" y="422" text-anchor="middle" font-weight="bold" fill="#7f1d1d">settlement-service</text>
+  <text x="969" y="436" text-anchor="middle" fill="#7f1d1d" font-size="9">routes trigger · betsApi REST · publishes batch</text>
+  <text x="969" y="450" text-anchor="middle" fill="#7f1d1d" font-size="9">test-local.arm-dev.bet-settlement (List&lt;BetStatusDto&gt;)</text>
+
+  <!-- audit-service -->
+  <rect x="880" y="466" width="178" height="52" rx="5" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="969" y="488" text-anchor="middle" font-weight="bold" fill="#374151">audit-service</text>
+  <text x="969" y="502" text-anchor="middle" fill="#374151" font-size="9">immutable audit log consumer</text>
+  <text x="969" y="516" text-anchor="middle" fill="#374151" font-size="9">arm-dev.audit-service.changes</text>
+
+  <!-- Arrows: BETTINGCO topics → consumers -->
+
+  <!-- T1 arm-dev.event-service.json → event-service (commands back) -->
+  <line x1="866" y1="113" x2="880" y2="47" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-blue)"/>
+
+  <!-- T1,T2 → sportsbook-service -->
+  <line x1="866" y1="155" x2="880" y2="127" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-purple)"/>
+
+  <!-- T1,T2,T4 → pricing-service -->
+  <line x1="866" y1="200" x2="880" y2="207" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- T5 → advisory-service -->
+  <line x1="866" y1="345" x2="880" y2="280" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- T6 test-local.arm-dev.bet-settlement → bet-manager -->
+  <line x1="866" y1="403" x2="880" y2="353" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-red)"/>
+
+  <!-- T7 arm-dev.bet-updates.json → sportsbook-service -->
+  <line x1="866" y1="461" x2="969" y2="160" stroke="#7c3aed" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-purple)"/>
+
+  <!-- T9 arm-dev.audit-service.changes → audit-service -->
+  <line x1="866" y1="577" x2="880" y2="492" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- event-service → BETTINGCO topics (produces) -->
+  <text x="840" y="92" text-anchor="middle" fill="#2563eb" font-size="8">publishes</text>
+  <text x="840" y="102" text-anchor="middle" fill="#2563eb" font-size="8">↙ T1/T2/T3/T4</text>
+
+  <!-- bet-manager → BETTINGCO (produces T5, T7) -->
+  <text x="840" y="340" text-anchor="middle" fill="#dc2626" font-size="8">publishes T5</text>
+
+</svg>
+</div>
+
+<h2>Full Topic Reference Table</h2>
+<table>
+  <thead><tr><th>Topic</th><th>Cluster</th><th>Producer</th><th>Consumer(s)</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>betfair.odds.horse.uk</td><td>WOODS</td><td>Betfair</td><td>feed-handler-betfair</td><td>Raw Betfair horse odds</td></tr>
+    <tr><td>betfair.odds.dog.uk</td><td>WOODS</td><td>Betfair</td><td>feed-handler-betfair</td><td>Raw Betfair dog odds</td></tr>
+    <tr><td>{bookie}.racecard.{sport}.{region}</td><td>WOODS</td><td>Bookmakers</td><td>feed-handler-*</td><td>Raw racecard data per bookie</td></tr>
+    <tr><td>arm-dev.event-service.json</td><td>BETTINGCO</td><td>event-service</td><td>sportsbook-service, pricing-service</td><td>All event state changes</td></tr>
+    <tr><td>arm-dev.event-service-inplay.json</td><td>BETTINGCO</td><td>event-service</td><td>sportsbook-service, pricing-service</td><td>In-running event updates</td></tr>
+    <tr><td>arm-dev.event-service.cerberus-meeting-update</td><td>BETTINGCO</td><td>event-service</td><td>sportsbook-service → cerberus-ui</td><td>Trader meeting status changes</td></tr>
+    <tr><td>arm-dev.event-service.price-histories</td><td>BETTINGCO</td><td>event-service</td><td>pricing-service</td><td>Historical odds snapshots</td></tr>
+    <tr><td>ARM_BET_MANAGER_SERVICE_EVENT</td><td>BETTINGCO</td><td>bet-manager-service</td><td>advisory-service</td><td>New bet → advisory risk check</td></tr>
+    <tr><td>test-local.arm-dev.bet-settlement</td><td>BETTINGCO</td><td>settlement-service</td><td>bet-manager-service</td><td>Batch settlement (List&lt;BetStatusDto&gt;)</td></tr>
+    <tr><td>arm-dev.bet-updates.json</td><td>BETTINGCO</td><td>bet-manager-service</td><td>sportsbook-service</td><td>Settled bet result → STOMP push</td></tr>
+    <tr><td>test-local.advisories.messages</td><td>BETTINGCO</td><td>advisory-service</td><td>analytics/logging</td><td>Advisory recommendation log</td></tr>
+    <tr><td>arm-dev.audit-service.changes</td><td>BETTINGCO</td><td>multiple</td><td>audit-service</td><td>Immutable domain audit log</td></tr>
+    <tr><td>arm-dev.commands.json</td><td>BETTINGCO</td><td>sportsbook-service</td><td>event-service</td><td>Internal commands</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Why two Kafka clusters instead of one?</strong>
+  WOODS isolates third-party instability. If Betfair sends a burst of malformed messages or goes offline, only the WOODS cluster is affected. Internal BETTINGCO MSK stays clean. Feed handlers act as the bridge — they consume from WOODS, normalise to the ARM canonical model, and publish to BETTINGCO. If a feed handler crashes, no other service is affected — it simply stops publishing on its topic.
+</div>
+
+<div class="callout">
+  <strong>at-least-once delivery + idempotency</strong>
+  Kafka guarantees at-least-once: a message may be replayed on consumer restart. bet-manager-service prevents duplicate slip placement via a SELECT pre-check on <code>(sportsbookTenantId, sportsbookRef)</code> before INSERT — if a matching row exists, it returns the existing slip ID without creating a new bet. The Broadcaster in event-service tracks a revision per event to prevent out-of-order publishes — if a message arrives with revision N but the current revision is N+1, it is discarded.
+</div>
+
+<footer>ARM BettingCo Study Guide · Architecture Diagram 2 of 4 · Kafka Data Flow</footer>
+</body>
+</html>

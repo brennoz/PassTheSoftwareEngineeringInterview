@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Behavioural Interview Questions</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6;--reveal-bg:#fffbeb}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1rem;margin:.6rem 0 .3rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  p{margin-bottom:.8rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.pass{border-color:var(--pass)}
+  .callout.warn{border-color:var(--warn)}
+  .callout strong{display:block;margin-bottom:.3rem;font-size:.88rem;font-family:monospace}
+
+  /* Question card */
+  .q-card{border:1px solid var(--border);border-radius:8px;margin:2rem 0;overflow:hidden}
+  .q-header{background:var(--sidebar);padding:1rem 1.2rem;border-bottom:1px solid var(--border)}
+  .q-header .q-num{font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:.2rem}
+  .q-header .q-text{font-size:1.05rem;font-weight:bold;color:var(--ink)}
+  .q-body{padding:1.2rem}
+
+  /* STAR skeleton */
+  .star-grid{display:grid;grid-template-columns:80px 1fr;gap:.5rem .8rem;margin-bottom:1rem;font-size:.92rem}
+  .star-label{font-family:monospace;font-weight:bold;font-size:.8rem;color:var(--accent);padding-top:.15rem}
+  .star-label.t{color:#7c3aed}
+  .star-label.a{color:var(--pass)}
+  .star-label.r{color:var(--warn)}
+
+  /* Key phrases */
+  .phrases{margin:.8rem 0;font-size:.88rem}
+  .phrases strong{display:block;color:var(--muted);margin-bottom:.3rem;font-family:monospace;font-size:.8rem;text-transform:uppercase}
+  .phrase-tag{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:4px;padding:.15em .5em;margin:.15em;font-family:monospace;font-size:.78rem}
+
+  /* Reveal */
+  .reveal-toggle{background:var(--accent);color:#fff;border:none;padding:.5rem 1rem;border-radius:5px;cursor:pointer;font-size:.85rem;margin-top:.5rem;font-family:monospace}
+  .reveal-toggle:hover{background:#1d4ed8}
+  .reveal-content{display:none;background:var(--reveal-bg);border:1px solid #fde68a;border-radius:6px;padding:1rem 1.2rem;margin-top:.8rem;font-size:.92rem;line-height:1.7}
+  .reveal-content.visible{display:block}
+  .reveal-content em{color:var(--muted);font-style:normal;font-size:.85rem}
+
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>Behavioural Interview Questions</h1>
+<div class="meta">Opayo interview prep · STAR skeleton + model answer · 10 questions</div>
+
+<div class="callout">
+  <strong>How to use this page</strong>
+  Each question has a STAR skeleton — four bullet-point anchors to structure your spoken answer. Study the skeleton first; it's what you personalise and deliver naturally. Click "Show model answer" to read a full written version and check you're hitting the right themes. The key phrases are what the interviewer is listening for — land at least two per answer.
+</div>
+
+<div class="callout pass">
+  <strong>STAR format reminder</strong>
+  <strong>S</strong>ituation — set the scene briefly (1-2 sentences). <strong>T</strong>ask — what was your specific responsibility. <strong>A</strong>ction — what YOU did (not "we" — own it). <strong>R</strong>esult — measurable outcome + what you learned. Target 90-120 seconds per answer. Silence at the end is fine — don't fill with hedging.
+</div>
+
+<!-- Q1 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q1</div>
+    <div class="q-text">Tell me about yourself and your background.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">NOW</span><span>Senior Software Engineer, ARM BettingCo — real-money sports betting risk platform, Java/Spring Boot/Kafka/EKS, 40+ microservices, production for major bookmakers.</span>
+      <span class="star-label t">PATH</span><span>Background in backend/distributed systems — [X years], worked across [relevant domains]. Always drawn to high-throughput, low-latency, financially critical systems.</span>
+      <span class="star-label a">WHY</span><span>At ARM the stakes were real: wrong odds or a duplicate bet meant direct financial loss. That forced genuine engineering discipline — idempotency, exactly-once, observability — not checkbox discipline.</span>
+      <span class="star-label r">NEXT</span><span>Looking for Opayo because payments is the same domain at higher stakes: same patterns (idempotency, saga, circuit breaker) but with PCI-DSS, card scheme integration, and multi-currency complexity I want to own.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">financially critical</span>
+      <span class="phrase-tag">high-throughput, low-latency</span>
+      <span class="phrase-tag">idempotency as discipline</span>
+      <span class="phrase-tag">same patterns, higher stakes</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      I'm a backend software engineer specialised in distributed, event-driven systems on the JVM. For the past [X years] I've been working on ARM BettingCo — a real-time sports betting risk platform that processes live odds feeds from 18 bookmakers, routes bets through a multi-step advisory and settlement saga, and pushes real-time updates to thousands of concurrent WebSocket clients. The stack is Java 21, Spring Boot 3.5, Kafka, Redis, PostgreSQL, deployed on AWS EKS with Helm and GitLab CI.<br><br>
+      What I value about that experience is the financial consequence of getting it wrong. A duplicate bet means a double deduction. A settlement bug means wrong payouts. That forces you to care about idempotency not as an academic concept but as a first-class production concern. I implemented idempotency at DB constraint level, used outbox pattern for exactly-once event delivery, and built circuit breakers on every external dependency.<br><br>
+      I'm interested in Opayo specifically because card payment processing is the same class of problem: financially critical, idempotency-mandatory, high-throughput — but with the added dimension of PCI-DSS compliance and card scheme protocols I want to grow into.
+      <em>— ~110 words spoken, ~75 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q2 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q2</div>
+    <div class="q-text">Why Opayo? Why payments specifically?</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">HOOK</span><span>ARM taught me that the most interesting engineering happens when money is on the line — wrong answer means real loss, not just a bad user experience.</span>
+      <span class="star-label t">OVERLAP</span><span>Idempotency, saga, circuit breaker, Kafka at-least-once — I've already solved these at ARM. Opayo means solving them at higher stakes with PCI-DSS and card scheme complexity.</span>
+      <span class="star-label a">GAP</span><span>What ARM didn't give me: tokenisation vaults, card scheme protocol (ISO 8583/20022), multi-currency settlement, 3DS2 authentication. These are the technical growth I'm looking for.</span>
+      <span class="star-label r">FIT</span><span>Opayo's scale — 50,000+ merchants, billions of transactions — means the engineering problems I care about (distributed consistency, zero-downtime, fault isolation) are genuinely hard here.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">money on the line = real engineering discipline</span>
+      <span class="phrase-tag">PCI-DSS as new dimension</span>
+      <span class="phrase-tag">transferable patterns + new depth</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      At ARM, every bug had a financial consequence. That raised the engineering bar in a way that most systems don't — you can't ship "good enough" when a settlement bug means wrong payouts to real people. That environment taught me to treat idempotency, exactly-once, and distributed consistency as non-negotiable, not nice-to-have.<br><br>
+      Opayo is the same class of problem at higher stakes: the same need for idempotent payment processing, the same saga choreography for capture and settlement, the same circuit breaker discipline on external calls — but now with card scheme protocols, PCI-DSS data handling, and multi-currency settlement that I want to own end-to-end. The Opayo scale — billions of transactions, 50,000+ merchants — means the distributed systems challenges I care about are real and unsolved, not theoretical.<br><br>
+      And practically: Elavon's backing means the infrastructure investment is serious. This isn't a startup hoping to scale — it's a platform that already has the load and needs engineers who can maintain and evolve it safely.
+      <em>— ~120 words, ~80 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q3 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q3</div>
+    <div class="q-text">Tell me about a significant technical challenge you overcame.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>During a major race meeting, settlement-service Kafka consumer started lagging — 10,000 messages behind. Bets were not being settled. Financial exposure growing with every minute.</span>
+      <span class="star-label t">T</span><span>My responsibility: diagnose root cause, restore settlement, prevent recurrence — without losing any messages or double-settling.</span>
+      <span class="star-label a">A</span><span>Used kafka-consumer-groups.sh to confirm consumer dead (CrashLoopBackOff). kubectl logs --previous revealed OOMKill from oversized batch (5,000 records, 512Mi limit). Reduced batch size to 200 via ConfigMap change (no redeploy needed). Consumer recovered and cleared lag in ~10 minutes. Root cause: environment-specific batch size not caught in arm-int (lower volume). Added consumer lag Datadog monitor + memory alert at 80% heap.</span>
+      <span class="star-label r">R</span><span>Zero messages lost (Kafka guaranteed delivery). Zero double-settlements (SettlementEngine checks current bet status before applying SETTLED — replayed messages are skipped). Incident resolved in 22 minutes. Monitor now fires before OOM recurs.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">kafka-consumer-groups.sh</span>
+      <span class="phrase-tag">OOMKill diagnosis</span>
+      <span class="phrase-tag">zero messages lost</span>
+      <span class="phrase-tag">idempotency prevented double-settlement</span>
+      <span class="phrase-tag">monitor to prevent recurrence</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      During a major race meeting, I was paged because our settlement-service Kafka consumer was 10,000 messages behind. Every unprocessed message was a bet not settled — direct financial exposure for the platform.<br><br>
+      My first step was to confirm the consumer was actually dead, not just slow: <code>kafka-consumer-groups.sh --describe --group ARM_BET_SETTLEMENT</code> showed the consumer ID as blank — the pod had crashed. <code>kubectl logs --previous</code> revealed a Java heap space OOMKill. The batch size had been set to 5,000 for a performance experiment and never reverted — fine in our lower-volume arm-int environment, lethal on race day with real load.<br><br>
+      I changed the batch size from 5,000 to 200 via a ConfigMap update — no redeploy, just a rolling restart. The consumer reconnected, started processing at 200 messages per poll, and cleared the lag in 9 minutes.<br><br>
+      Zero messages were lost because Kafka guaranteed at-least-once delivery from committed offsets. Zero double-settlements because bet-manager's SettlementEngine checks current bet status before writing SETTLED — if a message is replayed to an already-settled bet, the engine skips it without reprocessing. After the incident I added two Datadog monitors: Kafka consumer lag threshold and JVM heap usage at 80%. Both would have fired 15 minutes before the OOM on that day.
+      <em>— ~145 words, ~95 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q4 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q4</div>
+    <div class="q-text">Tell me about a time you disagreed with a technical decision.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>Team was debating how to implement cross-cutting cache invalidation in TenantService. The proposed approach used a plain <code>this</code> reference for @Cacheable — which silently bypasses Spring's proxy and makes caching a no-op.</span>
+      <span class="star-label t">T</span><span>I disagreed: the proposed approach looked correct but would fail silently in production. Needed to convince the team without blocking the sprint.</span>
+      <span class="star-label a">A</span><span>I wrote a failing unit test that proved the no-proxy issue — the cache was never populated when called via <code>this</code>. Then proposed the self-injection pattern: inject the Spring proxy as a constructor dependency. Showed it in a spike branch. Walked the team through WHY Spring proxies work this way (CGLIB subclass, method interception only on external calls).</span>
+      <span class="star-label r">R</span><span>Team adopted self-injection. Test became part of CI. Later caught another instance of the same anti-pattern in a different service. The test-first approach meant the disagreement was settled by evidence, not opinion.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">test as evidence not opinion</span>
+      <span class="phrase-tag">failing silently in production</span>
+      <span class="phrase-tag">spike branch to prove the point</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      We were implementing Redis caching on TenantService — a hot path called on every authenticated request. A colleague proposed calling the cached method directly as <code>this.getTenant(id)</code> within the same class. That looks correct but silently bypasses Spring's CGLIB proxy — @Cacheable only intercepts external method calls through the proxy, not internal <code>this</code> calls. The cache would never be populated, and we'd never see an error — just Redis never being used.<br><br>
+      Rather than arguing in a PR comment, I wrote a unit test that demonstrated the bug: mock the Redis cache, call the method via <code>this</code>, assert cache was never populated. The test failed, proving the point without rhetoric. I then created a spike branch with the self-injection fix: inject the bean's own Spring proxy as a constructor dependency and call through that. Ran the test again — green.<br><br>
+      The team adopted the pattern. The test lives in CI. Three months later it caught the same anti-pattern in a different service before it reached production. My lesson: technical disagreements should be resolved by evidence. A five-minute spike that proves the bug beats three rounds of back-and-forth in PR comments.
+      <em>— ~150 words, ~100 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q5 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q5</div>
+    <div class="q-text">Tell me about a time you influenced without formal authority.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>ARM BettingCo had inconsistent idempotency across services — some had it, some didn't. No cross-team standard. Multiple services were at risk of duplicate processing on retry.</span>
+      <span class="star-label t">T</span><span>I wasn't the tech lead. I had no mandate to change other services. But the risk was real and the fix was teachable.</span>
+      <span class="star-label a">A</span><span>Wrote an internal one-pager: "Idempotency at ARM — pattern, why, implementation." Shared it in the engineering Slack channel. Built a reference implementation in bet-manager-service (SELECT pre-check on the natural business key before any state-changing INSERT). Offered to pair-review PRs in other services that added the same pattern. Within one sprint, three other services adopted it independently.</span>
+      <span class="star-label r">R</span><span>Pattern became de facto standard. Added to our PR review checklist under "write endpoints." No authority used — just a clear explanation of the risk, a working example, and availability to help.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">one-pager + reference implementation</span>
+      <span class="phrase-tag">made it easy to adopt, not mandatory</span>
+      <span class="phrase-tag">PR checklist as lasting artefact</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      Idempotency handling across ARM BettingCo was inconsistent — bet-manager had it, but three other services processing financial writes didn't. Any of those services could double-process on a Kafka consumer replay. I wasn't the tech lead and had no mandate to enforce changes in other teams' code.<br><br>
+      My approach was to make the correct thing easy and the incorrect thing visible. I wrote a short internal doc: the problem (what double-processing looks like in production), the pattern (SELECT pre-check on the natural business key before any state-changing INSERT — if a record with that key already exists, return the existing result rather than inserting again), and a working implementation in bet-manager-service that anyone could copy. I shared it in our Slack engineering channel, not as a mandate but as "here's what I built and why." I offered to pair on PRs for anyone adding the pattern to their service.<br><br>
+      Within a sprint, three services had adopted it — not because I told them to, but because the reference implementation was clear and the risk was explained concretely. We added "idempotency check: does this write endpoint check for an existing record before inserting?" to our PR review checklist, so the standard lives in the process now, not in my memory.
+      <em>— ~145 words, ~95 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q6 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q6</div>
+    <div class="q-text">Tell me about a failure and what you learned.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>I deployed a change to pricing-service that removed a Redis TTL from a cache configuration — a one-line change I considered trivial, didn't flag for extra review.</span>
+      <span class="star-label t">T</span><span>No immediate error. Four hours later Redis memory was full — 2.4 million keys with no expiry. Cache eviction started, pricing slowed, error rate climbed.</span>
+      <span class="star-label a">A</span><span>Diagnosed via redis-cli INFO memory — maxmemory nearly reached, eviction rate high. Found the missing TTL in the diff. Reverted the configuration and purged the keyspace with redis-cli --scan | xargs DEL. Service recovered in under 5 minutes. Wrote postmortem: root cause, why review didn't catch it, action items.</span>
+      <span class="star-label r">R</span><span>Added a startup integration test that asserts TTL is set on all cache configs. Added Redis eviction rate alert. The lesson: "trivial" changes to infrastructure configuration deserve the same review rigour as logic changes — the blast radius is often larger.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">postmortem with action items</span>
+      <span class="phrase-tag">test to prevent recurrence</span>
+      <span class="phrase-tag">trivial changes deserve full review</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      I deployed a one-line change to a Redis cache configuration: a TTL duration was accidentally set to zero — no expiry. I considered it a trivial config change and didn't flag it for extra scrutiny. No tests failed, no alerts fired immediately.<br><br>
+      Four hours later, pricing-service started degrading. Redis memory was at 99% — 2.4 million cache keys had accumulated with no expiry. The LRU eviction policy was evicting live pricing data to make room, causing cache misses, which caused DB load, which caused latency spikes on bet placement during an active race meeting.<br><br>
+      Diagnosis took about 8 minutes: <code>redis-cli INFO memory</code> showed the problem clearly. The fix was straightforward — revert the config, purge the keyspace. Recovery in under 5 minutes.<br><br>
+      The learning wasn't just "test your configs." It was that "trivial" is a judgment call I made without evidence. Infrastructure config changes have potentially larger blast radius than logic changes — a wrong TTL affects every cached key, silently, with a 4-hour delay before symptoms appear. I wrote a postmortem and added a startup test that asserts TTL is non-zero on all cache configurations. That test has caught two other misconfigurations since.
+      <em>— ~155 words, ~105 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q7 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q7</div>
+    <div class="q-text">Tell me about a time you delivered under pressure or a tight deadline.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>A new bookmaker client required integration by a contractually fixed date — 3 weeks. Their feed format was undocumented and inconsistent. Two other engineers were occupied with a live incident at the start of the window.</span>
+      <span class="star-label t">T</span><span>Deliver a working feed handler in 3 weeks, solo for the first week, with no formal spec.</span>
+      <span class="star-label a">A</span><span>Day 1: captured 48h of live feed samples to a file, analysed message patterns. Built the normalisation parser against samples first (TDD on real data). Identified 3 edge cases in their format not visible from examples. Raised them in writing to the client's integration team — got clarification in 2 days, not 2 weeks. Integrated with WOODS cluster, tested via docker-compose with replayed samples. Demoed to client on day 18.</span>
+      <span class="star-label r">R</span><span>Delivered 3 days early. Zero incidents in first 30 days of live operation. The pattern (sample first, test on real data, surface ambiguity early in writing) became our standard for new feed integrations.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">surface ambiguity early in writing</span>
+      <span class="phrase-tag">TDD on real data samples</span>
+      <span class="phrase-tag">pattern became team standard</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      We had a contractually fixed deadline to integrate a new bookmaker's feed. The format was undocumented and their integration team's responses were slow. The first week I was working largely solo because two colleagues were dealing with a separate live incident.<br><br>
+      My first move was to capture 48 hours of live feed traffic to a file before writing any parsing code. This gave me real data to test against — not invented examples. I built the parser TDD-style against those samples. In the process I found three inconsistencies: message types that appeared in the live feed but weren't in the rough spec they'd shared. Rather than waiting to discover these at integration time, I wrote them up concisely and emailed their team with specific examples from the captured data. They responded in two days with clear answers — weeks faster than if I'd raised them verbally and waited.<br><br>
+      I delivered a working, tested integration on day 18 — three days early. The first 30 days of live operation had zero feed-related incidents. The broader lesson for the team: when integrating an undocumented external system, capture real traffic first, surface ambiguity in writing with specific examples, and test against real data not invented cases.
+      <em>— ~160 words, ~105 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q8 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q8</div>
+    <div class="q-text">Tell me about a time you had to deal with significant ambiguity.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>ARM was moving to multi-tenancy — same platform serving multiple bookmaker clients. The requirement was "isolate tenants" but no one had defined what isolation meant: data, config, rate limits, or all three.</span>
+      <span class="star-label t">T</span><span>Design the tenancy model before three services started building on it — without waiting for requirements to be fully specified.</span>
+      <span class="star-label a">A</span><span>Listed every dimension of isolation (data, cache, Kafka topic, rate limits, config) and asked the product owner to prioritise which were needed for the first client. Got answers in a 30-minute session. Designed the minimum viable model: tenantId in JWT, DB rows scoped by tenantId, Redis keys prefixed per tenant, shared Kafka topics (no partition-per-tenant). Documented the explicit decisions and what was deferred — so the team knew what was intentional scope and what was debt.</span>
+      <span class="star-label r">R</span><span>Three services built against the model without conflict. Deferred items (per-tenant rate limits) were correctly scoped as future work, not surprises. The process — enumerate dimensions, prioritise, document decisions explicitly — is now how we handle ambiguous architectural requirements.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">enumerate dimensions before deciding</span>
+      <span class="phrase-tag">document what's deferred — intentional not forgotten</span>
+      <span class="phrase-tag">minimum viable model</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      ARM was expanding to serve multiple bookmaker clients on the same platform. The requirement was "tenants must be isolated" — but isolation is a spectrum. It could mean isolated data (different rows), isolated caches, isolated Kafka topics, isolated rate limits, or fully isolated deployments. No one had defined which.<br><br>
+      Rather than waiting for clarity or guessing, I enumerated every isolation dimension I could think of — nine in total — and took them to the product owner in a 30-minute prioritisation session. Which ones were hard requirements for the first client? Which were nice-to-have? Which were deferred? In 30 minutes we had a concrete list: tenantId in JWT, all DB queries scoped by tenantId, Redis keys prefixed, shared Kafka topics (no per-tenant partitions). Per-tenant rate limits and config overrides were explicitly deferred.<br><br>
+      I documented this as an Architecture Decision Record — what we chose, what we didn't, and why. Three services built against this model in the same sprint without stepping on each other. The deferred items became a backlog ticket, not technical debt discovered by surprise. The process itself — enumerate, prioritise, document explicitly — is now how we handle ambiguous architectural requirements.
+      <em>— ~155 words, ~103 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q9 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q9</div>
+    <div class="q-text">Tell me about a time you improved a process or made a team more efficient.</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>ARM was losing Kafka events occasionally when a service crashed between DB write and Kafka publish. The team was patching it service-by-service with ad hoc retry logic — each patch slightly different, none reliable.</span>
+      <span class="star-label t">T</span><span>Establish a consistent, reliable approach across all write services — without mandating a big rewrite.</span>
+      <span class="star-label a">A</span><span>Introduced the outbox pattern: DB transaction atomically writes both the domain record and an outbox row; a separate poller publishes to Kafka and deletes the row on success. Built a shared <code>OutboxPublisher</code> library (one class, three methods) that any service could drop in. Ran a 1-hour workshop showing the before/after. Added an outbox row count alert to catch publishing failures.</span>
+      <span class="star-label r">R</span><span>Three services migrated in two sprints. Zero lost events in the subsequent 3 months. The library abstracted the pattern so junior engineers could use it correctly without understanding the internals. Reduced incident rate from "occasional lost event" to zero for those services.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">outbox pattern</span>
+      <span class="phrase-tag">shared library not repeated pattern</span>
+      <span class="phrase-tag">workshop to accelerate adoption</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      Several services in ARM were losing Kafka events occasionally when a pod crashed between the DB write and the Kafka publish call — the two operations weren't atomic. Each team was patching it differently: some added retry loops, some added manual checks, none of them reliable. It was the same root cause solved five different ways, none correctly.<br><br>
+      I proposed the outbox pattern: write the domain record and an outbox event row in the same DB transaction — atomically. A separate polling thread then publishes the outbox rows to Kafka and deletes them on success. The key insight is that the DB commit is the guarantee — if the service crashes before Kafka publish, the outbox row survives and gets processed on restart.<br><br>
+      I built a small shared <code>OutboxPublisher</code> — one class, three methods — that any service could drop into their Spring context. Ran a 1-hour walk-through with the team, not to mandate it, but so everyone understood what problem it solved. Three services migrated in two sprints. In the three months after, those services had zero lost event incidents. Making the correct approach easy to adopt mattered more than explaining the pattern.
+      <em>— ~155 words, ~105 seconds</em>
+    </div>
+  </div>
+</div>
+
+<!-- Q10 -->
+<div class="q-card">
+  <div class="q-header">
+    <div class="q-num">Q10</div>
+    <div class="q-text">How do you approach code quality and technical debt?</div>
+  </div>
+  <div class="q-body">
+    <div class="star-grid">
+      <span class="star-label">S</span><span>Not a STAR question — a philosophy question. Answer reveals how you think about engineering hygiene and prioritisation.</span>
+      <span class="star-label t">T</span><span><strong>Quality:</strong> Correct code that fails silently is worse than loud code that fails clearly. I'd rather have a test that proves the behaviour than a comment explaining it. Constructor injection over field injection — it forces dependencies to be explicit and makes testing trivial.</span>
+      <span class="star-label a">A</span><span><strong>Debt classification:</strong> Not all debt is equal. Blocking debt (idempotency missing on financial write) → fix before next sprint. Slowing debt (copy-paste HikariCP config in every service) → schedule, quantify the sprint cost. Cosmetic debt (method naming) → fix opportunistically.</span>
+      <span class="star-label r">R</span><span><strong>Review:</strong> PR review is outcome-focused: correctness under concurrency, production failure modes, missing observability. Not style. Style is Checkstyle's job. My review comments are always about what breaks in production, not what looks wrong to me.</span>
+    </div>
+    <div class="phrases">
+      <strong>Key phrases to land</strong>
+      <span class="phrase-tag">debt classified by impact not by smell</span>
+      <span class="phrase-tag">test proves behaviour, comment explains it</span>
+      <span class="phrase-tag">PR review: what breaks in production</span>
+    </div>
+    <button class="reveal-toggle" onclick="toggle(this)">Show model answer</button>
+    <div class="reveal-content">
+      My approach to code quality starts with what I care about in a PR review — and it's not style. Style is Checkstyle and a formatter's job. What I look for is: will this break in production under concurrent load? What happens if this external call times out? Where's the idempotency guard? Those questions reveal quality issues that matter.<br><br>
+      On technical debt: I classify it by impact, not by how unpleasant the code looks. Blocking debt — where the absence of a pattern creates real risk (missing idempotency on a financial write endpoint) — gets fixed before the next sprint regardless of other priorities. Slowing debt — copy-paste config across every service that costs us 2 hours per new service — gets scheduled with a measured cost argument. Cosmetic debt — method names that could be clearer — gets fixed opportunistically when I'm already in that file.<br><br>
+      On testing: I write tests to prove behaviour, not to satisfy coverage metrics. A test that proves "duplicate request returns existing result, not a new record" is worth more than five tests that assert the happy path five different ways. I default to unit tests with Mockito because they run in milliseconds and cover the domain logic. Real infrastructure gets verified manually via docker-compose — not because integration tests are bad, but because the marginal value of a Testcontainers test over a manual smoke test is low compared to the maintenance cost.
+      <em>— ~195 words, ~130 seconds — trim if over time</em>
+    </div>
+  </div>
+</div>
+
+<div class="callout warn">
+  <strong>Delivery tips for the interview</strong>
+  Own every "we" — say "I" for actions you took specifically. Numbers anchor credibility: "10,000 messages", "22 minutes", "3 services", "3 days early." Pause before answering — 2 seconds of silence looks confident, not uncertain. End on the result + learning, not on the action — interviewers remember the last sentence.
+</div>
+
+<footer>ARM BettingCo Study Guide · Opayo Interview Prep · Behavioural Questions</footer>
+<script>
+function toggle(btn){
+  const c=btn.nextElementSibling;
+  const open=c.classList.toggle('visible');
+  btn.textContent=open?'Hide model answer':'Show model answer';
+}
+</script>
+</body>
+</html>

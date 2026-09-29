@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARM BettingCo — Agile Ownership</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn)}
+  .callout.pass{border-color:var(--pass)}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.84rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.88em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{background:var(--sidebar);text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1rem 0 1.5rem}
+  .col-box{border:1px solid var(--border);border-radius:6px;padding:1rem}
+  .col-box h4{margin:0 0 .6rem;font-size:.95rem}
+  .col-box ul{padding-left:1.2rem;font-size:.9rem}
+  .col-box li{margin-bottom:.3rem}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← ARM BettingCo Study Guide</a></div>
+<h1>Agile Ownership — Senior Engineer Responsibilities</h1>
+<div class="meta">Gap Topic — Interview depth expected at Senior level · ARM BettingCo examples throughout</div>
+
+<p>Interviewers probe agile ownership to understand whether you see your role as "code writer" or "outcome owner." Senior engineers at Opayo or any payment/fintech platform are expected to drive delivery end-to-end: from shaping tickets, through code review, incident response, and production monitoring, to measuring their team's delivery health. This lesson uses ARM BettingCo's GitLab CI, Datadog, and delivery patterns as examples.</p>
+
+<h2>1. Senior vs Junior — The Ownership Spectrum</h2>
+
+<div class="two-col">
+  <div class="col-box">
+    <h4>Junior engineer's scope</h4>
+    <ul>
+      <li>Takes a ticket, implements it, opens PR</li>
+      <li>Fixes what reviewers comment on</li>
+      <li>Asks "is this done?" when code merges</li>
+      <li>Escalates incidents to someone else</li>
+      <li>Follows the Definition of Done (DoD) checklist</li>
+      <li>Waits for performance issues to be reported</li>
+    </ul>
+  </div>
+  <div class="col-box">
+    <h4>Senior engineer's scope</h4>
+    <ul>
+      <li>Shapes tickets before they're picked up</li>
+      <li>Asks "is this the right thing to build?"</li>
+      <li>Checks production metrics after deploy</li>
+      <li>Owns incidents from detection to postmortem</li>
+      <li>Defines the Definition of Done for the team</li>
+      <li>Proactively monitors and alerts on regressions</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>The interview differentiator</strong>
+  A junior says "I implemented the feature and it passed all tests." A senior says "I implemented the feature, deployed it to arm-int, verified with a sample of real traffic, set up a Datadog monitor for the new endpoint, and confirmed p99 latency was within SLA before signing off." The difference is outcome ownership, not just task completion.
+</div>
+
+<h2>2. Definition of Done — Opayo/Payment Platform Version</h2>
+
+<p>A strong DoD at a payment platform goes beyond "tests pass and PR merged." At Opayo, processing payments, every item on this list is a compliance and reliability concern:</p>
+
+<pre>Definition of Done — ARM BettingCo payment/fintech context:
+☐ Unit tests written and passing (relevant behaviour, not every edge case)
+☐ No new Sonar/Checkstyle violations introduced
+☐ Reviewed by ≥1 other engineer (architecture review for cross-service changes)
+☐ Deployed to arm-int (integration environment) and smoke-tested manually
+☐ Idempotency verified for any write operation (double-submit safe)
+☐ Datadog monitor created or updated for the changed endpoint/consumer
+☐ Runbook updated if incident response changes (alert → action mapping)
+☐ Database migration: tested rollback scenario, added CONCURRENTLY index if needed
+☐ API change: backward compatible OR version bump + deprecation header + date
+☐ Kafka schema change: producers deployed before consumers, old fields kept during transition
+☐ Security: no secrets in logs, no user PII in exception messages
+☐ Load tested if adding a new hot path (post load-test results in PR description)</pre>
+
+<div class="callout warn">
+  <strong>Payment platform specific — idempotency is not optional</strong>
+  At Opayo, every POST endpoint that creates or modifies money state must be idempotent. The DoD must include: "idempotency_key enforced at DB level (UNIQUE constraint), duplicate detected and handled gracefully (not 500)." This is a design requirement, not an afterthought. A senior engineer at a payment platform raises this in ticket refinement, not in a post-incident review.
+</div>
+
+<h2>3. Tech Debt — When to Tackle It</h2>
+
+<pre>// Tech debt classification (ARM BettingCo examples):
+
+// Type A: Blocking — stop work until fixed
+// → BetSettlementListener missing idempotency_key check → double settlement risk
+// → action: P0, fix before next sprint, no new work on bet-manager until done
+
+// Type B: Slowing — costing time each sprint, fix soon
+// → No shared HTTP client → every new service copy-pastes HikariCP config
+// → action: schedule in next sprint, create lib-http-client module
+
+// Type C: Cosmetic — code quality without functional impact, fix opportunistically
+// → EventRepository method names not following Spring Data naming conventions
+// → action: fix while in the file for another reason
+
+// Senior engineer's role in tech debt:
+// 1. Name and track it: create a Jira/GitLab issue with measured impact
+//    ("HikariCP copy-paste costs ~2h per new service = ~10h/quarter")
+// 2. Prioritise by impact: cost × frequency × risk, not by smell
+// 3. Propose the fix scope: don't refactor everything, fix the bottleneck
+// 4. Get sign-off: tech debt isn't free — get PM agreement on sprint allocation</pre>
+
+<h2>4. DORA Metrics — Measuring Delivery Health</h2>
+
+<p>DORA (DevOps Research and Assessment) metrics are the standard way to measure engineering team performance. A senior engineer should know all four, what ARM BettingCo's GitLab CI pipeline contributes to each, and how to improve them.</p>
+
+<table>
+  <thead><tr><th>Metric</th><th>Definition</th><th>ARM pipeline contribution</th><th>Elite threshold</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Deployment Frequency</strong></td>
+      <td>How often code deploys to production</td>
+      <td>GitLab CI auto-deploys trunk to arm-dev; release/* triggers arm-int; manual gate to arm-prod. Each service deploys independently.</td>
+      <td>Multiple times per day</td>
+    </tr>
+    <tr>
+      <td><strong>Lead Time for Changes</strong></td>
+      <td>Commit to production time</td>
+      <td>build+test+deploy-dev: ~8min. arm-int: manual trigger, ~5min. arm-prod: manual gate. Fastest path: ~30min commit-to-prod.</td>
+      <td>Under 1 hour</td>
+    </tr>
+    <tr>
+      <td><strong>Change Failure Rate</strong></td>
+      <td>% of deployments causing incidents</td>
+      <td>arm-int smoke tests catch most issues. Helm --wait ensures rollout completes before CI passes. kubectl rollout undo for instant rollback.</td>
+      <td>Under 5%</td>
+    </tr>
+    <tr>
+      <td><strong>Mean Time to Restore (MTTR)</strong></td>
+      <td>Time to recover from incident</td>
+      <td>kubectl rollout undo takes ~2min. Datadog alerts fire within 1min of error rate spike. Good runbooks → clear action.</td>
+      <td>Under 1 hour</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>5. PR Review — What a Senior Engineer Looks For</h2>
+
+<pre>// Code review at senior level is not grammar-checking. It's:
+
+// ✓ Correctness under concurrent load
+//   "This UPDATE doesn't handle the case where two threads run simultaneously.
+//    The balance subtraction needs SELECT FOR UPDATE or optimistic @Version."
+
+// ✓ Production failure modes
+//   "What happens if TenantsApi returns null? I see you call .getTenant(id)
+//    without null-checking. This will throw NPE in production on unknown tenant."
+
+// ✓ Idempotency for write paths
+//   "POST /bets creates a new bet on every call. What happens on client retry?
+//    Add idempotency_key parameter and UNIQUE constraint."
+
+// ✓ Schema evolution risk
+//   "You're removing the 'legacyOdds' field from EventUpdateEvent. We have 3
+//    consumers that read this field. Are they all deployed before this change?"
+
+// ✓ Missing observability
+//   "New endpoint added — no Datadog monitor. What alert fires if this starts
+//    returning 500s at 3am? Add a monitor before this merges."
+
+// ✓ Performance hot paths
+//   "This loops over all bets to find pending ones. With 500k bets per event,
+//    this is O(n). You need an index on (event_id, status) with WHERE status='PENDING'."
+
+// ✗ NOT: "This variable should be called 'betAmount' not 'amount'"
+// ✗ NOT: "Add a comment explaining this method"
+// ✗ NOT: Stylistic preferences already handled by checkstyle/formatter</pre>
+
+<h2>6. Incident Ownership — From Alert to Postmortem</h2>
+
+<pre>// ARM BettingCo incident response playbook (senior engineer owns all of this):
+
+// Phase 1: Detection (minutes 0-5)
+// → Datadog alert fires: error rate > 1% on bet-manager-service
+// → Check: what broke? which service? since when? which env?
+// → Datadog APM: find service, find failing traces, find error type
+// → Communicate: post in #incidents Slack channel:
+//   "bet-manager-service: 3% 500 error rate since 14:23 UTC. Investigating."
+
+// Phase 2: Triage (minutes 5-15)
+// → Is it a deployment? Check GitLab CI: last deploy was 14:18 → likely culprit
+// → Rollback decision: if clear causal link → kubectl rollout undo immediately
+//   "Rolling back bet-manager-service to v2.3.1 (deployed 14:18)"
+// → If unclear: gather more data before rollback (might not help)
+
+// Phase 3: Resolution (minutes 15-60)
+// → Fix deployed or rollback confirmed
+// → Verify: error rate drops to baseline, lag clears, no customer impact
+// → Communicate: "Resolved 14:52 UTC. Root cause: missing null check on TenantsApi.
+//    Customers affected: ~400 bets failed. All retried successfully by client retry logic."
+
+// Phase 4: Postmortem (within 48h)
+// Template:
+// - Timeline (when detected, when fixed, duration)
+// - Root cause (technical cause + contributing factors)
+// - Impact (how many users, what data, any financial impact)
+// - Why we didn't catch it (what test/monitor was missing)
+// - Action items (who fixes what by when — no vague "improve monitoring")
+
+// A good postmortem action item:
+// "Add unit test: TenantsApi returns null → expect 401, not 500. Owner: @roberto, Done by: 2026-06-30"
+// A bad postmortem action item:
+// "Improve error handling in TenantService" (no owner, no date, no definition of done)</pre>
+
+<div class="callout pass">
+  <strong>The blameless postmortem principle</strong>
+  Incidents are system failures, not individual failures. A postmortem that names a person as the cause ("João made a mistake") doesn't prevent the next incident — the system allowed that mistake to reach production. A good postmortem asks "what system property allowed this to happen?" (missing test, missing monitor, missing review checklist item) and fixes the system. This is the senior engineer's job to model and enforce.
+</div>
+
+<h2>7. Ticket Refinement — Senior Engineer's Pre-Sprint Role</h2>
+<pre>// Questions a senior engineer asks in refinement (before a ticket is accepted into sprint):
+
+// On a new feature ticket:
+// 1. "What is the expected throughput? 1 req/s or 1000 req/s? This affects indexing."
+// 2. "Is this a one-way door or two-way door? Can we roll this back if users hate it?"
+// 3. "Which services does this touch? Do we need a Kafka schema change? DB migration?"
+// 4. "What's the rollout strategy? Feature flag, canary, or full deploy?"
+// 5. "What does the incident runbook look like for this feature?"
+
+// On a bug ticket:
+// 1. "Can we reproduce this in arm-int before fixing it? Fixes without reproduction risk re-opening."
+// 2. "Is this a data corruption issue? Do we need a one-off data fix script?"
+// 3. "How do we verify the fix is working in production? What metric proves it's gone?"
+
+// Signs a ticket isn't ready for sprint:
+// - "Add caching" without specifying what data, TTL, invalidation strategy
+// - "Fix performance" without a measured baseline and target
+// - "Integrate with Opayo's payment API" without API docs or sandbox credentials</pre>
+
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question">
+  <p>Q1. You merged a feature to production at 10am. At 2pm, Datadog fires: settlement-service error rate 4%. No other deploys happened between 10am and 2pm. How do you determine whether your deploy caused this, and what do you do first?</p>
+  <ul class="options" data-correct="2">
+    <li>Immediately roll back your deploy — the 4-hour gap is suspicious but it's the only change</li>
+    <li>Check Datadog APM for the 2pm trace errors. Look at which endpoint/flow is failing. Check GitLab CI — was there another deploy in another service between 10am and 2pm? Check if the error pattern matches code paths your feature touched. If error traces reference your new code paths, rollback is likely correct. If errors are in unrelated services, gather more data before rolling back. Communicate in #incidents either way.</li>
+    <li>Wait for more data — 4% error rate might be transient and could resolve itself</li>
+    <li>Ask the on-call engineer to investigate — you're off shift at 2pm</li>
+  </ul>
+  <div class="explanation">A 4-hour gap doesn't exclude your deploy — some bugs only surface under specific conditions (time of day, specific race meeting starting, specific tenant). The correct sequence: (1) check traces to understand what's failing, (2) check if your code is in the failure path, (3) check if other deploys happened (other services, infra changes), (4) decide: if your code is clearly in the error path → rollback immediately, (5) communicate in #incidents. "Wait and see" on a 4% error rate at a payment platform is never correct — at 4%, ~1 in 25 transactions is failing.</div>
+</div>
+
+<div class="question">
+  <p>Q2. In sprint refinement, a PM proposes: "Add a fee calculation endpoint — POST /fees/calculate, takes bet amount and odds, returns fee." No further detail. What questions must be answered before this goes into a sprint?</p>
+  <ul class="options" data-correct="1">
+    <li>Questions needed: (1) Fee rules — where are they stored? DB? Config? Per-tenant? (2) Expected throughput — called on every bet placement? If yes, what's peak bet/s? (3) Caching — can fee rules be cached, or are they dynamic per-bet? (4) Idempotency — POST that reads (no write) is fine, but does it create any record? (5) Rounding — fees involve money. BigDecimal not double. Which rounding mode (HALF_UP for customer-facing)? (6) Audit — does a fee calculation need to be logged for PCI-DSS? (7) Integration point — does this call an external Opayo API or is it internal logic? Without these, the estimate is fiction.</li>
+    <li>Ask the PM which sprint this is for — if it's Sprint 3 we have time to figure it out later</li>
+    <li>Accept the ticket and start implementation — the questions will answer themselves as you code</li>
+    <li>Ask only about the API format — the business logic is the PM's responsibility to define</li>
+  </ul>
+  <div class="explanation">Fee calculation at a payment platform is a compliance-critical path. BigDecimal vs double alone is a source of real financial bugs — Java double arithmetic loses precision in the 14th decimal place, which over millions of transactions becomes material. Rounding mode matters: HALF_UP (standard for customer-facing finance) vs HALF_EVEN (banker's rounding, statistically unbiased). These aren't architecture questions — they're requirements that must be locked before any code is written. A senior engineer's job in refinement is to surface all these so the ticket has a real acceptance criterion, not just "POST /fees/calculate works."</div>
+</div>
+
+<div class="question">
+  <p>Q3. Your team's Lead Time for Changes is 3 days (DORA elite is under 1 hour). What are the three most likely bottlenecks and what does a senior engineer do about each?</p>
+  <ul class="options" data-correct="3">
+    <li>The team needs more developers — 3-day lead time means insufficient staffing, hire two more engineers</li>
+    <li>The CI pipeline is too slow — optimize test execution time with parallel test runners</li>
+    <li>Three likely bottlenecks: (A) Long-lived feature branches — PRs open for 2+ days. Fix: mob PR reviews, smaller tickets (1-day chunks), pair programming. (B) Manual approval gates — waiting for QA or management sign-off. Fix: automate smoke tests in arm-int, remove manual gate if test suite is trustworthy. (C) Large batch sizes — big PRs take 3 days to review. Fix: break features into vertical slices deployable independently (feature flags for in-progress work). Senior engineer's action: measure each step (commit → PR → review → merge → deploy), find the longest wait, eliminate it first. Lead time is about flow, not speed.</li>
+    <li>The team should adopt Kanban instead of Scrum — sprint boundaries are causing the delay</li>
+  </ul>
+  <div class="explanation">3-day lead time almost always points to batch size and handoff delays, not pipeline speed. The root cause is usually: (1) PRs sit in review for 1-2 days because no one has time or context, (2) deployment requires manual steps or approvals, (3) tickets are too large (week-long branches). A senior engineer diagnoses with data: plot the time at each stage (writing code, waiting for review, waiting for deploy, waiting for approval). The longest box is the bottleneck. Kanban vs Scrum rarely changes lead time — reducing batch size (smaller tickets, frequent merges, feature flags) is the highest-leverage change for lead time.</div>
+</div>
+
+</div>
+
+<footer>ARM BettingCo Study Guide · Gap Topics · Agile Ownership</footer>
+<script>
+  document.querySelectorAll('.question').forEach(q=>{
+    const opts=q.querySelectorAll('li');
+    const correct=parseInt(q.querySelector('.options').dataset.correct)-1;
+    const expl=q.querySelector('.explanation');
+    let answered=false;
+    opts.forEach((li,i)=>{li.addEventListener('click',()=>{if(answered)return;answered=true;if(i===correct){li.classList.add('correct')}else{li.classList.add('wrong');opts[correct].classList.add('reveal')}expl.classList.add('visible')})});
+  });
+</script>
+</body>
+</html>
