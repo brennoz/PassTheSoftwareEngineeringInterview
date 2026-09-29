@@ -24,6 +24,7 @@
         <module>databases</module>
         <module>ood</module>
         <module>interview-prep</module>
+        <module>pairing-drill</module>
     </modules>
 
     <properties>

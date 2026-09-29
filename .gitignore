@@ -18,5 +18,3 @@ __pycache__/
 .superpowers/
 
 # Excluded from this repo — kept local only
-topics/projects/arm-pythia/
-topics/projects/global/

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collectors.mapping &mdash; Extract Before You Collect</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0 1.5rem}
+  .compare-grid pre{margin:0}
+  .compare-label{font-size:.78rem;font-family:monospace;color:var(--muted);margin-bottom:.25rem;font-weight:bold}
+  @media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="lesson-nav">
+  <a href="../../">&#8592; Topics</a> &nbsp;&middot;&nbsp;
+  <a href="0009-teeing-collector.html">&#8592; Previous: teeing</a>
+</div>
+<h1>Collectors.mapping &mdash; Extract Before You Collect</h1>
+<div class="meta">Category: Java &middot; Topic: Collectors (Java 8) &middot; Est. time: 15 min &middot; Lesson 10</div>
+
+<p><code>Collectors.mapping</code> is the simplest downstream adapter: it applies a mapper function to each element <em>before</em> feeding it into another collector. You've probably used <code>.map(f).collect(...)</code> hundreds of times. <code>mapping</code> does the same thing but works <em>inside</em> a downstream position — inside a <code>groupingBy</code>, inside <code>teeing</code>, inside <code>collectingAndThen</code>.</p>
+
+<!-- ===== 1. THE PROBLEM IT SOLVES ===== -->
+<h2>1. The Problem It Solves</h2>
+
+<p>You have a list of bets and want to group them by market, collecting just the bet reference strings — not the whole <code>Bet</code> object.</p>
+
+<p>The naive two-pass approach:</p>
+
+<pre>// Two passes: group first, then transform each group
+Map&lt;String, List&lt;Bet&gt;&gt; byMarket = bets.stream()
+    .collect(Collectors.groupingBy(Bet::marketId));
+
+Map&lt;String, List&lt;String&gt;&gt; result = new HashMap&lt;&gt;();
+byMarket.forEach((market, marketBets) -&gt;
+    result.put(market, marketBets.stream()
+        .map(Bet::betRef)
+        .toList()));
+</pre>
+
+<p><code>Collectors.mapping</code> collapses this into one stream pass, one <code>collect</code> call:</p>
+
+<pre>Map&lt;String, List&lt;String&gt;&gt; result = bets.stream()
+    .collect(Collectors.groupingBy(
+        Bet::marketId,
+        Collectors.mapping(Bet::betRef, Collectors.toList())
+    ));
+</pre>
+
+<p><code>mapping(Bet::betRef, toList())</code> reads as: "for every bet in this group, extract <code>betRef</code>, then collect those strings into a list." The extraction happens <em>before</em> the downstream <code>toList</code> ever sees the element.</p>
+
+<!-- ===== 2. SIGNATURE ===== -->
+<h2>2. Signature</h2>
+
+<pre>// java.util.stream.Collectors
+public static &lt;T, U, A, R&gt; Collector&lt;T, ?, R&gt; mapping(
+    Function&lt;? super T, ? extends U&gt; mapper,
+    Collector&lt;? super U, A, R&gt;       downstream
+)
+</pre>
+
+<table>
+  <tr><th>Parameter</th><th>Meaning</th></tr>
+  <tr><td><code>T</code></td><td>Input element type (e.g. <code>Bet</code>)</td></tr>
+  <tr><td><code>U</code></td><td>Mapped type (e.g. <code>String</code> — the bet reference)</td></tr>
+  <tr><td><code>mapper</code></td><td>Transforms <code>T → U</code> before the downstream sees it</td></tr>
+  <tr><td><code>downstream</code></td><td>Any collector that accepts <code>U</code> — toList, toSet, joining, counting…</td></tr>
+</table>
+
+<!-- ===== 3. COMMON PATTERNS ===== -->
+<h2>3. Common Patterns</h2>
+
+<h3>3a. groupingBy + mapping + toList</h3>
+<p>The most common shape — extract one field per group:</p>
+<pre>// marketId → list of bet references in that market
+bets.stream().collect(groupingBy(
+    Bet::marketId,
+    mapping(Bet::betRef, toList())
+));
+</pre>
+
+<h3>3b. groupingBy + mapping + toSet (deduplication)</h3>
+<pre>// marketId → set of unique bettors
+bets.stream().collect(groupingBy(
+    Bet::marketId,
+    mapping(Bet::bettor, toSet())
+));
+</pre>
+
+<h3>3c. groupingBy + mapping + joining</h3>
+<pre>// marketId → comma-separated bet refs
+bets.stream().collect(groupingBy(
+    Bet::marketId,
+    mapping(Bet::betRef, joining(", "))
+));
+</pre>
+
+<h3>3d. mapping + collectingAndThen (sort the result)</h3>
+<p>Wrap the downstream with <code>collectingAndThen</code> to post-process — here, sort the collected list:</p>
+<pre>bets.stream().collect(groupingBy(
+    Bet::marketId,
+    collectingAndThen(
+        mapping(Bet::betRef, toList()),
+        refs -&gt; refs.stream().sorted().toList()
+    )
+));
+</pre>
+
+<div class="callout warn">
+  <strong>Why not .sorted() before .collect()?</strong>
+  <p>Sorting the outer stream before <code>groupingBy</code> sorts elements globally — not per-group. The finisher in <code>collectingAndThen</code> runs after a group is fully accumulated, so it sorts each bucket independently. That's the correct hook for per-group ordering.</p>
+</div>
+
+<!-- ===== 4. IMPERATIVE COUNTERPART ===== -->
+<h2>4. Imperative Counterpart: Map.computeIfAbsent</h2>
+
+<p>The imperative version of <code>groupingBy + mapping</code> uses <code>computeIfAbsent</code> to lazily create the accumulator list on first encounter of a key:</p>
+
+<pre>Map&lt;String, List&lt;String&gt;&gt; result = new HashMap&lt;&gt;();
+for (Bet bet : bets) {
+    result.computeIfAbsent(bet.marketId(), k -&gt; new ArrayList&lt;&gt;())
+          .add(bet.betRef());
+}
+result.values().forEach(Collections::sort);
+return result;
+</pre>
+
+<table>
+  <tr><th>Method</th><th>When it fires</th><th>Returns</th></tr>
+  <tr><td><code>computeIfAbsent(k, fn)</code></td><td>Key absent — calls <code>fn</code> and stores result</td><td>The existing or newly-created value</td></tr>
+  <tr><td><code>computeIfPresent(k, fn)</code></td><td>Key present — calls <code>fn(key, existing)</code> and stores result</td><td>Updated value, or null if fn returns null</td></tr>
+  <tr><td><code>compute(k, fn)</code></td><td>Always — calls <code>fn(key, existingOrNull)</code></td><td>New value</td></tr>
+  <tr><td><code>merge(k, v, fn)</code></td><td>Always — absent uses <code>v</code>; present calls <code>fn(existing, v)</code></td><td>New value</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Why computeIfAbsent beats get + put</strong>
+  <p><code>get(k)</code> + <code>putIfAbsent(k, new ArrayList&lt;&gt;())</code> allocates a new list <em>even when the key already exists</em> — the put just discards it. <code>computeIfAbsent</code> only calls the factory when the key is genuinely missing, so no wasted allocation on hot keys.</p>
+</div>
+
+<!-- ===== 5. WHEN TO USE WHICH ===== -->
+<h2>5. Quick Reference</h2>
+
+<table>
+  <tr><th>Goal</th><th>Reach for</th></tr>
+  <tr><td>Group and keep the full object per group</td><td><code>groupingBy(key)</code></td></tr>
+  <tr><td>Group and extract one field per group</td><td><code>groupingBy(key, mapping(field, toList()))</code></td></tr>
+  <tr><td>Group, deduplicate one field</td><td><code>groupingBy(key, mapping(field, toSet()))</code></td></tr>
+  <tr><td>Group, extract, sort the result</td><td><code>groupingBy(key, collectingAndThen(mapping(…), finisher))</code></td></tr>
+  <tr><td>Same thing imperatively</td><td><code>computeIfAbsent</code> loop</td></tr>
+</table>
+
+<!-- ===== QUIZ ===== -->
+<h2>Quiz</h2>
+<div class="quiz">
+
+<div class="question" id="q1">
+  <p>Q1: You call <code>groupingBy(Bet::marketId, mapping(Bet::bettor, toList()))</code>. What is the return type?</p>
+  <ul class="options" data-correct="1">
+    <li><code>Map&lt;String, List&lt;Bet&gt;&gt;</code></li>
+    <li><code>Map&lt;String, List&lt;String&gt;&gt;</code></li>
+    <li><code>Map&lt;String, Set&lt;String&gt;&gt;</code></li>
+    <li>Compile error — mapping cannot be a groupingBy downstream</li>
+  </ul>
+  <div class="explanation"><code>mapping(Bet::bettor, toList())</code> produces <code>Collector&lt;Bet,?,List&lt;String&gt;&gt;</code>. The outer <code>groupingBy</code> key is <code>String</code> (marketId), the downstream result is <code>List&lt;String&gt;</code>, so the map is <code>Map&lt;String, List&lt;String&gt;&gt;</code>.</div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2: <code>computeIfAbsent(k, fn)</code> vs <code>get(k) + putIfAbsent(k, new ArrayList&lt;&gt;())</code> — which is preferable and why?</p>
+  <ul class="options" data-correct="2">
+    <li>They are equivalent — both do one map lookup.</li>
+    <li><code>putIfAbsent</code> is better — it is an atomic CAS operation, safe for concurrent use.</li>
+    <li><code>computeIfAbsent</code> is better — it only calls the factory when the key is absent, so hot keys incur no allocation. <code>putIfAbsent</code> always allocates a new list, which is immediately discarded when the key already exists.</li>
+    <li><code>computeIfAbsent</code> is better only for <code>ConcurrentHashMap</code>; for <code>HashMap</code> they are identical.</li>
+  </ul>
+  <div class="explanation"><code>computeIfAbsent(k, fn)</code> calls <code>fn</code> only when <code>k</code> is absent. <code>putIfAbsent(k, new ArrayList&lt;&gt;())</code> always evaluates <code>new ArrayList&lt;&gt;()</code> — the allocation is unconditional, the reference is just discarded if the key exists. For a map with many repeated keys this is measurable GC pressure. Note: neither is safe for concurrent use without <code>ConcurrentHashMap</code>.</div>
+</div>
+
+</div>
+
+<footer>PassTheSoftwareEngineeringInterview &middot; java/0010-collectors-mapping.html</footer>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = +ul.dataset.correct;
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      ul.querySelectorAll('li').forEach((l, j) => {
+        l.classList.remove('correct','wrong');
+        if (j === correct) l.classList.add('reveal');
+      });
+      li.classList.remove('reveal');
+      li.classList.add(i === correct ? 'correct' : 'wrong');
+      const exp = ul.nextElementSibling;
+      if (exp?.classList.contains('explanation')) exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</body>
+</html>

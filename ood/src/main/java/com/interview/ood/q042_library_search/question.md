@@ -1,6 +1,6 @@
 **Lessons:** [0002 Library Search: Four Layers, One Interview](../../../../../../../../topics/ood/library-system/0002-search-strategies.html)
 
-# q042 — Library Search (NatWest Retro)
+# q042 — Library Search (BankCo Retro)
 
 **Category:** OOD · **Difficulty:** Easy-Medium · **Ideal time:** 20 min
 

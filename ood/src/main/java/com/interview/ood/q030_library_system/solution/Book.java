@@ -5,7 +5,7 @@ package com.interview.ood.q030_library_system.solution;
 // reserved, borrowed, overdue, or lost. Book itself (isbn/title/author) never changes —
 // putting mutable status here would conflate "what the book is" with "where a specific
 // physical copy currently is." Same reasoning as this course's other library exercise
-// (interview-prep/natwest/ex4_library_borrowing).
+// (interview-prep/bankco/ex4_library_borrowing).
 class Book {
     private final String isbn;
     private final String title;

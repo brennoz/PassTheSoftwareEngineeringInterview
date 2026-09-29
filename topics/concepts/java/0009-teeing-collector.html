@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collectors.teeing &mdash; Two Aggregations, One Pass</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:1rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fff1f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.88rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0 1.5rem}
+  .compare-grid pre{margin:0}
+  .compare-label{font-size:.78rem;font-family:monospace;color:var(--muted);margin-bottom:.25rem;font-weight:bold}
+  @media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="lesson-nav">
+  <a href="../../">&#8592; Topics</a> &nbsp;&middot;&nbsp;
+  <a href="0008-sealed-pattern-matching.html">&#8592; Previous: Sealed &amp; Pattern Matching</a>
+</div>
+<h1>Collectors.teeing &mdash; Two Aggregations, One Pass</h1>
+<div class="meta">Category: Java &middot; Topic: Collectors (Java 12) &middot; Est. time: 15 min &middot; Lesson 9</div>
+
+<p>Most collector questions ask: <em>collect this stream into one result</em>. <code>Collectors.teeing</code> (introduced in Java 12) answers a harder question: <em>what if I need two different results from the same stream, without iterating it twice?</em> It splits every element into two independent downstream collectors simultaneously, then merges their results in one final step.</p>
+
+<!-- ===== 1. THE PROBLEM TEEING SOLVES ===== -->
+<h2>1. The Problem It Solves</h2>
+
+<p>Suppose you have a list of settled bets and you need two things: the total payout to winners, and the count of all bets processed. These two aggregations have <em>different</em> filtering criteria — payout sums only won bets, count includes everyone. Without <code>teeing</code>, you need two passes:</p>
+
+<pre>// Two-pass — iterates the list twice
+BigDecimal totalPayout = settlements.stream()
+    .filter(Settlement::won)
+    .map(Settlement::payout)
+    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+long count = settlements.stream()
+    .count();                                   // second pass</pre>
+
+<p>Or you collect to an intermediate list and re-stream — same cost, more code. <code>teeing</code> fuses both into one pass:</p>
+
+<pre>// Single pass — both collectors see every element once
+SettlementReport report = settlements.stream()
+    .collect(Collectors.teeing(
+        Collectors.filtering(Settlement::won,
+            Collectors.reducing(BigDecimal.ZERO, Settlement::payout, BigDecimal::add)),
+        Collectors.counting(),
+        SettlementReport::new          // BiFunction merger
+    ));</pre>
+
+<!-- ===== 2. SIGNATURE ===== -->
+<h2>2. Signature</h2>
+
+<pre>static &lt;T, R1, R2, R&gt; Collector&lt;T, ?, R&gt; teeing(
+    Collector&lt;? super T, ?, R1&gt; downstream1,
+    Collector&lt;? super T, ?, R2&gt; downstream2,
+    BiFunction&lt;? super R1, ? super R2, R&gt; merger
+)</pre>
+
+<table>
+  <tr><th>Parameter</th><th>What it does</th></tr>
+  <tr><td><code>downstream1</code></td><td>First collector — receives every element, produces <code>R1</code></td></tr>
+  <tr><td><code>downstream2</code></td><td>Second collector — receives every element, produces <code>R2</code></td></tr>
+  <tr><td><code>merger</code></td><td>Takes <code>R1</code> and <code>R2</code>, returns the final result <code>R</code></td></tr>
+</table>
+
+<p>The merger is a <code>BiFunction&lt;R1, R2, R&gt;</code>. A constructor reference like <code>SettlementReport::new</code> works when the record constructor matches the signature — <code>SettlementReport(BigDecimal, long)</code> matches <code>BiFunction&lt;BigDecimal, Long, SettlementReport&gt;</code>.</p>
+
+<!-- ===== 3. COLLECTORS.FILTERING ===== -->
+<h2>3. Collectors.filtering (Java 9)</h2>
+
+<p><code>Collectors.filtering(predicate, downstream)</code> applies a <code>Predicate</code> <em>inside</em> a Collector pipeline. It is the collector equivalent of <code>Stream.filter()</code>.</p>
+
+<div class="callout warn">
+  <strong>Why not just .filter() before the terminal collect?</strong>
+  <code>settlements.stream()
+    .filter(Settlement::won)            // only winners reach teeing
+    .collect(teeing(reducing(...), counting(), SettlementReport::new))</code>
+  Pre-filtering breaks <code>settledCount</code>: counting() now only sees winners,
+  not all settled bets. When the two downstream collectors need <em>different</em>
+  predicates, <code>Collectors.filtering</code> is mandatory inside teeing.
+</div>
+
+<div class="compare-grid">
+  <div>
+    <div class="compare-label">&#x2713; filtering inside teeing — different predicates work</div>
+    <pre>.collect(teeing(
+  Collectors.filtering(
+    Settlement::won,        // filter inside collector 1
+    reducing(ZERO, payout, add)),
+  counting(),              // no filter — counts all
+  SettlementReport::new
+))</pre>
+  </div>
+  <div>
+    <div class="compare-label">&#x26D4; pre-filter — breaks second collector</div>
+    <pre>.filter(Settlement::won) // strips non-winners
+.collect(teeing(
+  reducing(ZERO, payout, add),
+  counting(),              // now counts only winners!
+  SettlementReport::new
+))</pre>
+  </div>
+</div>
+
+<!-- ===== 4. REDUCING — WHICH OVERLOAD? ===== -->
+<h2>4. Reducing — the Identity vs No-Identity Trap</h2>
+
+<p>Inside <code>teeing</code> you frequently need <code>Collectors.reducing</code>. There are two overloads that matter:</p>
+
+<table>
+  <tr><th>Overload</th><th>Returns</th><th>Use when</th></tr>
+  <tr>
+    <td><code>reducing(identity, mapper, combiner)</code></td>
+    <td><code>T</code> directly</td>
+    <td>Empty partition must return a sensible default (e.g. <code>BigDecimal.ZERO</code>)</td>
+  </tr>
+  <tr>
+    <td><code>reducing(BinaryOperator)</code></td>
+    <td><code>Optional&lt;T&gt;</code></td>
+    <td>Empty case must be signalled explicitly as absent</td>
+  </tr>
+</table>
+
+<div class="callout fail">
+  <strong>Common mistake: 1-arg reducing inside teeing → type mismatch</strong>
+  <code>teeing(
+    reducing(Settlement::payout),            // returns Optional&lt;BigDecimal&gt;
+    counting(),
+    SettlementReport::new                    // constructor expects BigDecimal, not Optional
+)</code>
+  The constructor reference fails to compile because <code>R1 = Optional&lt;BigDecimal&gt;</code>,
+  not <code>BigDecimal</code>. Always use the 3-arg overload when you need <code>T</code> directly.
+</div>
+
+<!-- ===== 5. WHEN TO USE TEEING ===== -->
+<h2>5. When to Use Teeing vs. Alternatives</h2>
+
+<table>
+  <tr><th>Scenario</th><th>Right tool</th></tr>
+  <tr><td>Two aggregations, same predicate (or no predicate)</td><td><code>teeing</code> or pre-filter + <code>teeing</code></td></tr>
+  <tr><td>Two aggregations, <strong>different</strong> predicates</td><td><code>teeing</code> + <code>Collectors.filtering</code> inside each downstream</td></tr>
+  <tr><td>Two passes on a <code>List</code> — readability matters more than performance</td><td>Two separate streams (simpler, still fine for small data)</td></tr>
+  <tr><td>Three or more aggregations</td><td>Manual for-each or collect to intermediate + process (teeing only composes two)</td></tr>
+  <tr><td>Parallel stream — combining must be associative</td><td><code>teeing</code> is parallel-safe; each downstream must be too</td></tr>
+</table>
+
+<!-- ===== 6. DOMAIN EXAMPLES ===== -->
+<h2>6. Domain Examples</h2>
+
+<h3>Payment — reconciliation in one pass</h3>
+<pre>record TxSummary(BigDecimal approvedTotal, long declinedCount) {}
+
+TxSummary summary = transactions.stream()
+    .collect(Collectors.teeing(
+        Collectors.filtering(Transaction::approved,
+            Collectors.reducing(BigDecimal.ZERO, Transaction::amount, BigDecimal::add)),
+        Collectors.filtering(t -&gt; !t.approved(), Collectors.counting()),
+        TxSummary::new
+    ));</pre>
+
+<h3>Betting — payout vs stake ratio</h3>
+<pre>record BookReport(BigDecimal totalPayout, BigDecimal totalStake) {}
+
+BookReport book = bets.stream()
+    .collect(Collectors.teeing(
+        Collectors.reducing(BigDecimal.ZERO, Bet::payout, BigDecimal::add),
+        Collectors.reducing(BigDecimal.ZERO, Bet::stake,  BigDecimal::add),
+        BookReport::new
+    ));</pre>
+
+<!-- ===== 7. AWS / DISTRIBUTED NOTE ===== -->
+<h2>7. In AWS / Distributed Environment</h2>
+
+<p><code>Collectors.teeing</code> is a local, in-JVM computation — there is no direct AWS equivalent. However, the pattern it represents — computing multiple aggregates in a single data scan — maps directly to distributed systems:</p>
+<ul style="margin:0 0 1rem 1.5rem">
+  <li><strong>Kafka Streams / Flink:</strong> a single consumer reading a settlement topic can maintain two KTables (payout aggregate + count aggregate) from one consume loop, rather than spinning up two consumer groups.</li>
+  <li><strong>AWS Athena / Redshift:</strong> <code>SELECT SUM(payout) FILTER (WHERE won), COUNT(*) FROM settlements</code> — the SQL <code>FILTER</code> clause is the exact relational equivalent of <code>Collectors.filtering</code> inside a downstream aggregate.</li>
+  <li><strong>DynamoDB:</strong> no native multi-aggregate scan — you'd read the table once and compute locally, exactly what <code>teeing</code> enables.</li>
+</ul>
+
+<!-- ===== QUIZ ===== -->
+<h2>Quiz</h2>
+<div class="quiz">
+<script>
+function pick(li,correct){
+  var ul=li.parentNode;
+  if(ul.dataset.answered)return;
+  ul.dataset.answered='1';
+  var exp=ul.parentNode.querySelector('.explanation');
+  if(correct){li.classList.add('correct');}
+  else{
+    li.classList.add('wrong');
+    Array.from(ul.children).forEach(function(c){
+      if(parseInt(c.dataset.idx)===parseInt(ul.dataset.correct))c.classList.add('reveal');
+    });
+  }
+  if(exp){exp.classList.add('visible');}
+}
+</script>
+
+<div class="question" id="q1">
+  <p>Q: You need two results from a stream: the sum of amounts for APPROVED transactions and the count of all transactions (approved + declined). Which code is correct?</p>
+  <ul class="options" data-correct="2">
+    <li data-idx="1" onclick="pick(this,false)">
+      <code>.filter(Transaction::approved)<br>.collect(teeing(reducing(ZERO, amount, add), counting(), TxSummary::new))</code>
+    </li>
+    <li data-idx="2" onclick="pick(this,true)">
+      <code>.collect(teeing(filtering(Transaction::approved, reducing(ZERO, amount, add)), counting(), TxSummary::new))</code>
+    </li>
+    <li data-idx="3" onclick="pick(this,false)">
+      <code>.collect(teeing(reducing(Transaction::amount), counting(), TxSummary::new))</code>
+    </li>
+    <li data-idx="4" onclick="pick(this,false)">
+      <code>.collect(teeing(groupingBy(Transaction::approved, reducing(ZERO, amount, add)), counting(), TxSummary::new))</code>
+    </li>
+  </ul>
+  <div class="explanation">
+    Option 1 pre-filters to approved only — <code>counting()</code> then counts only approved, not all transactions. Wrong.<br>
+    Option 2 is correct: <code>Collectors.filtering</code> scopes the predicate to downstream1 only; downstream2 (<code>counting()</code>) still sees every element.<br>
+    Option 3 uses 1-arg <code>reducing</code> — returns <code>Optional&lt;BigDecimal&gt;</code>, which won't match a <code>BigDecimal</code> constructor parameter.<br>
+    Option 4 passes a <code>Map</code> as <code>R1</code> — incompatible with the record constructor.
+  </div>
+</div>
+</div>
+
+<footer>
+  Lesson 9 &middot; Collectors.teeing &middot; Java 12 &middot; PassTheSoftwareEngineeringInterview
+</footer>
+</body>
+</html>

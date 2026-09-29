@@ -6,6 +6,6 @@ import java.util.function.Supplier;
 public class MyAnswer {
 
     public static Optional<String> resolvePreferredContact(String mobileNumber, Supplier<Optional<String>> emailLookup) {
-        throw new UnsupportedOperationException("implement me");
+        return Optional.ofNullable(mobileNumber).or(emailLookup);
     }
 }

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BankCo Round 2 — Library Borrowing (TDD, OOD, Locks, Mockito Spy)</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.7; color: var(--ink);
+    max-width: 880px; margin: 0 auto; padding: 3rem 2rem 6rem;
+  }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.8rem; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1.02rem; margin: 1.3rem 0 0.4rem; font-weight: bold; }
+  p  { margin: 0.55rem 0; }
+  ul, ol { padding-left: 1.5rem; margin: 0.4rem 0; }
+  li { margin: 0.3rem 0; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.83em;
+    background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78em;
+    background: #1e1e2e; color: #cdd6f4;
+    padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto;
+    margin: 0.6rem 0; line-height: 1.55;
+  }
+  pre .c  { color: #6c7086; font-style: italic; }
+  pre .kw { color: #cba6f7; }
+  pre .ty { color: #89b4fa; }
+  pre .st { color: #a6e3a1; }
+  pre .nu { color: #f9e2af; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.86rem; }
+  th { background: var(--bg-soft); text-align: left; padding: 0.4rem 0.7rem; border: 1px solid var(--border); }
+  td { padding: 0.4rem 0.7rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .callout { background: var(--bg-note); border-left: 4px solid var(--accent); padding: 0.9rem 1.1rem; margin: 1.2rem 0; border-radius: 0 4px 4px 0; }
+  .callout-warn { background: var(--bg-warn); border-left-color: #d97706; }
+  .callout-red { background: #fef2f2; border-left-color: #dc2626; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+
+  .toc { background: var(--bg-soft); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.5rem 0; }
+  .toc h4 { margin-bottom: 0.5rem; font-size: 0.95rem; }
+  .toc ol { margin: 0; padding-left: 1.3rem; }
+  .toc li { margin: 0.2rem 0; font-size: 0.9rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+
+  .say { background: var(--bg-say); border-left: 4px solid var(--say-border); padding: 0.7rem 1rem; margin: 0.6rem 0; font-size: 0.94rem; border-radius: 0 4px 4px 0; }
+  .say .tag { font-family: 'Menlo', monospace; font-size: 0.7rem; font-weight: bold; color: var(--say-border); letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+
+  .arch-box {
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg-soft); padding: 0.9rem 1.1rem;
+    margin: 0.8rem 0; font-family: 'Menlo', 'Consolas', monospace; font-size: 0.78rem;
+    line-height: 1.8; color: var(--ink);
+    white-space: pre; overflow-x: auto;
+  }
+
+  .tddstep { border: 1px solid var(--border); border-radius: 6px; margin: 0.7rem 0; overflow: hidden; }
+  .tddstep .num { display: inline-block; background: var(--accent); color: #fff; font-family: 'Menlo', monospace; font-size: 0.78rem; font-weight: bold; padding: 0.15em 0.55em; border-radius: 3px; margin-right: 0.5rem; }
+  .tddstep .head { background: var(--bg-soft); padding: 0.6rem 1rem; font-weight: bold; }
+  .tddstep .why { padding: 0.6rem 1rem; font-size: 0.9rem; }
+
+  .badge { display: inline-block; font-size: 0.76rem; padding: 0.1em 0.5em; border-radius: 3px; font-weight: bold; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  .footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e0e0e0; --muted: #aaa; --border: #444;
+      --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+      --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+    }
+    body { background: #1a1a1a; }
+    pre { background: #111 !important; }
+    table th { background: #2a2a2a; }
+    table tr:nth-child(even) { background: #222; }
+    .callout-red { background: #3a1a1a; }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e0e0e0; --muted: #aaa; --border: #444;
+    --accent: #5fa3ff; --bg-soft: #2a2a2a; --bg-note: #1a2a4a;
+    --bg-warn: #4a3a1a; --bg-say: #16281c; --say-border: #4a9a5a;
+  }
+  :root[data-theme="light"] {
+    --ink: #1a1a1a; --muted: #555; --border: #d0d0d0;
+    --accent: #1a56db; --bg-soft: #f8f8f6; --bg-note: #eff6ff;
+    --bg-warn: #fffbeb; --bg-say: #f0fdf4; --say-border: #16a34a;
+  }
+</style>
+</head>
+<body>
+
+<h1>BankCo Round 2 — Library Borrowing</h1>
+<p class="meta">
+  <span class="badge badge-blue">BankCo</span>
+  <span class="badge badge-amber">2nd interview — live coding</span>
+  &nbsp;·&nbsp; Companion to <code>interview-prep/bankco/ex4_library_borrowing/</code>
+</p>
+
+<div class="toc">
+  <h4>Contents</h4>
+  <ol>
+    <li><a href="#format">How this maps to the real exercise format</a></li>
+    <li><a href="#model">The object model</a></li>
+    <li><a href="#tdd">TDD order — six tests, in the order they were written</a></li>
+    <li><a href="#race">The race condition, and why the lock goes where it goes</a></li>
+    <li><a href="#spy">Mockito: spy vs mock vs fake</a></li>
+    <li><a href="#feedback">What the rejected-candidate feedback actually maps to</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="format">How this maps to the real exercise format</h2>
+
+<p>BankCo's own description: you're handed a project with <em>some existing basic code</em> and asked to add functionality, finish it, and make tests pass. That's not quite blank-slate (this practice exercise) and not quite the course's usual full-skeleton — it's "read someone else's partial code, understand its shape, extend it." The skill that actually transfers from this practice isn't the specific class names here — it's <strong>TDD discipline under time pressure and a coherent object model</strong>. Read the code in <code>solution/</code> once cold, as if you'd just opened it in an unfamiliar IDE, before reading the explanations below — that's the closer rehearsal.</p>
+
+<hr>
+
+<h2 id="model">The object model</h2>
+
+<div class="arch-box">Book (record)         — isbn, title, author. Immutable value, no identity beyond its data.
+BookCopy               — ONE physical copy. Owns its own availability + lock. Several
+                          BookCopy instances can share the same isbn.
+Member                 — owns its own borrowed-copy list (information-expert).
+Library (orchestrator) — coordinates the above + AuditTrail. Holds NO business state of
+                          its own beyond the catalog/copies/members maps.
+AuditTrail (interface) — side-effect seam. InMemoryAuditTrail is the real implementation.</div>
+
+<div class="say">
+  <span class="tag">SAY THIS</span>Availability lives on <code>BookCopy</code>, not <code>Book</code> — a library can hold several physical copies of the same title, and each copy is independently on the shelf or on loan. Putting a mutable flag on <code>Book</code> would conflate "what the book is" with "where a specific copy currently is."
+</div>
+
+<h3>Why Library is thin</h3>
+
+<p><code>Library</code> doesn't hold "is this copy available" or "what has this member borrowed" as its own fields — it asks <code>BookCopy</code> and <code>Member</code>, who own that state. This is the same information-expert principle this course's other OOD questions push (see <code>topics/ood/</code>) — and it's precisely what let the Part B lock get added to <code>BookCopy</code> alone, with zero changes to <code>Library.borrowBook()</code>'s logic.</p>
+
+<h3>Why author is a single String — and where that stops being true</h3>
+
+<p><code>Book.author()</code> is one <code>String</code>, not a list, not a domain type. That's a real simplification — plenty of books have co-authors — kept deliberately, because nothing in this exercise ever queries, sorts, or filters by author. Worth being ready to walk through the two escalation steps live, rather than defending the <code>String</code> as permanently correct:</p>
+
+<table>
+  <tr><th>Model</th><th>What it buys you</th><th>What triggers reaching for it</th></tr>
+  <tr><td><code>String author</code> (current)</td><td>Simplest possible — matches an exercise that only ever displays the author, never queries by it.</td><td>Default until one of the rows below has an actual reason to exist.</td></tr>
+  <tr><td><code>List&lt;String&gt; authors</code></td><td>Correctly represents multiplicity — a book CAN have 2+ authors — without inventing identity or behavior nothing needs yet.</td><td>The moment a co-authored book is a real input the system must accept, even if nothing queries by author individually.</td></tr>
+  <tr><td><code>Author</code> as its own domain type (id + name), <code>Book</code> holds <code>List&lt;Author&gt;</code></td><td>Gives authors identity — the same author can be recognized across many books, deduped, have their own metadata (bio), and be queried directly.</td><td><strong>A concrete feature</strong>: "find every book by author X" is exactly the kind of requirement that makes a bare <code>List&lt;String&gt;</code> insufficient — two entries of <code>"J.K. Rowling"</code> and <code>"JK Rowling"</code> silently fail to match as the same person with strings, but an <code>Author</code> entity with its own id does not have that problem. Once that query exists, <code>Library</code> would also need an author index (e.g. <code>Map&lt;AuthorId, List&lt;Book&gt;&gt;</code>) to answer it without scanning the whole catalog.</td>
+</table>
+
+<div class="callout">
+  <strong>The interview-ready answer if pushed:</strong> "I kept author as a single String because nothing here needs multiplicity or identity yet. If co-authored books were a real input, I'd widen it to <code>List&lt;String&gt;</code> — that's a data-shape fix, not a new concept. I'd only promote to a full <code>Author</code> entity once there's an actual query or behavior that needs author identity, like 'list all books by this author' — at that point a plain string can't reliably tell two authors apart from a typo, and that's the real trigger, not just 'authors are a thing in the domain.'"
+</div>
+
+<hr>
+
+<h2 id="tdd">TDD order — six tests, in the order they were written</h2>
+
+<p>The <em>order</em> is itself a signal graders look for — not just "are there tests." Each test below only makes sense once the previous one's model exists.</p>
+
+<div class="tddstep">
+  <div class="head"><span class="num">1</span>borrowing an available copy marks it unavailable</div>
+  <div class="why">The simplest possible case. Forces the core decision immediately: <code>borrowBook</code> must return the <code>BookCopy</code> (not <code>void</code>, not a boolean) — later tests and Part B's race need to know which copy was actually lent.</div>
+</div>
+<div class="tddstep">
+  <div class="head"><span class="num">2</span>borrowing with zero available copies throws</div>
+  <div class="why">Needs Test 1's model to exist first — "no copies available" only means something once "a copy can become unavailable" is implemented. Zero copies is the simplest way to set up the precondition.</div>
+</div>
+<div class="tddstep">
+  <div class="head"><span class="num">3</span>returning a borrowed copy makes it available again</div>
+  <div class="why">The round trip — only testable once borrow works, since you need a borrowed copy to return.</div>
+</div>
+<div class="tddstep">
+  <div class="head"><span class="num">4</span>returning a copy never borrowed throws</div>
+  <div class="why">The "real use / user journey" case rejected-candidate feedback explicitly flags as often missed — without this, <code>returnBook</code> would silently free up someone else's book on a typo'd copy id.</div>
+</div>
+<div class="tddstep">
+  <div class="head"><span class="num">5</span>borrowing records an audit event (Mockito <code>@Spy</code>)</div>
+  <div class="why">Layered on AFTER the core flow is proven — auditing a broken borrow flow tests the wrong thing. See the spy section below for why this is a spy, not a mock.</div>
+</div>
+<div class="tddstep">
+  <div class="head"><span class="num">6</span>(Part B) exactly one concurrent borrower wins the last copy</div>
+  <div class="why">Only makes sense once single-threaded correctness is solid. Against a naive/unlocked <code>BookCopy</code> this test is <strong>flaky</strong>, not reliably red — worth saying out loud live, since that's exactly what makes race-condition bugs dangerous in production: they don't fail every run.</div>
+</div>
+
+<hr>
+
+<h2 id="race">The race condition, and why the lock goes where it goes</h2>
+
+<p>The naive implementation of "borrow if available" is two separate statements:</p>
+
+<pre><span class="kw">if</span> (status == CopyStatus.AVAILABLE) {
+    status = CopyStatus.BORROWED;
+    <span class="kw">return</span> <span class="kw">true</span>;
+}
+<span class="kw">return</span> <span class="kw">false</span>;</pre>
+
+<div class="callout callout-red">
+  <strong>The race:</strong> two threads can both execute the <code>if (status == AVAILABLE)</code> check and both see <code>true</code>, BEFORE either one reaches <code>status = BORROWED</code>. Both threads then proceed to "successfully" borrow the same physical copy. This is a classic check-then-act race — the exact same shape as the account-balance race in Ex1's <code>ThreadSafeLedger</code>. (The field started as a plain <code>boolean available</code> and was swapped for a <code>CopyStatus</code> enum — see below — but the race is identical either way; a <code>boolean</code> and a two-value enum are the same bug wearing different clothes.)
+</div>
+
+<div class="say">
+  <span class="tag">SAY THIS</span>Fold the check AND the flip into one atomic operation, under a lock owned by the specific <code>BookCopy</code> — not a library-wide lock, which would serialize borrowing of completely unrelated books for no reason.
+</div>
+
+<pre><span class="c">// BookCopy.tryBorrow() — check-and-flip as ONE atomic step under this copy's own lock</span>
+<span class="kw">public</span> <span class="kw">boolean</span> tryBorrow() {
+    lock.lock();
+    <span class="kw">try</span> {
+        <span class="kw">if</span> (status != CopyStatus.AVAILABLE) <span class="kw">return</span> <span class="kw">false</span>;
+        status = CopyStatus.BORROWED;
+        <span class="kw">return</span> <span class="kw">true</span>;
+    } <span class="kw">finally</span> { lock.unlock(); }
+}</pre>
+
+<div class="callout">
+  <strong>Why an enum here, not a plain boolean or a full State pattern:</strong> a <code>boolean available</code> works but reads poorly at call sites (<code>if (!available)</code> vs <code>if (status != AVAILABLE)</code>) and can't grow past two values. A full GoF State pattern (separate <code>AvailableState</code>/<code>BorrowedState</code> classes, each implementing <code>borrow()</code>/<code>returnCopy()</code>) would be premature — both states do the exact same lock-then-transition, no per-state behavior diverges. <code>CopyStatus</code> is the right-sized middle ground: readable, and a natural seed for a third value (<code>RESERVED</code>, <code>LOST</code>) later, without committing to a class hierarchy until behavior — not just the label — actually diverges per state.
+</div>
+
+<p>Why a lock <em>per copy</em>, not a single lock on <code>Library</code>: a library-wide lock would make borrowing "Effective Java" block someone borrowing "Clean Code" at the same instant, even though they touch completely unrelated state — correct, but needlessly slow. Locking at the smallest scope that actually needs protecting (one physical copy's availability) is the same principle as Ex1's per-account locks, not one lock for the whole ledger.</p>
+
+<hr>
+
+<h2 id="spy">Mockito: spy vs mock vs fake</h2>
+
+<table>
+  <tr><th></th><th>Behaviour</th><th>When to reach for it here</th></tr>
+  <tr><td><code>@Mock</code></td><td>Every method no-ops / returns null unless stubbed</td><td>You only care THAT a call happened, not what real storage would do — would need <code>when(mock.allEvents()).thenReturn(...)</code> stubbed by hand to fake "it actually stored the event," which is testing your stub, not your code.</td></tr>
+  <tr><td><code>@Spy</code></td><td>Real object, real methods run, unless individually overridden</td><td><strong>What Test 5 uses.</strong> <code>InMemoryAuditTrail</code>'s real <code>record()</code>/<code>allEvents()</code> genuinely run — the test verifies both the interaction (<code>verify(auditTrail).record(...)</code>) AND that the resulting state is actually correct (<code>allEvents()</code> really contains the event), from one object.</td></tr>
+  <tr><td>Hand-written fake</td><td>A second, simplified real implementation you write yourself</td><td>Reasonable alternative to a spy for this exact case — but Mockito's spy gets you the same real-behaviour guarantee AND `verify()`'s interaction-checking for free, without writing and maintaining a second implementation.</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Interview framing if pushed on this:</strong> "spy wraps a real instance so its real code runs — I use it when I want to assert on both what actually happened to the object's state, and that a specific method was called, in one test. A mock is for when I only care about the interaction, and don't want the collaborator's real logic running at all (e.g. it would hit a real database or a real external API)."
+</div>
+
+<hr>
+
+<h2 id="feedback">What the rejected-candidate feedback actually maps to</h2>
+
+<table>
+  <tr><th>Feedback quote</th><th>What this exercise rehearses against it</th></tr>
+  <tr><td>"rusty in the IDE... lots of problems with setup"</td><td>Not something a doc fixes — practice this exercise IN IntelliJ, from a truly blank file, timed.</td></tr>
+  <tr><td>"no coherent approach to the model"</td><td>The five-class split (<code>Book</code>/<code>BookCopy</code>/<code>Member</code>/<code>Library</code>/<code>AuditTrail</code>) — each with ONE reason to change — is the coherent-model answer. Cramming borrow/return/availability/audit into one <code>Library</code> class is the incoherent one.</td></tr>
+  <tr><td>"not really test focussed enough... where to put the logic"</td><td>The TDD-order table above — tests aren't an afterthought bolted on at the end, each one drives the next design decision.</td></tr>
+  <tr><td>"lack of forethought to how the implementation would stand up to real use"</td><td>Test 4 (returning a copy you never borrowed) and Part B (the concurrent race) are exactly this — going one step past "the given tests pass" to "what breaks this in practice."</td></tr>
+  <tr><td>"didn't consider how the solution would fit together as a user journey"</td><td>Walk the interviewer through register → borrow → (attempt to borrow when unavailable) → return → (attempt to return twice) as one continuous story, not four disconnected methods.</td></tr>
+</table>
+
+<hr>
+
+<div class="footer">
+  <p><strong>Related:</strong>
+    <a href="0005-bankco-interview-prep.html">Round 1 Quickfire Cheatsheet</a> ·
+    <a href="0006-bankco-round2-exercises.html">Round 2 — Locks/RxJava/Functional Exercises</a>
+  </p>
+  <p style="margin-top:0.6rem; font-size:0.85rem">
+    Runnable code + tests: <code>interview-prep/bankco/ex4_library_borrowing/</code> — blank-slate <code>question.md</code>, fully worked <code>solution/</code> (6 tests, TDD-order comments), empty <code>answer/</code>. Run: <code>mvn test -pl interview-prep</code>. Demo: <code>mvn -f interview-prep/pom.xml compile exec:java -Dexec.mainClass="com.interview.prep.bankco.ex4_library_borrowing.solution.LibraryMain"</code>.
+  </p>
+</div>
+
+</body>
+</html>

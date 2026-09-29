@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01 — Idempotency Fundamentals</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #555; --border: #ddd;
+    --bg-code: #f7f7f5; --accent: #2563eb;
+    --pass: #16a34a; --fail: #dc2626; --warn: #d97706;
+    --bg: #fefefe; --sidebar: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; font-size: 17px; line-height: 1.7;
+         color: var(--ink); background: var(--bg);
+         max-width: 780px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+  p  { margin-bottom: 1rem; }
+  ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+  li { margin-bottom: 0.4rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-family: monospace; margin-bottom: 2rem; }
+  .lesson-nav { font-size: 0.85rem; margin-bottom: 3rem; color: var(--muted); }
+  .lesson-nav a { color: var(--accent); text-decoration: none; }
+  .callout { border-left: 4px solid var(--accent); background: var(--sidebar);
+             padding: 0.9rem 1.2rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.pass { border-color: var(--pass); }
+  .callout.fail { border-color: var(--fail); }
+  .callout strong { display: block; margin-bottom: 0.3rem; font-family: monospace; font-size: 0.9rem; }
+  pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+        padding: 1.2rem 1.4rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6;
+        margin: 1rem 0 1.5rem; font-family: 'Menlo', 'Consolas', monospace; }
+  code { font-family: 'Menlo','Consolas',monospace; font-size: 0.88em;
+         background: var(--bg-code); padding: 0.1em 0.35em; border-radius: 3px; }
+  .diagram { font-family: 'Menlo','Consolas',monospace; font-size: 0.78rem;
+             background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+             padding: 1.2rem 1.4rem; line-height: 1.6; margin: 1rem 0 1.5rem;
+             overflow-x: auto; white-space: pre; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: 0.9rem; }
+  th { background: var(--sidebar); text-align: left; padding: 0.5rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .quiz { margin: 2rem 0; }
+  .question { margin: 1.5rem 0; }
+  .question p { font-weight: bold; margin-bottom: 0.75rem; }
+  .options { list-style: none; margin: 0; }
+  .options li { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 5px;
+                margin-bottom: 0.4rem; cursor: pointer; transition: background 0.15s; font-size: 0.92rem; }
+  .options li:hover { background: var(--sidebar); }
+  .options li.correct { background: #dcfce7; border-color: var(--pass); }
+  .options li.wrong   { background: #fee2e2; border-color: var(--fail); }
+  .options li.reveal  { background: #dcfce7; border-color: var(--pass); opacity: 0.6; }
+  .explanation { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; display: none;
+                 padding: 0.5rem 0.8rem; background: var(--sidebar); border-radius: 4px; }
+  .explanation.visible { display: block; }
+  footer { margin-top: 4rem; border-top: 1px solid var(--border);
+           padding-top: 1.5rem; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<p class="meta">concepts / idempotency · lesson 01 of 01</p>
+
+<h1>Idempotency Fundamentals</h1>
+<p class="meta">Distributed systems, APIs, databases, AWS — the one guarantee that makes retries safe.</p>
+
+<div class="lesson-nav">
+  Related: <a href="../../system-design/idempotent-payment-api/0001-idempotent-payment-api.html">System Design — Idempotent Payment API</a>
+</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>1. The Definition</h2>
+
+<p>
+  An operation is <strong>idempotent</strong> if applying it one time produces the same outcome as
+  applying it any number of times.
+</p>
+
+<div class="callout pass">
+  <strong>f(f(x)) = f(x)</strong>
+  Setting a light switch to ON is idempotent: doing it twice leaves the light on, exactly as doing it once.
+  <em>Toggling</em> a switch is not idempotent: two toggles = net no change.
+</div>
+
+<p>
+  In software, this means: <em>a client can safely retry a request without risking duplicate side effects.</em>
+  Every distributed system eventually needs retries — networks drop packets, timeouts fire, load balancers
+  restart. Idempotency is what makes retries safe.
+</p>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>2. HTTP Methods — Which Are Idempotent?</h2>
+
+<table>
+  <tr>
+    <th>Method</th><th>Idempotent?</th><th>Safe?</th><th>Why</th>
+  </tr>
+  <tr>
+    <td><code>GET</code></td><td>✅ Yes</td><td>✅ Yes</td>
+    <td>Read-only. Same request returns same resource (until the resource changes).</td>
+  </tr>
+  <tr>
+    <td><code>HEAD</code></td><td>✅ Yes</td><td>✅ Yes</td>
+    <td>Same as GET, no response body.</td>
+  </tr>
+  <tr>
+    <td><code>PUT</code></td><td>✅ Yes</td><td>❌ No</td>
+    <td>Full replacement. PUT twice = same final state as PUT once.</td>
+  </tr>
+  <tr>
+    <td><code>DELETE</code></td><td>✅ Yes</td><td>❌ No</td>
+    <td>Deleting an already-deleted resource → 404 or 204, but server state unchanged.</td>
+  </tr>
+  <tr>
+    <td><code>POST</code></td><td>❌ No</td><td>❌ No</td>
+    <td>Creates a new resource each call. Retry = duplicate order, duplicate payment.</td>
+  </tr>
+  <tr>
+    <td><code>PATCH</code></td><td>❌ Usually not</td><td>❌ No</td>
+    <td>Partial update. <code>PATCH /balance {delta: -100}</code> applied twice debits twice.</td>
+  </tr>
+</table>
+
+<div class="callout warn">
+  <strong>Interview trap: PATCH</strong>
+  PATCH <em>can</em> be made idempotent if the payload is absolute
+  (<code>{"status": "CANCELLED"}</code>) rather than relative (<code>{"delta": -100}</code>).
+  The spec does not require it — the server author decides.
+</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>3. Why Networks Force This Conversation</h2>
+
+<p>
+  In a distributed system, <strong>at-least-once delivery</strong> is the default — not exactly-once.
+  When a client POSTs a payment and the TCP connection drops before the response arrives, the client
+  does not know whether the server processed the request:
+</p>
+
+<div class="diagram">Client                    Network          Server
+  │                           │                  │
+  │──── POST /payments ───────▶                  │
+  │                                              │
+  │                          ← response lost →   │ ← payment created ✅
+  │                           │                  │
+  │    timeout fires          │                  │
+  │──── POST /payments ───────▶                  │
+  │                                              │ ← DUPLICATE payment ❌</div>
+
+<p>
+  The fix: the client includes an <strong>idempotency key</strong> in both requests.
+  The server deduplicates using the key.
+</p>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>4. The Idempotency Key Pattern</h2>
+
+<h3>Request shape</h3>
+<pre>POST /payments
+Idempotency-Key: 7f3a9b21-4c2e-4d1a-8e6f-1234abcd5678
+Content-Type: application/json
+
+{ "amount": 100, "currency": "GBP", "toAccount": "ACC-42" }</pre>
+
+<h3>Server-side algorithm</h3>
+<div class="diagram">Receive request with key K
+  │
+  ├─ SELECT * FROM idempotency_records WHERE key = K
+  │    │
+  │    ├─ FOUND and status = COMPLETED
+  │    │    └─ Return cached response immediately (no re-processing)
+  │    │
+  │    ├─ FOUND and status = IN_PROGRESS
+  │    │    └─ Return 409 Conflict or wait/retry (concurrent duplicate)
+  │    │
+  │    └─ NOT FOUND
+  │         ├─ INSERT INTO idempotency_records (key, status=IN_PROGRESS)
+  │         │    [UNIQUE constraint prevents race — second insert fails]
+  │         ├─ Process the business operation
+  │         ├─ UPDATE idempotency_records SET status=COMPLETED, response=...
+  │         └─ Return response to client</div>
+
+<h3>Java skeleton</h3>
+<pre>@Transactional
+public PaymentResponse placePayment(String idempotencyKey, PlacePaymentRequest req) {
+    // Step 1: check cache — returns immediately if already processed
+    return idempotencyStore.find(idempotencyKey)
+        .map(record -> record.getCachedResponse(PaymentResponse.class))
+        .orElseGet(() -> {
+            // Step 2: reserve the key — UNIQUE constraint prevents concurrent duplicates
+            idempotencyStore.reserve(idempotencyKey);
+            // Step 3: process
+            PaymentResponse resp = paymentDomainService.execute(req);
+            // Step 4: commit result alongside business data
+            idempotencyStore.complete(idempotencyKey, resp);
+            return resp;
+        });
+}</pre>
+
+<div class="callout">
+  <strong>Why one transaction?</strong>
+  Steps 2–4 run inside a single DB transaction. If the process crashes after inserting the payment
+  but before marking the key COMPLETED, the whole transaction rolls back — the retry will find
+  key NOT_FOUND and try again cleanly. <strong>Never commit the business record and the idempotency
+  record in separate transactions.</strong>
+</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>5. Database-Level Idempotency</h2>
+
+<p>Three tools, from simplest to most powerful:</p>
+
+<h3>5a. UNIQUE constraint</h3>
+<pre>-- Natural idempotency: duplicate INSERT → constraint violation, not duplicate row
+CREATE TABLE bets (
+    idempotency_key UUID PRIMARY KEY,
+    bet_slip_id     UUID NOT NULL,
+    amount          NUMERIC(10,2) NOT NULL
+);</pre>
+<p>The DB itself rejects a second INSERT with the same key. No application logic needed.</p>
+
+<h3>5b. INSERT … ON CONFLICT DO NOTHING (PostgreSQL)</h3>
+<pre>INSERT INTO payments (idempotency_key, amount, status)
+VALUES (:key, :amount, 'PENDING')
+ON CONFLICT (idempotency_key) DO NOTHING;</pre>
+<p>Silent deduplication — returns 0 rows affected on duplicate, no exception thrown.</p>
+
+<h3>5c. Optimistic locking with @Version</h3>
+<pre>@Entity
+public class Wallet {
+    @Version
+    private long version;   // JPA auto-increments; stale read → OptimisticLockException
+
+    public void debit(BigDecimal amount) {
+        if (balance.compareTo(amount) < 0) throw new InsufficientFundsException();
+        this.balance = balance.subtract(amount);
+    }
+}</pre>
+<p>
+  Not strictly idempotency — protects against concurrent writes to the same row (e.g. two simultaneous
+  debit operations on the same wallet). If both threads read version=5, only the first commit succeeds;
+  the second throws <code>OptimisticLockException</code> and retries at version=6.
+</p>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>6. Idempotency in Messaging (Kafka / RabbitMQ)</h2>
+
+<table>
+  <tr><th>Layer</th><th>Problem</th><th>Solution</th></tr>
+  <tr>
+    <td>Producer</td>
+    <td>Broker acks lost → producer retries → duplicate message in topic</td>
+    <td>Kafka idempotent producer (<code>enable.idempotence=true</code>) — broker deduplicates within a session using sequence numbers</td>
+  </tr>
+  <tr>
+    <td>Consumer</td>
+    <td>Consumer crashes after processing but before committing offset → message redelivered</td>
+    <td>Consumer tracks processed message IDs in Redis/DB — skip if seen before (<em>consumer-side deduplication</em>)</td>
+  </tr>
+  <tr>
+    <td>Exactly-once</td>
+    <td>Need both: no duplicates at producer AND consumer</td>
+    <td>Kafka Transactions: producer + consumer in same transactional boundary; reads-process-writes atomically</td>
+  </tr>
+</table>
+
+<div class="callout warn">
+  <strong>Exactly-once is expensive.</strong>
+  Kafka transactions add latency (~10–50 ms per batch). Most systems accept at-least-once with
+  idempotent consumers rather than paying the transaction overhead.
+</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>7. Common Pitfalls</h2>
+
+<div class="callout fail">
+  <strong>Pitfall 1: Idempotency key scope too wide</strong>
+  Using the same key for different operations (e.g. same UUID reused by a buggy client for two
+  different payments). The server returns the cached result of the first — wrong money moves.
+  Fix: key is scoped per operation type + client + request content.
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 2: Request body changes on retry</strong>
+  Client retries with same key but different amount. Server should hash the original request body,
+  store it with the key, and return 422 Unprocessable Entity if the hash mismatches on retry.
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 3: No TTL on idempotency records</strong>
+  Records accumulate forever → unbounded table growth. Set TTL (e.g. 24 hours for payments;
+  7 days for long-running sagas). After TTL, client must treat the request as new.
+</div>
+
+<div class="callout fail">
+  <strong>Pitfall 4: Idempotency key in application memory only</strong>
+  Single-instance works. On a 4-pod ECS cluster, pod A deduplicates correctly, but pod B has
+  never seen the key → processes duplicate. Fix: store keys in shared PostgreSQL or Redis.
+</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>8. In AWS / Distributed Environment</h2>
+
+<table>
+  <tr><th>Component</th><th>AWS Service</th><th>Idempotency mechanism</th></tr>
+  <tr>
+    <td>HTTP API</td>
+    <td>API Gateway + Lambda</td>
+    <td><a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-idempotency.html" target="_blank">AWS Lambda Powertools Idempotency</a> — DynamoDB-backed key store, single annotation</td>
+  </tr>
+  <tr>
+    <td>Database writes</td>
+    <td>DynamoDB</td>
+    <td><code>attribute_not_exists(pk)</code> conditional write — atomic check-and-insert</td>
+  </tr>
+  <tr>
+    <td>Queue</td>
+    <td>SQS FIFO</td>
+    <td><code>MessageDeduplicationId</code> — broker deduplicates within 5-minute window</td>
+  </tr>
+  <tr>
+    <td>Streaming</td>
+    <td>Kinesis / MSK</td>
+    <td>No built-in dedup — implement consumer-side deduplication with DynamoDB or Redis SET NX</td>
+  </tr>
+  <tr>
+    <td>Step Functions</td>
+    <td>Step Functions Standard</td>
+    <td>Execution names are globally unique — retry with same name = resume existing execution, not new one</td>
+  </tr>
+  <tr>
+    <td>Distributed cache</td>
+    <td>ElastiCache Redis</td>
+    <td><code>SET key value NX PX ttl_ms</code> — atomic "set if not exists" with TTL; natural idempotency token store</td>
+  </tr>
+</table>
+
+<h3>Redis SET NX — the Swiss army knife</h3>
+<pre>// Redis SET NX (set if not exists) — atomic, O(1), supports TTL
+// Returns 1 (acquired) or 0 (already processed — this is a duplicate)
+Boolean isNew = redisTemplate.opsForValue()
+    .setIfAbsent(idempotencyKey, "processed", Duration.ofHours(24));
+
+if (Boolean.FALSE.equals(isNew)) {
+    return cachedResponseStore.get(idempotencyKey);
+}</pre>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>9. Decision Tree: Which Pattern to Use?</h2>
+
+<div class="diagram">Is the operation naturally idempotent?
+(e.g. PUT full-replace, DELETE, SET)
+  │
+  ├─ YES → No extra work needed. Document it.
+  │
+  └─ NO (POST, PATCH with delta, multi-step saga)
+       │
+       ├─ Single DB, single service?
+       │    └─ UNIQUE constraint on idempotency_key column
+       │         + INSERT ON CONFLICT DO NOTHING
+       │
+       ├─ Multi-service / distributed?
+       │    └─ Client-generated UUID in header
+       │         + shared Redis SET NX (fast, TTL-based)
+       │         + DB idempotency table as durable fallback
+       │
+       └─ Event-driven / Kafka consumer?
+            └─ Consumer deduplication table
+                 (message_id UNIQUE) or Redis SET NX per event</div>
+
+<!-- ──────────────────────────────────────────── -->
+<h2>Quiz</h2>
+
+<div class="quiz" id="quiz">
+
+  <div class="question" id="q1">
+    <p>Q1. A client POSTs a payment with <code>Idempotency-Key: abc123</code>. The server processes the payment successfully but crashes before sending the response. The client retries with the same key. What should the server return?</p>
+    <ul class="options" data-correct="1">
+      <li>A 500 error — the server state is unknown</li>
+      <li>The cached response from the first (completed) request</li>
+      <li>A new payment — the first one may not have committed</li>
+      <li>A 409 Conflict — the key is already in use</li>
+    </ul>
+    <div class="explanation">The server completed the first request and stored the result alongside the idempotency record in one transaction. On retry it finds the key with status COMPLETED and returns the cached response. No new payment is created.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. Which HTTP method is NOT idempotent by default?</p>
+    <ul class="options" data-correct="2">
+      <li>DELETE</li>
+      <li>PUT</li>
+      <li>POST</li>
+      <li>GET</li>
+    </ul>
+    <div class="explanation">POST creates a new resource on each call. DELETE, PUT, and GET are idempotent: repeating them leaves server state the same as one application.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Your payment service runs on 4 ECS pods. An engineer stores idempotency keys in a local <code>ConcurrentHashMap</code> on each pod. What is the production failure mode?</p>
+    <ul class="options" data-correct="0">
+      <li>A retry routed to a different pod finds no key and processes the payment again</li>
+      <li>The ConcurrentHashMap is not thread-safe across pods</li>
+      <li>The map fills up after high traffic and throws OutOfMemoryError</li>
+      <li>No failure — HTTP load balancers use sticky sessions by default</li>
+    </ul>
+    <div class="explanation">Each pod has its own map. A retry load-balanced to a different pod finds no record of the first request and creates a duplicate payment. Fix: use a shared Redis or database key store.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. You store idempotency keys forever to guarantee deduplication. What is the primary operational risk?</p>
+    <ul class="options" data-correct="3">
+      <li>Key collisions become more likely as the table grows</li>
+      <li>SELECT on idempotency_key becomes a full table scan over time</li>
+      <li>Old keys interfere with new requests that reuse the same UUID</li>
+      <li>Unbounded table growth leads to storage cost and query degradation</li>
+    </ul>
+    <div class="explanation">Without TTL, the table grows indefinitely. Add a TTL column and a periodic cleanup job (or use Redis with built-in expiry). UUID reuse is astronomically unlikely but TTL also guards against it.</div>
+  </div>
+
+</div>
+
+<div class="callout">
+  <strong>Ask your teacher</strong>
+  Stuck on any question, or want to go deeper on Kafka transactions, DynamoDB conditional writes,
+  or the Outbox pattern? Ask Claude directly — this lesson is a starting point, not the ceiling.
+</div>
+
+<footer>
+  <p>Primary source: <a href="https://stripe.com/docs/api/idempotent_requests" target="_blank">Stripe — Idempotent Requests</a> · <a href="https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/" target="_blank">AWS Builders Library — Making retries safe with idempotent APIs</a></p>
+  <p style="margin-top:0.5rem">Next: <a href="../../system-design/idempotent-payment-api/0001-idempotent-payment-api.html">System Design — Idempotent Payment API</a> (full design with Outbox pattern)</p>
+</footer>
+
+<script>
+  document.querySelectorAll('.options').forEach(ul => {
+    const correct = parseInt(ul.dataset.correct, 10);
+    ul.querySelectorAll('li').forEach((li, i) => {
+      li.addEventListener('click', () => {
+        if (ul.dataset.answered) return;
+        ul.dataset.answered = '1';
+        li.classList.add(i === correct ? 'correct' : 'wrong');
+        if (i !== correct) ul.querySelectorAll('li')[correct].classList.add('reveal');
+        const exp = ul.closest('.question').querySelector('.explanation');
+        if (exp) exp.classList.add('visible');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -38,8 +38,13 @@ Different from SystemDesignLab (deep build) — this is breadth + time pressure 
 | `next medium` | Force medium difficulty |
 | `next hard` | Force hard difficulty |
 | `next {category} {slug}` | Force category + topic hint — e.g. `next ood bank`, `next algo sliding-window`. Scopes lesson folder and question topic. |
+| `next pairing-drill` | Force the pairing-drill category — live mentoring/refactor exercise with roleplay. **Explicit-invoke only, not in the weighted `next` rotation** — see "Pairing Drill Category" below |
+| `next pairing-drill {level}` | Force pairing-partner seniority — `junior` (default) / `mid` / `senior` / `pm`. Combinable with difficulty and flavor in the same line, e.g. `next pairing-drill senior hard spring` — see "Pairing Drill Category" |
+| `next pairing-drill skeleton` | Same as `next pairing-drill`, but `answer/` ships pre-seeded with a partial attempt already in progress instead of an exact copy of the seeded code — see "Pairing Drill Category" |
+| `next {easy\|medium\|hard} pairing-drill` | Force issue-density scope for this session (easy ≈2–3 issues, medium ≈4–6, hard ≈7+ tangled) — medium is default. **Scope selector only — no pass/fail auto-progression for this category**, unlike every other `next easy/medium/hard` use |
 | `hint` | Claude gives a hint — saved to `hints.md` in question folder |
 | `solution` | Claude shows full solution — saved to `hints.md` |
+| `review` | **`pairing-drill` only.** Repeatable, non-terminal check-in: Claude reads your current files, runs the tests, reacts in character, appends to `transcript.md`. Not the same as `done` |
 | `done` | Submit answer — Claude reviews + writes `review.md` |
 | `skip` | Skip question, log as skipped in PROGRESS.md |
 | `pause` | Save state to SESSION.md |
@@ -61,83 +66,13 @@ Different from SystemDesignLab (deep build) — this is breadth + time pressure 
 | DevOps | 7% | 9 clusters — containers (Dockerfile, multi-stage, compose), kubernetes (Pods/Deployments/HPA/Ingress/probes), helm (charts/templating/rollback), ci-cd (GitLab/ArgoCD/GitOps), observability (Datadog APM/SLO/dashboards), alerting (PagerDuty/Slack/runbooks), terraform (providers/modules/state), agent-infra (AI agents on K8s, LLM observability, model versioning), architecture (full pipeline end-to-end) |
 | Rest | 10% | Spring/Boot/Hibernate/JPA, Spring Security, Kafka, Redis, RabbitMQ, PostgreSQL, Oracle, MongoDB, Elasticsearch, Neo4j, AWS, DDD, EDA, Microservices patterns, gRPC, REST design |
 
----
-
-## Industry Domain Focus
-
-Questions should rotate across three verticals. When relevant, mention that a topic maps to real industry interview patterns (without naming specific companies). Pick the domain that best fits the question — rotate across all three over time.
+`pairing-drill` is **not** in this table — it's explicit-invoke only (`next pairing-drill`). A
+45–60 minute roleplay drill doesn't fit the breadth/time-pressure rhythm a random `next` is
+built around; see "Pairing Drill Category" below.
 
 ---
 
-### Vertical 1 — Payment / Fintech
-
-| Topic | What they probe |
-|---|---|
-| High-throughput systems | Millions of card transactions/sec — sharding, partitioning, async processing |
-| PCI-DSS compliance | Card data (PAN) never in logs, encrypted at rest (AWS KMS), tokenisation |
-| Idempotency | Duplicate requests must not double-charge — idempotency keys, DB conditional writes |
-| Race conditions on balance | Concurrent debit on same account → overdraft — `@Version` / optimistic lock / DynamoDB conditional write |
-| Fraud detection | Real-time anomaly detection, sliding window counters, feature stores, rule engines |
-| Card authorization flow | Issuer → Network → Acquirer, timeout handling, fallback, reversals |
-| Multi-region failover | Active-active vs active-passive, RTO/RPO, Route 53 health checks, Aurora Global |
-| Rate limiting | Token bucket / sliding window per merchant/card, Redis atomics (INCR + EXPIRE) |
-| Outbox pattern | Atomic DB write + event publish — prevents ghost payments on SNS/Kafka failure |
-| Exactly-once semantics | Kafka idempotent producer + transactions, consumer deduplication |
-| Legacy system migration | Strangler fig pattern, shadow mode validation, event-driven decoupling |
-| Observability | Prometheus metrics, Splunk/CloudWatch logs, OpenTelemetry distributed tracing |
-| mTLS / security | Service-to-service auth, secrets via AWS Secrets Manager, JWT/OAuth2 |
-| Schema evolution | Avro + Schema Registry, backward/forward compatibility, no breaking changes |
-| Canary / blue-green deploy | Feature flags, gradual rollout, instant rollback for payment services |
-
----
-
-### Vertical 2 — Banking
-
-| Topic | What they probe |
-|---|---|
-| Double-entry ledger | Every debit has a matching credit — immutable append-only ledger, no UPDATE on posted entries |
-| Interest calculation | Daily accrual vs compound, `BigDecimal` precision (never `double` for money), end-of-day batch jobs |
-| Loan origination pipeline | Credit score → underwriting → approval → disbursement as a saga; rollback on rejection |
-| KYC / AML compliance | Identity verification pipeline, watchlist screening (OFAC/PEP), suspicious activity reports (SARs) |
-| SWIFT / SEPA / ACH | Message formats (ISO 20022), settlement windows (T+1/T+2), retry on NACK, correspondent banking |
-| Regulatory reporting | End-of-day reconciliation, Basel III capital ratios, batch aggregation, audit trail immutability |
-| Core banking migration | Strangler fig + dual-write to old and new system; shadow mode validation before cutover |
-| Overdraft / credit limit | Optimistic lock (`@Version`) + compensating transaction if limit exceeded post-commit |
-| Data retention / GDPR | Right to erasure vs immutable audit trail conflict — pseudonymisation strategy |
-| SOX compliance | No production access without audit log, separation of duties, 4-eyes approval for config changes |
-
-**Code review triggers (always flag):**
-- `double` or `float` for monetary amounts → use `BigDecimal`
-- Mutable state in posted ledger entries → ledger rows must be append-only
-- Missing audit log on any balance-changing operation
-- Synchronous call to external credit bureau without timeout + circuit breaker
-
----
-
-### Vertical 3 — Sport Betting
-
-| Topic | What they probe |
-|---|---|
-| Real-time odds feed | WebSocket fan-out to millions of clients; Redis pub/sub for odds updates; back-pressure handling |
-| Bet placement idempotency | Network retry → duplicate bet → double stake deduction — idempotency key per bet slip |
-| Liability management | Max exposure per outcome tracked in Redis; suspend market when threshold hit; atomic INCR check |
-| In-play low latency | Sub-100ms bet acceptance during live events; in-memory state + async DB write (write-behind cache) |
-| Bet settlement | Outcome event triggers settlement saga: mark bets won/lost → credit winnings → publish receipt |
-| Odds calculation | Decimal/fractional/American formats; overround (margin) ensures book profit; `BigDecimal` for payout |
-| Race conditions on wallet | Concurrent bet placements deplete same wallet → overdraft — optimistic lock or Redis DECR atomic |
-| Responsible gambling | Deposit limits, loss limits, self-exclusion (GamStop UK), cooling-off — enforced pre-bet, not post |
-| Anti-fraud / bonus abuse | Matched betting detection (correlated accounts, IP/device fingerprint), velocity checks |
-| Market suspension | Event triggers (red card, goal) → suspend all markets atomically → recalculate odds → reopen |
-| KYC / AML | Mandatory in regulated markets (UK GC, MGA); verify identity before first withdrawal |
-| High-traffic spikes | Super Bowl / World Cup — 100× normal load in minutes; auto-scaling, pre-warmed Lambda/ECS |
-| Regulatory audit trail | Every bet, odds change, settlement immutably logged — WORM storage (S3 Object Lock) |
-
-**Code review triggers (always flag):**
-- `double`/`float` for odds or payout calculation → `BigDecimal`
-- No idempotency key on bet placement endpoint → duplicate bets on retry
-- Liability counter in application memory → wrong on multi-pod deployment → use Redis INCR
-- Self-exclusion check missing or checked after wallet debit → regulatory violation
-- No market suspension lock → bets accepted on stale odds during live event
+@docs/domain-verticals.md
 
 ---
 
@@ -157,81 +92,7 @@ This applies to:
 
 ---
 
-## AI Engineering Extension Rule
-
-**Applies to lessons only** (not `question.md`). Classic implementation always comes first. AI section always last, after the quiz, visually separated.
-
-### When to add it
-Add an AI Engineering Extension section to a lesson when the topic matches **any** of these triggers:
-
-| Trigger | Example domains |
-|---|---|
-| Content moderation / spam detection | Comment system, social feed, chat |
-| Fraud / anomaly detection | Payments, banking, betting wallet |
-| Search / recommendation / ranking | Feed ranking, product search, autocomplete |
-| Classification (intent, sentiment, category) | Support tickets, transaction tagging, bet type |
-| Content generation / summarisation | News feed, document processing, reports |
-| Document processing / extraction | KYC, loan origination, invoice parsing |
-| Chatbot / conversational interface | Customer support, banking assistant |
-| Personalisation / user behaviour | Feed ranking, notification timing, odds display |
-
-### Section template (add to lesson HTML after quiz)
-
-```html
-<!-- AI Engineering Extension -->
-<h2 style="border-color: #7c3aed">🤖 AI Engineering Extension</h2>
-
-<h3>Where AI fits</h3>
-<!-- which component benefits from an LLM -->
-
-<h3>Pattern</h3>
-<!-- RAG / classifier / agent / embedding search / tool-use / summarisation / extraction -->
-
-<h3>Architecture delta</h3>
-<!-- new boxes: vector DB, embedding service, LLM API call, prompt cache, guardrails -->
-
-<h3>Tradeoffs</h3>
-<!-- latency cost · hallucination risk vs rule-based · cost per call · accuracy · cold start -->
-
-<h3>AWS / managed services</h3>
-<!-- Bedrock · OpenSearch vector index · SageMaker · Kendra · Comprehend -->
-
-<!-- AI Quiz — one question, labelled AI-Q, same format as main quiz -->
-<div class="question" id="ai-q1">
-  <p>AI-Q: ...</p>
-  <ul class="options" data-correct="N"> ... </ul>
-  <div class="explanation"> ... </div>
-</div>
-```
-
-### DevOps AI Angle section template (add to devops lessons after quiz)
-
-```html
-<!-- DevOps Agentic AI Angle -->
-<h2 style="border-color: #7c3aed">🤖 Agentic AI Angle</h2>
-
-<h3>AI as workload</h3>
-<!-- How this tool/config changes when the service being deployed IS an AI agent:
-     GPU node pools, long-running inference pods, token-rate sidecars, model version pinning,
-     prompt config via ConfigMap, cost-per-call metrics in Datadog -->
-
-<h3>AI as operator</h3>
-<!-- How AI agents USE or AUTOMATE this tool in the DevOps pipeline:
-     Claude in GitLab CI as automated code reviewer, AI-powered incident triage,
-     LLM generating Terraform plans from natural language, AI reading Datadog anomalies
-     and opening Jira tickets automatically -->
-
-<h3>Key differences from a standard service</h3>
-<!-- GPU requirements, non-deterministic outputs (can't assert exact response in tests),
-     model version = dependency (pin like a library version), token cost = runtime cost metric -->
-
-<h3>AWS managed services</h3>
-<!-- Bedrock (managed inference), SageMaker (custom model hosting),
-     SSM Parameter Store (prompt versioning), Cost Explorer (token cost tracking) -->
-```
-
-### Section styling
-Use a **purple left border** (`border-color: #7c3aed`) on the `h2` to visually distinguish from the main lesson content.
+@docs/ai-extension-rule.md
 
 ---
 
@@ -260,62 +121,8 @@ Fix: [what to change]
 Claude starts at **easy**. After 2 consecutive passes → bump to next level. On fail → hold level (or drop one if 2 consecutive fails). User can override with `next easy/medium/hard` at any time.
 
 ---
-## OOD Delivery Convention
 
-Applies to the `ood` category only — no other category changes delivery shape.
-
-**Plain `next ood` (and `next ood {slug}`):**
-1. Teach-first lesson generated before the question (existing `topics/ood/{slug}/INDEX.md`
-   check applies as usual) — but the lesson itself is now a full solution-walkthrough doc:
-   design reasoning, TDD narrative (red → green shown, not just described), and complete
-   code for the primary recommended approach. Not a lighter pre-teaching primer.
-2. `solution/` — complete, heavily commented (WHY, not what), TDD-ordered reference
-   implementation matching what the lesson walks through. Always includes a runnable
-   `{Entity}Main.java` demonstrating the solution end-to-end (construct the core objects,
-   drive them through a realistic sequence of calls, print/assert observable outcomes) —
-   same precedent as `q030_library_system/solution/LibraryMain.java`.
-3. `answer/` — empty (a `.gitkeep` placeholder only). Write from scratch, or study
-   `solution/` and the lesson first — the choice is yours, not enforced by withholding
-   content.
-
-**`next ood skeleton` (and `next ood skeleton {slug}`):**
-1. Identical lesson + `solution/` as plain `next ood`.
-2. `answer/` — pre-seeded with partial/buggy code (planted issues), same spirit as
-   `q030_library_system/answer/attempt1`'s historical planted bugs (State pattern miswired,
-   BigDecimal `==` reference-equality bug). Task: complete it and find what's wrong before
-   `done`.
-
-**Folder mirroring (both modes):** `solution/` and `answer/` are created under BOTH
-`src/main/java/.../q{NNN}_{slug}/` AND `src/test/java/.../q{NNN}_{slug}/` — not just
-`src/main`. Test code (the reference test suite in `solution/`, and wherever the learner's
-own tests eventually land in `answer/`) mirrors the same `solution/`/`answer/` split as the
-implementation code, exactly matching each package's directory layout.
-
-**Both modes:** TDD is mandatory. JUnit 5 + Mockito only — no AssertJ (standing project-wide
-rule, restated here since it's load-bearing for OOD specifically).
-
-**Comment density (both modes, both `solution/` and its tests):** heavier than this
-project's general default. Every non-trivial class or method in `solution/` explains, inline:
-1. The design decision made (which pattern, which structure) and why it fits this specific
-   requirement — not a restatement of what the code does.
-2. At least one alternative that was considered and rejected, with the concrete reason
-   (e.g. "enum + switch was rejected because adding a state means editing every switch
-   block").
-3. What NOT to do — the specific mistake this design guards against, ideally naming the
-   actual bug shape (silent state corruption, a strategy holding elevator-specific state and
-   losing reusability, a public setter bypassing a guard).
-
-Test files get the same treatment, not just production code: comment on WHY a test is
-structured the way it is, what it actually verifies vs. what a superficially-similar-but-
-wrong version of the same test would miss. If a test was rewritten after an initial version
-turned out not to test what it claimed, say so and explain why the fixed version is correct
-— this project already caught real examples of that mid-session and it's worth keeping the
-lesson attached to the code, not just in chat history.
-
-This does not apply retroactively to already-built OOD questions (q013, q026, q027, q030,
-q032, q035, q036, q037, q040) — forward-only from q042. The `{Entity}Main.java`
-requirement specifically is forward-only from q044 — q042 and q043 predate it and were not
-retrofitted.
+@docs/ood-delivery-convention.md
 
 ---
 
@@ -377,124 +184,42 @@ code-review/q{NNN}_{slug}/
 ├── question.md      ← contains the broken Java code snippet + "what is wrong?"
 ├── hints.md
 └── MyAnswer.md      ← list every issue you find, categorised
+
+Pairing drill (see "Pairing Drill Category" below — **forward-only from the next new
+`pairing-drill` question; q072–q074 predate this shape and are not retrofitted**, same
+precedent as the OOD Delivery Convention):
+pairing-drill/src/main/java/com/interview/pairingdrill/q{NNN}_{slug}/
+├── question.md
+├── {DomainClass}.java  ← seeded messy code — REFERENCE ONLY, not edited directly. Real class
+│                          name, not "MyAnswer". This is "what we started with."
+├── {supporting entity/interface files as the scenario needs}
+├── hints.md            ← populated on hint/solution requests
+├── transcript.md       ← appended on every `review`
+├── solution/           ← self-contained reference (own package, redeclares any entity/
+│                          interface it needs to change) — pre-seeded from the start, same as
+│                          `ood`'s `solution/`. Nothing stops you opening it early; the
+│                          discipline of not peeking is on you, not enforced by withholding it.
+└── answer/             ← where you actually work. Starts as an exact copy of the seeded
+                           messy code (default) — or, under `next pairing-drill skeleton`, a
+                           partial attempt already in progress (planted mistakes mid-refactor,
+                           same spirit as `ood skeleton`'s attempt1)
+
+pairing-drill/src/test/java/com/interview/pairingdrill/q{NNN}_{slug}/
+├── solution/
+│   └── SolutionTest.java
+└── answer/
+    └── MyAnswerTest.java   ← starts empty, mocks pre-wired (default) — or, per question,
+                               pre-seeded with tests that pass but don't actually exercise the
+                               real bug, same pattern as q056/q060 in `algorithms`
 ```
+
+`review`/`done` operate on `answer/`, not the main-folder file directly.
 
 **After `done`:** Claude creates `review.md` in the same folder.
 
 ---
 
-## Review Rubrics
-
-### Algorithms
-- Correctness: does it produce right output?
-- Time complexity: optimal or acceptable?
-- Space complexity: any obvious waste?
-- Edge cases: null, empty, duplicates, overflow handled?
-
-### System Design
-- Component selection: right tools for the job?
-- Scalability reasoning: bottlenecks identified?
-- Trade-offs articulated: consistency vs availability, etc.?
-- Data model: storage decisions justified?
-- **AWS mapping:** every component mapped to AWS equivalent (e.g. Kafka → MSK, Redis → ElastiCache, Postgres → RDS Multi-AZ, API Gateway → API GW + Lambda or ALB)
-- **Distributed failure modes:** what breaks at 10x load, in a multi-AZ deployment, or during a region failover?
-- **If payment domain:** idempotency addressed? PCI-DSS data handling? Multi-region RTO/RPO stated? Race conditions on balance? Outbox pattern for event publishing?
-
-### Spring / Coding Exercises
-- Correct patterns used (e.g. @Transactional, @Service boundaries)?
-- Testable design (dependencies injectable)?
-- Idiomatic Java 21?
-- Spring Boot conventions followed?
-
-### Code Review / Spot the Issue
-
-Issues are scored by category. For each issue found:
-- **Spring anti-patterns:** mutable state in `@Controller`/`@Service`, `@Autowired` field injection (not constructor), missing `@Transactional`, wrong propagation, lazy-load outside transaction
-- **Distributed system pitfalls:** shared mutable state assumes single instance, in-memory cache not invalidated across nodes, no idempotency, missing retry/timeout, assuming local file system
-- **Concurrency bugs:** non-thread-safe collections (`HashMap` in shared context), missing `synchronized`/`volatile`, double-checked locking without `volatile`, `SimpleDateFormat` shared instance
-- **Algorithm / complexity:** O(N²) where O(N log N) possible, unnecessary DB query in loop (N+1), sorting unsorted input assumptions
-- **JPA / Hibernate:** N+1 select, `EAGER` fetch on large collections, entity exposed directly as DTO, missing `@Version` for optimistic lock, transaction boundary too wide or too narrow
-- **Security:** SQL string concatenation (injection), secrets in code, missing input validation, `@PreAuthorize` missing
-- **Memory / resource leaks:** streams not closed, connection not released, large collection held in static field
-- **Java style:** raw types, unchecked casts, empty catch blocks swallowing exceptions, `System.out.println` instead of logger
-
-Strong answer: finds ALL planted issues, names the category, explains the real-world consequence, proposes fix, and where relevant explains **AWS/distributed impact** (e.g. "on a 4-pod ECS cluster this cache is per-instance → use ElastiCache Redis instead").
-
-**Domain-specific code review triggers (always flag these):**
-
-Payment / Fintech:
-- Card/PAN data in logs → PCI-DSS violation, instant fail in compliance audit
-- No idempotency key on payment mutation → double charge on retry
-- No optimistic lock (`@Version`) on account balance → overdraft race condition
-- `synchronized` on instance method when service runs as multiple replicas → false sense of safety
-- Hardcoded AWS region or endpoint → breaks multi-region deployment
-- Secrets/API keys in code or properties files → use AWS Secrets Manager / KMS
-- No `@Transactional` on multi-step payment operations → partial failure = data inconsistency
-
-Banking:
-- `double`/`float` for monetary amounts → precision loss, regulatory non-compliance → use `BigDecimal`
-- Mutable/UPDATE on posted ledger entries → audit trail destroyed → append-only ledger rows
-- Missing audit log on balance-changing operation → SOX/regulatory violation
-- No timeout + circuit breaker on external credit bureau call → cascading failure
-- Loan/account state machine with no guard → invalid state transitions (e.g. approved → pending)
-
-Sport Betting:
-- `double`/`float` for odds or payout → wrong payouts, regulatory liability → use `BigDecimal`
-- No idempotency key on bet placement → duplicate bets on client retry → duplicate stake deduction
-- Liability counter in application memory → wrong on multi-pod → use Redis INCR (atomic)
-- Self-exclusion / deposit limit check missing or checked after wallet debit → regulatory violation
-- No market suspension during live event update → bets accepted on stale odds → financial loss
-
-### OO Design
-- SOLID principles applied?
-- Correct pattern identified and named (e.g. Strategy, Observer)?
-- Classes have single responsibility, low coupling?
-- Skeleton compiles, interfaces/abstractions make sense?
-- Extensibility: adding new behaviour doesn't require modifying existing classes?
-
-### Java / Java 8
-- Java 8 APIs used correctly (streams, Optional, CompletableFuture)?
-- No unnecessary boxing/unboxing, no raw types?
-- Thread safety addressed where relevant?
-- Idiomatic use of lambdas and method references?
-
-### DevOps / Docker / Kubernetes / GitLab / Terraform / Observability
-
-**Hard gate — must pass:**
-- **Prod awareness:** failure modes identified, not just happy path. Examples that must be caught:
-  - containers: no .dockerignore → secrets in image layer; `latest` tag → non-reproducible deploys; running as root → container escape risk
-  - kubernetes: missing resource limits → OOMKilled / noisy neighbour; missing probes → traffic routed to crashed pod
-  - helm: no rollback strategy → failed deploy is stuck; hardcoded values in templates → not environment-portable
-  - ci-cd: secrets hardcoded in `.gitlab-ci.yml` → exposed in CI logs; no cache → rebuild from scratch every run
-  - observability: no SLO defined → alert fires but breach not tracked; missing distributed trace → can't pinpoint slow service
-  - alerting: no runbook linked from alert → on-call engineer blind; PagerDuty without escalation policy → alert silently drops
-  - terraform: state not in remote backend → corruption on team usage; no state locking → concurrent apply race condition
-  - agent-infra: no rate-limit sidecar → LLM API costs unbounded; model version not pinned → silent behaviour change on redeploy
-
-**Required for pass:**
-- Architecture justification: WHY this config/tool choice, not just what it is
-
-**Bonus (not required to pass):**
-- Correct YAML/HCL/Dockerfile syntax
-- Agentic AI angle mentioned
-- AWS equivalent called out (EKS, ECR, MSK, ElastiCache, Secrets Manager, Bedrock)
-- Cost / operational tradeoff named
-
-**Difficulty scope:**
-- Easy: single tool in isolation (Dockerfile, one K8s resource, one Terraform resource)
-- Medium: two tools wired together (CI pipeline + Docker push; K8s Deployment + HPA + ConfigMap)
-- Hard: full subsystem (K8s prod setup with Ingress + TLS + Secrets + HPA + probes; full CI/CD pipeline)
-- Architecture (always hard): complete DevOps pipeline — git push → GitLab CI → Docker → ECR → Helm → ArgoCD → EKS → Datadog → Slack → Terraform underneath
-
-### Messaging / NoSQL / DB
-- Technology chosen correctly for the use case?
-- Configuration/schema correct?
-- Failure scenarios considered?
-
-### Concepts / DDD / EDA
-- Domain language precise?
-- Boundaries correctly identified?
-- Patterns named and applied correctly?
+@docs/review-rubrics.md
 
 ---
 
@@ -518,7 +243,23 @@ topics/
   db/{slug}/
   devops/{slug}/
   concepts/{slug}/
+  projects/{company}/  e.g. pairingco — real, named-employer interview-day prep kits
 ```
+
+### `projects/{company}/` — company-specific interview prep
+
+Distinct from the categories above: not a concept being taught, but a prep kit for a real,
+named employer's actual interview process (format, rubric, drills, scripts). Differences from
+the standard flow:
+
+- **No teach-first gate.** Skip the `INDEX.md` "concept already listed" check — these are
+  always written fresh for the specific engagement, not reused across companies.
+- **One slug per company, flat.** All docs for that employer's process live directly under
+  `topics/projects/{company}/`, numbered `0NNN-*.html` same as any other topic folder — not
+  nested per interview round. A later round for the same company just continues the numbering.
+- **Local-only, never pushed.** The entire `topics/projects/` tree is excluded via
+  `.git/info/exclude` (not `.gitignore` — no trace of the exclusion rule in repo history
+  either). Confirm this exclusion is still in place before ever running a broad `git add`.
 
 ### INDEX.md — concept registry per topic
 Every topic folder contains `INDEX.md`. Format:
@@ -574,6 +315,10 @@ Before retrying a question, read:
 
 ---
 
+@docs/pairing-drill-spec.md
+
+---
+
 ## Maven Modules
 
 | Module | Run tests |
@@ -585,6 +330,7 @@ Before retrying a question, read:
 | databases | `mvn test -pl databases` |
 | ood | `mvn test -pl ood` |
 | interview-prep | `mvn test -pl interview-prep` |
+| pairing-drill | `mvn test -pl pairing-drill` |
 | All | `mvn test` |
 
 ---
