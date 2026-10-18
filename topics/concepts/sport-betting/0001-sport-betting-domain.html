@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sport Betting Domain</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:.9rem}
+  ul,ol{margin:.5rem 0 1rem 1.5rem}
+  li{margin-bottom:.4rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fef2f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .domain-box{border:1.5px solid var(--accent);border-radius:8px;padding:1rem 1.4rem;margin:1.2rem 0;background:#f0f6ff}
+  .domain-box .label{font-family:monospace;font-size:.78rem;color:var(--accent);font-weight:bold;margin-bottom:.4rem}
+  .lifecycle{display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0 1.5rem;align-items:center}
+  .lifecycle .step{background:var(--sidebar);border:1px solid var(--border);border-radius:5px;padding:.4rem .8rem;font-family:monospace;font-size:.82rem;white-space:nowrap}
+  .lifecycle .arrow{color:var(--muted);font-size:1rem}
+  .lifecycle .step.current{background:#dbeafe;border-color:#2563eb;color:#1e40af}
+  .lifecycle .step.terminal-pass{background:#dcfce7;border-color:var(--pass);color:#166534}
+  .lifecycle .step.terminal-fail{background:#fee2e2;border-color:var(--fail);color:#991b1b}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none;margin:0}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← Concepts</a></div>
+<h1>Sport Betting Domain</h1>
+<div class="meta">Event · Market · Selection · Odds · Bet lifecycle · Settlement · Liability · In-play · Responsible gambling</div>
+
+<div class="callout">
+  <strong>Why this matters</strong>
+  Sport betting platforms are a rich source of technical interviews in fintech and gambling. The domain has precise vocabulary — using the wrong term signals a shallow understanding. This lesson gives you the full mental model from first principles.
+</div>
+
+<!-- ============================================================ -->
+<h2>1. The core model: Event → Market → Selection</h2>
+
+<p>Every bet in sport betting traces back to this three-level hierarchy:</p>
+
+<div class="domain-box">
+  <div class="label">HIERARCHY</div>
+  <pre style="margin:.3rem 0">Event
+  └── Market (one event can have many markets)
+        └── Selection / Outcome (one market has 2–N selections)
+
+Example: "Premier League: Arsenal vs Chelsea" (Event)
+  ├── "Match Result" (Market)
+  │     ├── Arsenal Win  (Selection, odds: 2.10)
+  │     ├── Draw         (Selection, odds: 3.40)
+  │     └── Chelsea Win  (Selection, odds: 3.60)
+  ├── "Both Teams to Score" (Market)
+  │     ├── Yes          (Selection, odds: 1.75)
+  │     └── No           (Selection, odds: 2.05)
+  └── "First Goalscorer" (Market)
+        ├── Saka         (Selection, odds: 6.00)
+        ├── Nketiah      (Selection, odds: 8.00)
+        └── ...          (many more)</pre>
+</div>
+
+<table>
+  <thead><tr><th>Term</th><th>Definition</th><th>Key attributes</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Event</strong></td><td>The sporting fixture: a match, race, or competition</td><td>sport, startTime, status (ACTIVE / IN_RUNNING / FINISHED / SUSPENDED)</td></tr>
+    <tr><td><strong>Market</strong></td><td>A specific question about the event you can bet on</td><td>marketType (MATCH_RESULT, NEXT_GOALSCORER…), status, suspendedAt</td></tr>
+    <tr><td><strong>Selection / Outcome</strong></td><td>One possible answer to the market's question</td><td>name, odds (decimal), result (WIN / LOSE / VOID / PLACE)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Selection vs Outcome — are they the same?</strong>
+  In most platforms: same concept, different names. "Selection" is used at bet-placement time (what the punter selects). "Outcome" is used at settlement time (what actually happened). Some codebases use both interchangeably; some reserve "outcome" strictly for settled states. In ARM's codebase: <code>Selection</code> is the pre-race term, <code>RunnerResult</code> is the settled form.
+</div>
+
+<!-- ============================================================ -->
+<h2>2. Odds — formats and implied probability</h2>
+
+<p>Odds express the bookmaker's assessment of a selection's likelihood of winning AND the payout if it does. Three formats in common use:</p>
+
+<table>
+  <thead><tr><th>Format</th><th>Example</th><th>Payout on £10 stake</th><th>Implied probability</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Decimal</strong> (European)</td><td>2.50</td><td>£10 × 2.50 = £25 (includes stake)</td><td>1 ÷ 2.50 = 40%</td></tr>
+    <tr><td><strong>Fractional</strong> (UK traditional)</td><td>6/4 (say "six to four")</td><td>£10 × (6/4) = £15 profit + £10 stake = £25</td><td>4 ÷ (6+4) = 40%</td></tr>
+    <tr><td><strong>American / Moneyline</strong></td><td>+150 (underdog) or -200 (favourite)</td><td>+150: £10 wins £15. -200: £20 stake needed to win £10</td><td>+150 → 100÷250=40%; -200 → 200÷300=67%</td></tr>
+  </tbody>
+</table>
+
+<div class="domain-box">
+  <div class="label">CONVERSION: decimal ↔ fractional ↔ implied probability</div>
+  <pre style="margin:.3rem 0">decimal  = (fractional numerator / denominator) + 1
+         = 6/4 + 1 = 1.5 + 1 = 2.50
+
+implied_probability = 1 / decimal_odds
+                    = 1 / 2.50 = 0.40  (40%)
+
+// In code — always BigDecimal:
+BigDecimal impliedProb = BigDecimal.ONE.divide(decimalOdds, 10, HALF_UP);</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Overround — the bookmaker's margin</h2>
+
+<p>If implied probabilities were fair, all selections in a market would sum to exactly 100%. They don't — the sum exceeds 100%. This excess is the <strong>overround</strong> (also called the "vig" or "juice"), and it's how bookmakers guarantee profit over time.</p>
+
+<div class="domain-box">
+  <div class="label">EXAMPLE: Match Result market</div>
+  <pre style="margin:.3rem 0">Home Win:  odds 2.10 → implied prob = 1/2.10 = 47.6%
+Draw:      odds 3.40 → implied prob = 1/3.40 = 29.4%
+Away Win:  odds 3.60 → implied prob = 1/3.60 = 27.8%
+                                                ─────
+                       Total implied:           104.8%   ← overround = 4.8%
+
+// A "fair" book would sum to 100%. The extra 4.8% is the bookmaker's margin.
+// If the book took equal money on each selection, they profit 4.8% regardless of result.</pre>
+</div>
+
+<p>Overround varies by market competitiveness: major match results ≈ 103–107%, obscure markets ≈ 110–120%. In-play markets are often wider because pricing under time pressure is harder.</p>
+
+<!-- ============================================================ -->
+<h2>4. Bet types</h2>
+
+<table>
+  <thead><tr><th>Type</th><th>Selections</th><th>Win condition</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Single</strong></td><td>1</td><td>That selection wins</td><td>Arsenal to win at 2.10</td></tr>
+    <tr><td><strong>Double</strong></td><td>2</td><td>Both selections win</td><td>Arsenal + Man City win → stakes × 2.10 × 1.80</td></tr>
+    <tr><td><strong>Accumulator (Acca)</strong></td><td>3+</td><td>All selections win</td><td>5-fold acca: £10 at 2.0×2.0×2.0×2.0×2.0 = £320 if all win</td></tr>
+    <tr><td><strong>Each-Way</strong></td><td>1 (horse racing)</td><td>Win part: horse wins. Place part: horse finishes in top N</td><td>£10 EW = £10 win + £10 place at ¼ odds</td></tr>
+    <tr><td><strong>Trixie</strong></td><td>3</td><td>Any 2 or more win (3 doubles + 1 treble = 4 bets)</td><td>At least 2 of 3 must win</td></tr>
+    <tr><td><strong>Patent</strong></td><td>3</td><td>Any 1 or more win (3 singles + 3 doubles + 1 treble = 7 bets)</td><td>Returns something if 1 of 3 wins</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Each-way is two bets, not one</strong>
+  £10 each-way = £20 total stake. The "win" part pays at full odds. The "place" part pays at a fraction of odds (typically ¼ or ⅕) if the horse finishes in the top 2, 3, or 4 (depends on field size). Settlement logic must handle both legs independently — a horse that places but doesn't win pays only the place portion.
+</div>
+
+<!-- ============================================================ -->
+<h2>5. Bet lifecycle — placement to settlement</h2>
+
+<div class="lifecycle">
+  <div class="step current">PENDING</div>
+  <div class="arrow">→</div>
+  <div class="step terminal-pass">APPROVED</div>
+  <div class="arrow">→</div>
+  <div class="step">SETTLED</div>
+</div>
+<div class="lifecycle">
+  <div class="step current">PENDING</div>
+  <div class="arrow">→</div>
+  <div class="step terminal-fail">DECLINED</div>
+</div>
+<div class="lifecycle">
+  <div class="step">APPROVED</div>
+  <div class="arrow">→</div>
+  <div class="step">PARTIALLY_CASHED_OUT</div>
+  <div class="arrow">→</div>
+  <div class="step terminal-pass">FULLY_CASHED_OUT</div>
+</div>
+<div class="lifecycle">
+  <div class="step">APPROVED / SETTLED</div>
+  <div class="arrow">→</div>
+  <div class="step terminal-fail">CANCELLED / VOID</div>
+</div>
+
+<h3>Placement phase</h3>
+<ol>
+  <li>Bettor submits bet slip via <code>POST /slips</code> — selections, stake, odds accepted by bettor.</li>
+  <li>Service validates: self-exclusion check, deposit limit check, wallet balance check.</li>
+  <li>Idempotency check: has this exact slip already been submitted? (idempotency key = sportsbookRef + tenantId).</li>
+  <li>Wallet debited for stake amount.</li>
+  <li>Bet inserted as <strong>PENDING</strong>.</li>
+  <li>Advisory service asynchronously evaluates the bet (fraud / price drift checks) → APPROVED or DECLINED.</li>
+</ol>
+
+<h3>Settlement phase</h3>
+<ol>
+  <li>Race/match result event published (e.g. "Arsenal Won") to Kafka.</li>
+  <li>Settlement service consumes event, identifies all open bets on that market.</li>
+  <li>For each bet: evaluate each selection against result → WIN / LOSE / VOID / PLACE.</li>
+  <li>Calculate payout: <code>payout = stake × odds</code> for a win single. Void selections use odds = 1.0 (stake returned). Each-way calculated as two legs.</li>
+  <li>Wallet credited with payout (if any).</li>
+  <li>Bet status updated to <strong>SETTLED</strong>.</li>
+  <li>Settlement receipt pushed to bettor via WebSocket.</li>
+</ol>
+
+<div class="callout">
+  <strong>Key engineering constraint: idempotent settlement</strong>
+  Race results can be republished (Kafka at-least-once). Settlement must be idempotent — settling the same bet twice must not credit the wallet twice. Standard pattern: set bet status to SETTLED atomically with the wallet credit; on retry, if status is already SETTLED, skip processing.
+</div>
+
+<!-- ============================================================ -->
+<h2>6. Liability management</h2>
+
+<p><strong>Liability</strong> is the maximum amount the bookmaker must pay out on a given selection if it wins. Tracking this in real-time is critical — a bookmaker that accepts too much exposure on a short-priced favourite can lose money even with a correct overround model.</p>
+
+<div class="domain-box">
+  <div class="label">EXAMPLE: liability on Arsenal Win selection</div>
+  <pre style="margin:.3rem 0">// Accepted bets on Arsenal Win (odds 2.10):
+Bet A: £100 stake → potential payout £210 → liability £110 (profit above stake)
+Bet B: £500 stake → potential payout £1,050 → liability £550
+Bet C: £200 stake → potential payout £420 → liability £220
+
+Total liability on Arsenal Win = £110 + £550 + £220 = £880
+
+// If liability exceeds the configured threshold:
+// → suspend market (no more bets accepted)
+// → OR shorten odds (reduce 2.10 → 1.95) to discourage further exposure</pre>
+</div>
+
+<h3>Engineering: where liability lives</h3>
+<p>Liability counters must be <strong>atomic</strong> and <strong>shared across all pods</strong>. In-memory counters fail on multi-pod deployments — each pod has its own count, the aggregate is never known. Standard solution: Redis <code>INCR</code> / <code>HSET</code> keyed by <code>{selectionId}</code>. On each accepted bet, atomically increment the counter and compare to threshold in one Lua script.</p>
+
+<!-- ============================================================ -->
+<h2>7. In-play (live) betting</h2>
+
+<p>In-play betting accepts bets while the event is in progress. This introduces constraints absent in pre-match:</p>
+
+<ul>
+  <li><strong>Sub-100ms acceptance target:</strong> a bettor submitting during a live penalty kick needs an answer before the outcome is known — any perceptible delay looks like the bookmaker is "waiting to see."</li>
+  <li><strong>Market suspension on trigger events:</strong> a goal, red card, or penalty must suspend all affected markets within milliseconds, before any informed bets can be placed on the changed state.</li>
+  <li><strong>Odds freshness:</strong> odds change rapidly; a bet submitted at 2.10 may be rejected if odds have moved to 1.80 by the time it arrives at the server. The platform must validate accepted odds against current odds, with a tolerance window.</li>
+  <li><strong>Price drift:</strong> if the bettor's submitted odds are significantly outside the current market odds, the bet is declined or offered at the new price ("best odds guarantee" or "price change notification").</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Market suspension is a regulatory obligation, not just a business rule</strong>
+  In the UK (Gambling Commission), accepting bets at stale odds after a known material event has occurred can be treated as a breach of licence conditions. Suspension logic must be triggered by the event feed — not by a human operator.
+</div>
+
+<!-- ============================================================ -->
+<h2>8. Settlement special cases</h2>
+
+<table>
+  <thead><tr><th>Case</th><th>What happens</th><th>Payout</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Win</strong></td><td>Selection result matches WIN</td><td><code>stake × decimalOdds</code></td></tr>
+    <tr><td><strong>Lose</strong></td><td>Selection result matches LOSE</td><td>£0 (stake forfeit)</td></tr>
+    <tr><td><strong>Void</strong></td><td>Event/market cancelled, postponed, or rule 4 deduction</td><td>Stake returned. In accas: voided leg treated as odds = 1.0 (leg removed, rest settle normally)</td></tr>
+    <tr><td><strong>Rule 4 deduction</strong></td><td>Horse racing: a runner is withdrawn before the race. Reduces payouts proportionally to compensate the bookmaker</td><td>Payout multiplied by Rule 4 factor (e.g. ×0.85)</td></tr>
+    <tr><td><strong>Each-way place only</strong></td><td>Horse finishes in place positions but not first</td><td>Win part: £0. Place part: <code>stake × (odds × place_fraction)</code></td></tr>
+    <tr><td><strong>Best Odds Guaranteed (BOG)</strong></td><td>Bookmaker guarantees bettor gets the better of SP (starting price) or taken price</td><td>If SP &gt; taken odds → pay at SP instead</td></tr>
+    <tr><td><strong>Dead heat</strong></td><td>Two or more selections finish equal (horse racing, golf)</td><td>Payout divided by number of tied selections</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2>9. Responsible gambling — always-flag triggers</h2>
+
+<p>Regulated markets (UK Gambling Commission, Malta Gaming Authority) mandate responsible gambling controls. These are <strong>pre-bet enforcement</strong> — checks must happen before wallet debit, not after.</p>
+
+<ul>
+  <li><strong>Self-exclusion:</strong> customer registered with GamStop (UK national scheme) → all bets declined. Must be checked before any bet is accepted.</li>
+  <li><strong>Deposit limits:</strong> customer-set daily/weekly/monthly cap. Bet declined if it would cause the limit to be exceeded.</li>
+  <li><strong>Loss limits:</strong> similar cap on net losses over a period.</li>
+  <li><strong>Cooling-off period:</strong> customer has requested a temporary break. All bets declined during the period.</li>
+  <li><strong>Affordability checks:</strong> high-spend customers may be required to provide proof of income above a threshold.</li>
+</ul>
+
+<div class="callout fail">
+  <strong>Critical code review trigger</strong>
+  Self-exclusion and deposit limit checks placed AFTER wallet debit are a regulatory violation — the bet has been partially processed before the check. The correct order: (1) responsible gambling checks → (2) idempotency check → (3) odds validation → (4) wallet debit → (5) insert bet. Any implementation that checks self-exclusion "at the end for audit purposes" must be flagged immediately.
+</div>
+
+<!-- ============================================================ -->
+<hr style="margin:2.5rem 0">
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question" id="q1">
+  <p>Q1: A market has three selections with decimal odds 2.00, 3.50, and 4.00. What is the overround?</p>
+  <ul class="options" data-correct="3">
+    <li>0% — the odds sum to exactly 100% implied probability</li>
+    <li>3.6% — the excess above 100% of the first selection only</li>
+    <li>14.3% — the difference between the highest and lowest implied probability</li>
+    <li>6.4% — implied probs are 50% + 28.6% + 25% = 103.6%, excess = 3.6%</li>
+  </ul>
+  <div class="explanation"><strong>D is correct.</strong> 1/2.00 = 50%, 1/3.50 = 28.57%, 1/4.00 = 25%. Sum = 103.57%. Overround = 3.57% ≈ 3.6%. This is a slightly below-average book (typical match result books run 104–107%). The bookmaker expects to retain ~3.6% of all stakes on this market over time.</div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2: A £20 accumulator wins on 4 of 5 selections. The fifth selection is voided (match postponed). What is the payout rule for the voided leg?</p>
+  <ul class="options" data-correct="2">
+    <li>The entire accumulator is voided and the £20 stake is returned</li>
+    <li>The voided leg is treated as odds 1.0, so the four winning legs pay as a 4-fold accumulator</li>
+    <li>The accumulator is settled as a loss because not all legs were resolved as wins</li>
+    <li>The payout is halved to compensate for the reduced number of legs</li>
+  </ul>
+  <div class="explanation"><strong>B is correct.</strong> A voided selection in an accumulator is removed from the bet — the accumulator folds down. Odds 1.0 × anything = anything, so the voided leg has no effect on the total payout. The remaining four winning legs pay as a 4-fold acca. Only if ALL legs void does the stake return outright.</div>
+</div>
+
+<div class="question" id="q3">
+  <p>Q3: Your in-play bet placement service runs on 4 pods. Liability is tracked with an in-memory counter on each pod. Why is this wrong?</p>
+  <ul class="options" data-correct="1">
+    <li>Each pod tracks only bets it processed; the aggregate liability is split across pods and the threshold check never sees the true total, allowing over-exposure</li>
+    <li>In-memory counters are not thread-safe and will produce race conditions within a single pod</li>
+    <li>Pods restart frequently in Kubernetes, so the counter resets on every deployment</li>
+    <li>The counter uses int which overflows for large liability values in high-traffic markets</li>
+  </ul>
+  <div class="explanation"><strong>A is correct.</strong> Pod A sees bets it handled; Pod B sees bets it handled. Neither knows the total. If the threshold is £10,000 and each pod has accepted £8,000, the total exposure is £32,000 — but each pod thinks it's only at £8,000 and keeps accepting. Fix: shared Redis HSET/INCR keyed by selectionId, updated atomically on every accepted bet across all pods.</div>
+</div>
+
+<div class="question" id="q4">
+  <p>Q4: A bettor submits a bet with a self-exclusion check positioned after the wallet debit in the code. What is the production consequence?</p>
+  <ul class="options" data-correct="4">
+    <li>No consequence — the bet is still declined once the check runs</li>
+    <li>The wallet is debited twice due to the check delaying the idempotency guard</li>
+    <li>The bet is accepted silently because the self-exclusion check never reaches the declined branch</li>
+    <li>Money leaves the customer's wallet before the check runs — the bet may be declined but a refund cycle is now required, and accepting any funds from a self-excluded customer is a regulatory breach</li>
+  </ul>
+  <div class="explanation"><strong>D is correct.</strong> UK GC licence conditions require that a self-excluded customer cannot place a bet — this means the entire transaction must not begin. If the wallet debit happens first, you have accepted money from a self-excluded person even if you immediately decline and refund. The correct order is: responsible gambling checks first, wallet debit last within the placement sequence.</div>
+</div>
+
+<div class="question" id="q5">
+  <p>Q5: What is the difference between a Market and a Selection?</p>
+  <ul class="options" data-correct="2">
+    <li>A market is a type of bet (single, double, acca); a selection is the event being bet on</li>
+    <li>A market is a bettable question about an event (e.g. Match Result); a selection is one possible answer within that market (e.g. Home Win)</li>
+    <li>A market is the bookmaker's internal record; a selection is what the customer sees in the UI</li>
+    <li>A market covers pre-match bets; a selection covers in-play bets on the same event</li>
+  </ul>
+  <div class="explanation"><strong>B is correct.</strong> One Event has many Markets. Each Market has 2–N Selections. "Match Result" is a market; "Arsenal Win", "Draw", "Chelsea Win" are its three selections. A bettor picks one or more selections across one or more markets to build a bet slip. Getting this hierarchy right is the first step to understanding any betting platform codebase.</div>
+</div>
+
+</div>
+
+<div class="callout" style="margin-top:2.5rem">
+  <strong>Ask your teacher</strong>
+  Questions like "how does BOG work technically?", "walk me through the settlement saga for an each-way bet on a voided race", or "what does in-play latency look like in a system design interview?" — ask Claude and drill deeper on any section here.
+</div>
+
+<footer>Sport Betting Domain · Lesson 0001 · topics/concepts/sport-betting</footer>
+</body>
+<script>
+document.querySelectorAll('.options').forEach(opts=>{
+  const correct=parseInt(opts.dataset.correct)-1;
+  opts.querySelectorAll('li').forEach((li,i)=>{
+    li.addEventListener('click',()=>{
+      if(opts.dataset.answered)return;
+      opts.dataset.answered=true;
+      opts.querySelectorAll('li').forEach((l,j)=>{
+        if(j===correct)l.classList.add('reveal');
+      });
+      li.classList.add(i===correct?'correct':'wrong');
+      if(i!==correct)opts.querySelectorAll('li')[correct].classList.add('reveal');
+      const exp=opts.closest('.question').querySelector('.explanation');
+      if(exp)exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</html>

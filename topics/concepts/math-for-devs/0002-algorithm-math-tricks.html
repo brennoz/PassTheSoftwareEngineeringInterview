@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Math Tricks for Algorithm Problem Solving</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:.9rem}
+  ul,ol{margin:.5rem 0 1rem 1.5rem}
+  li{margin-bottom:.4rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fef2f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .trick-box{border:1.5px solid var(--accent);border-radius:8px;padding:1rem 1.4rem;margin:1.2rem 0;background:#f0f6ff}
+  .trick-box .label{font-family:monospace;font-size:.78rem;color:var(--accent);font-weight:bold;margin-bottom:.4rem}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none;margin:0}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  .xor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;margin:1rem 0;font-family:monospace;font-size:.9rem;text-align:center}
+  .xor-grid .cell{padding:.4rem;border:1px solid var(--border);border-radius:4px;background:var(--sidebar)}
+  .xor-grid .cell.highlight{background:#f0f6ff;border-color:var(--accent);font-weight:bold}
+  .complexity-badge{display:inline-block;font-family:monospace;font-size:.78rem;font-weight:bold;padding:.15rem .5rem;border-radius:4px;margin-left:.5rem}
+  .fast{background:#dcfce7;color:var(--pass)}
+  .slow{background:#fee2e2;color:var(--fail)}
+  .step{counter-increment:step;display:flex;gap:.75rem;margin:.6rem 0}
+  .step::before{content:counter(step);min-width:1.6rem;height:1.6rem;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-family:monospace;font-weight:bold;margin-top:.15rem;flex-shrink:0}
+  .steps{counter-reset:step;margin:1rem 0}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav">
+  <a href="../">← Concepts</a> ·
+  <a href="0001-math-tricks-for-devs.html">← Lesson 1: Powers, Logs, Bits, Estimation</a>
+</div>
+<h1>Math Tricks for Algorithm Problem Solving</h1>
+<div class="meta">Prefix sums · XOR algebra · Ceiling division · Two's complement geometry · Pigeonhole · Difference arrays · Arithmetic progressions</div>
+
+<div class="callout">
+  <strong>The core idea</strong>
+  The fastest algorithms don't compute harder — they compute differently. Each trick below transforms a naive approach
+  (O(n) per query, O(n²) loop, branch-heavy logic) into something structurally faster by seeing the math from a
+  different angle. Learn the pattern, not the individual problem.
+</div>
+
+<!-- ============================================================ -->
+<h2>1. Prefix Sums — precompute once, query in O(1)</h2>
+
+<p><strong>The naive mistake:</strong> given an array, sum elements between index <code>l</code> and <code>r</code>
+every time you're asked. That's O(n) per query — if you answer Q queries, it's O(n × Q) total.</p>
+
+<p><strong>The insight:</strong> precompute a running total. Then any range sum is two array lookups and a subtraction.</p>
+
+<div class="trick-box">
+  <div class="label">PATTERN — Prefix Sum</div>
+  <code>prefix[0] = 0</code><br>
+  <code>prefix[i] = prefix[i-1] + arr[i-1]</code>  <em>(1-indexed)</em><br><br>
+  <code>sum(l, r) = prefix[r+1] - prefix[l]</code>  <em>→ O(1) per query after O(n) setup</em>
+</div>
+
+<pre>// Build prefix sum array — O(n) once
+int[] prefix = new int[n + 1];
+for (int i = 0; i &lt; n; i++) {
+    prefix[i + 1] = prefix[i] + arr[i];
+}
+
+// Range sum [l, r] inclusive — O(1)
+int rangeSum = prefix[r + 1] - prefix[l];</pre>
+
+<table>
+  <tr><th>Approach</th><th>Per query</th><th>Total (Q queries)</th></tr>
+  <tr><td>Naive loop each time</td><td><span class="complexity-badge slow">O(n)</span></td><td><span class="complexity-badge slow">O(n × Q)</span></td></tr>
+  <tr><td>Prefix sum</td><td><span class="complexity-badge fast">O(1)</span></td><td><span class="complexity-badge fast">O(n + Q)</span></td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Where it appears</strong>
+  Range sum queries (LeetCode #303, #304 2D variant), subarray sum equals K (#560), product arrays (#238),
+  sliding window problems where the window condition involves a running total.
+</div>
+
+<div class="callout">
+  <strong>2D prefix sums</strong>
+  The same trick extends to matrices: <code>prefix[i][j]</code> = sum of the rectangle from (0,0) to (i-1,j-1).
+  Any sub-rectangle query becomes: <code>P[r2+1][c2+1] - P[r1][c2+1] - P[r2+1][c1] + P[r1][c1]</code>
+  — four lookups, O(1).
+</div>
+
+<!-- ============================================================ -->
+<h2>2. XOR Algebra — cancellation as a tool</h2>
+
+<p>XOR has three properties that make it a surprisingly sharp instrument:</p>
+
+<div class="xor-grid">
+  <div class="cell highlight">a ^ a = 0</div>
+  <div class="cell highlight">a ^ 0 = a</div>
+  <div class="cell highlight">a ^ b = b ^ a</div>
+  <div class="cell highlight">(a^b)^c = a^(b^c)</div>
+</div>
+
+<p>Translation: <strong>XOR-ing the same number twice cancels it out.</strong> Every value is its own inverse.
+Order doesn't matter.</p>
+
+<h3>Find the missing number in 0..n</h3>
+<p>Given an array with all numbers 1..n except one, find the missing number without sorting or a hash set.</p>
+<pre>// XOR all indices 0..n, then XOR all values.
+// Paired values cancel; unpaired index (the missing number) survives.
+int missing = n;
+for (int i = 0; i &lt; n; i++) {
+    missing ^= i ^ arr[i];
+}</pre>
+<p>Space: O(1). Time: O(n). The same pattern finds two non-repeating elements in an array of duplicates.</p>
+
+<h3>Swap two integers without a temp variable</h3>
+<pre>a ^= b;   // a = a ^ b
+b ^= a;   // b = b ^ (a ^ b) = a
+a ^= b;   // a = (a ^ b) ^ a = b</pre>
+<div class="callout warn">
+  <strong>Caution</strong>
+  This breaks if <code>a</code> and <code>b</code> are the same memory location (same pointer). Always use a temp
+  variable in production Java — this trick exists so you can recognise it in interviews, not to write it in services.
+</div>
+
+<h3>Detect if two integers have opposite signs</h3>
+<pre>boolean oppositeSign = (a ^ b) &lt; 0;  // sign bit differs → XOR sign bit = 1 → negative</pre>
+
+<div class="callout pass">
+  <strong>Where it appears</strong>
+  LeetCode #136 (single number), #137 (single number II), #260 (two unique numbers),
+  #268 (missing number), #389 (find difference). Recognise "find the odd-one-out" → reach for XOR.
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Ceiling Division &amp; Rounding Tricks</h2>
+
+<p>Integer division in Java truncates toward zero. When you need the ceiling (round up), a common mistake is
+converting to float.</p>
+
+<div class="trick-box">
+  <div class="label">PATTERN — Integer Ceiling Division</div>
+  <code>ceil(a / b)  =  (a + b - 1) / b</code>  &nbsp;&nbsp;→&nbsp;&nbsp; integer arithmetic, no float, no branch
+</div>
+
+<p><strong>Why it works:</strong> adding <code>b - 1</code> to <code>a</code> pushes any remainder over the
+threshold that forces a higher quotient, then truncation brings it back down exactly to the ceiling.</p>
+
+<pre>// How many pages of size PAGE_SIZE fit n items?
+int pages = (n + PAGE_SIZE - 1) / PAGE_SIZE;
+
+// How many chunks of 8 bits to hold n bits?
+int bytes = (n + 7) / 8;
+
+// How many full weeks to complete n days?
+int weeks = (n + 6) / 7;</pre>
+
+<h3>Aligning to a power-of-2 boundary</h3>
+<pre>// Round x UP to nearest multiple of align (must be power of 2)
+int aligned = (x + align - 1) &amp; ~(align - 1);
+
+// Round x DOWN to nearest multiple of align
+int aligned = x &amp; ~(align - 1);</pre>
+<p>This appears in memory allocators, cache-line alignment, and disk block addressing. The <code>~(align-1)</code>
+mask clears the low bits that would represent the remainder.</p>
+
+<div class="callout">
+  <strong>Related: is x a multiple of n?</strong>
+  <code>x % n == 0</code> when n is a power of 2 can be written as <code>(x &amp; (n-1)) == 0</code> — same
+  bitwise-AND-as-modulo trick from lesson 1.
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Two's Complement Geometry — low-bit tricks</h2>
+
+<p>Two's complement negation inverts all bits then adds 1. That +1 carries through the low zeros and flips the
+lowest set bit — everything below it becomes zero, everything above it is inverted. This geometry produces three
+extremely fast primitives:</p>
+
+<table>
+  <tr><th>Operation</th><th>Code</th><th>What it does</th></tr>
+  <tr><td>Is power of two?</td><td><code>(n &gt; 0) &amp;&amp; (n &amp; (n-1)) == 0</code></td><td>Clears lowest set bit; if result is 0, only one bit was set</td></tr>
+  <tr><td>Isolate lowest set bit</td><td><code>n &amp; (-n)</code></td><td>Returns a value with only the rightmost 1-bit set</td></tr>
+  <tr><td>Clear lowest set bit</td><td><code>n &amp; (n-1)</code></td><td>Turns off the rightmost 1-bit</td></tr>
+  <tr><td>Count set bits (Kernighan)</td><td><code>while(n!=0){count++;n&amp;=n-1;}</code></td><td>Each iteration strips one set bit — O(set bits), not O(32)</td></tr>
+  <tr><td>Absolute value (no branch)</td><td><code>int s=n&gt;&gt;31; (n^s)-s</code></td><td>Arithmetic right-shift fills with sign bit; XOR + subtract negates if negative</td></tr>
+</table>
+
+<div class="trick-box">
+  <div class="label">EXAMPLE — Count Set Bits (Kernighan's algorithm)</div>
+  <pre style="background:transparent;border:none;padding:0;margin:.5rem 0">// Naive: 32 iterations always
+// Kernighan: only as many iterations as there are 1-bits
+int count = 0;
+while (n != 0) {
+    count++;
+    n &amp;= (n - 1);  // strip lowest set bit
+}</pre>
+  If n = 1000 (decimal), it has 6 set bits in binary → only 6 iterations, not 32.
+</div>
+
+<h3>Fenwick Tree (Binary Indexed Tree) relies on these</h3>
+<p>A Fenwick Tree stores prefix sums with O(log n) update and query using exactly
+<code>i += (i &amp; -i)</code> to move to parent nodes and <code>i -= (i &amp; -i)</code> to move to
+next range — isolation of the lowest set bit is the entire navigation mechanism.</p>
+
+<!-- ============================================================ -->
+<h2>5. The Pigeonhole Principle — guarantee-based reasoning</h2>
+
+<p><strong>If you put n+1 objects into n boxes, at least one box holds two or more objects.</strong></p>
+
+<p>This sounds trivial. In algorithm problem solving it unlocks proof-by-contradiction reasoning and
+guarantees the existence of a structure you can then search for efficiently.</p>
+
+<h3>Example: Find Duplicate in Array of n+1 Integers (1..n)</h3>
+<p>By pigeonhole, at least one value must appear twice. That doesn't tell you how to find it — but it
+guarantees a solution exists. Floyd's cycle detection (fast/slow pointers) exploits this: treat the
+array as a function <code>f(i) = arr[i]</code> and follow it like a linked list. A duplicate entry creates
+a cycle, and the cycle's entry point is the duplicate.</p>
+
+<pre>// Floyd's Cycle Detection — find duplicate without extra space
+int slow = nums[0], fast = nums[0];
+do {
+    slow = nums[slow];
+    fast = nums[nums[fast]];
+} while (slow != fast);
+
+// Find entry point of cycle = duplicate
+fast = nums[0];
+while (slow != fast) {
+    slow = nums[slow];
+    fast = nums[fast];
+}
+return slow;  // = duplicate value</pre>
+
+<h3>Birthday Problem — probability meets pigeonhole</h3>
+<p>If you hash n items into m buckets, you expect a collision after roughly √m insertions, not m.
+At m = 365 days, collisions appear after ~23 people — not 183. This is why:</p>
+<ul>
+  <li>UUID collisions appear far sooner than the 2¹²⁸ space suggests (after ~2⁶⁴ IDs)</li>
+  <li>Hash tables need collision handling well before they're 100% full</li>
+  <li>Cryptographic birthday attacks (SHA-1 broken at ~2⁸⁰, not 2¹⁶⁰)</li>
+</ul>
+
+<div class="callout pass">
+  <strong>Where it appears</strong>
+  LeetCode #287 (find duplicate), #442 (find duplicates in array), any "prove at least one X must exist"
+  argument. Any capacity planning where you reason about expected collision rate.
+</div>
+
+<!-- ============================================================ -->
+<h2>6. Difference Arrays — O(1) range update</h2>
+
+<p>Prefix sums let you query a range sum in O(1) after O(n) setup. The <strong>difference array</strong> is
+the inverse trick: update a range in O(1), then reconstruct the full array in O(n).</p>
+
+<div class="trick-box">
+  <div class="label">PATTERN — Difference Array</div>
+  To add <code>val</code> to every element in range <code>[l, r]</code>:<br><br>
+  <code>diff[l]   += val</code><br>
+  <code>diff[r+1] -= val</code><br><br>
+  Reconstruct by prefix-summing <code>diff</code>: <code>arr[i] = arr[i-1] + diff[i]</code>
+</div>
+
+<pre>// Apply K range updates, then reconstruct — O(K + n) total
+int[] diff = new int[n + 1];
+
+// Each update: O(1)
+for (int[] op : operations) {
+    int l = op[0], r = op[1], val = op[2];
+    diff[l] += val;
+    if (r + 1 &lt;= n) diff[r + 1] -= val;
+}
+
+// Reconstruct: O(n)
+int[] result = new int[n];
+int running = 0;
+for (int i = 0; i &lt; n; i++) {
+    running += diff[i];
+    result[i] = running;
+}</pre>
+
+<table>
+  <tr><th>Operation</th><th>Naive array</th><th>Difference array</th></tr>
+  <tr><td>Update range [l, r]</td><td><span class="complexity-badge slow">O(n)</span></td><td><span class="complexity-badge fast">O(1)</span></td></tr>
+  <tr><td>Reconstruct full array</td><td><span class="complexity-badge fast">O(1)</span></td><td><span class="complexity-badge slow">O(n)</span> once at end</td></tr>
+  <tr><td>K updates + read all</td><td><span class="complexity-badge slow">O(K × n)</span></td><td><span class="complexity-badge fast">O(K + n)</span></td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Where it appears</strong>
+  LeetCode #1109 (flight booking), #1854 (maximum population year), #370 (range addition),
+  any "apply many range increments then read final values" problem.
+</div>
+
+<!-- ============================================================ -->
+<h2>7. Arithmetic Progression Identity</h2>
+
+<p>Sum of integers from 1 to n: <code>n × (n+1) / 2</code>. You almost certainly know this. What's
+less obvious is <em>when to reach for it</em> in algorithm problems.</p>
+
+<div class="trick-box">
+  <div class="label">PATTERN — Expected sum as a detection tool</div>
+  If you have n distinct integers drawn from 1..n, their sum must equal <code>n(n+1)/2</code>.
+  Any deviation reveals missing or extra elements without sorting or hashing.
+</div>
+
+<pre>// Find missing number in [0..n] — O(n) time, O(1) space
+int expected = n * (n + 1) / 2;
+int actual   = Arrays.stream(nums).sum();
+return expected - actual;
+
+// Find missing and extra: difference = missing - extra
+// Combined with XOR: one pass gives both</pre>
+
+<h3>Gauss sum generalisation</h3>
+<ul>
+  <li>Sum of <code>a</code> to <code>b</code>: <code>(b - a + 1) × (a + b) / 2</code></li>
+  <li>Sum of even numbers 2..n: <code>(n/2) × (n/2 + 1)</code></li>
+  <li>Sum of squares 1..n: <code>n(n+1)(2n+1)/6</code> — appears in variance calculations and DP proofs</li>
+</ul>
+
+<div class="callout">
+  <strong>Overflow guard</strong>
+  For large n, <code>n * (n+1)</code> overflows a 32-bit int before the division. Cast to <code>long</code>:
+  <code>(long)n * (n+1) / 2</code>. This is a common off-by-one source in contest problems.
+</div>
+
+<!-- ============================================================ -->
+<h2>Summary — pattern recognition table</h2>
+
+<table>
+  <tr><th>Signal in the problem</th><th>Reach for</th><th>Complexity gain</th></tr>
+  <tr><td>"Sum of subarray [l..r]" asked many times</td><td>Prefix sum</td><td>O(n) per query → O(1)</td></tr>
+  <tr><td>"Find the one that doesn't pair up"</td><td>XOR self-cancellation</td><td>O(n) space O(1)</td></tr>
+  <tr><td>Integer division rounding up</td><td><code>(a+b-1)/b</code></td><td>No float, no branch</td></tr>
+  <tr><td>"Is this a power of 2?" or count set bits</td><td><code>n &amp; (n-1)</code> / <code>n &amp; (-n)</code></td><td>O(1) / O(set bits)</td></tr>
+  <tr><td>"n+1 values from range 1..n → duplicate must exist"</td><td>Pigeonhole + Floyd's cycle</td><td>O(n) time O(1) space</td></tr>
+  <tr><td>"Apply K range increments, read final array"</td><td>Difference array</td><td>O(K×n) → O(K+n)</td></tr>
+  <tr><td>"Missing number in 0..n" / "detect extra"</td><td>Gauss sum identity</td><td>O(n) time O(1) space</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>Practice Quiz</h2>
+
+<div class="quiz">
+
+<div class="question" id="q1">
+  <p>Q1 — You have an array of size n+1 with values in [1..n]. No sorting, no hash set, O(1) space. Which approach finds the duplicate?</p>
+  <ul class="options" data-correct="1">
+    <li>Prefix sum after converting to diff array</li>
+    <li>Floyd's cycle detection via f(i) = arr[i]</li>
+    <li>XOR all indices then XOR all values</li>
+    <li>Gauss sum identity on the expected total</li>
+  </ul>
+  <div class="explanation">Pigeonhole guarantees a duplicate exists. Floyd's treats the array as a function to follow — the duplicate creates a cycle, and the entry point is the duplicate. XOR would also work for missing number, but not when there are duplicates (it cancels pairs, not extras).</div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2 — You must add +3 to every element in range [2, 7] of a 10-element array, 10,000 times with different ranges. Which data structure makes all updates O(1)?</p>
+  <ul class="options" data-correct="2">
+    <li>Fenwick Tree (Binary Indexed Tree)</li>
+    <li>Segment Tree with lazy propagation</li>
+    <li>Difference array with prefix reconstruction</li>
+    <li>Prefix sum array rebuilt after each update</li>
+  </ul>
+  <div class="explanation">Difference array: mark diff[l]+=val, diff[r+1]-=val — O(1) per update. Reconstruct once with a prefix pass at the end. Segment tree/Fenwick handle point queries between updates; prefix sum rebuilding is O(n) per update — exactly what we're avoiding.</div>
+</div>
+
+<div class="question" id="q3">
+  <p>Q3 — What does <code>n &amp; (n-1)</code> return when n is a power of 2?</p>
+  <ul class="options" data-correct="0">
+    <li>Returns exactly zero and no other value</li>
+    <li>Returns the next lower power of two</li>
+    <li>Returns n with the high bit cleared</li>
+    <li>Returns n with all low bits set to one</li>
+  </ul>
+  <div class="explanation">n & (n-1) clears the lowest set bit. For a power of 2, the only set bit IS the lowest (and only) bit. Clearing it leaves zero. This is the O(1) power-of-2 check: <code>(n > 0) && (n & (n-1)) == 0</code>.</div>
+</div>
+
+<div class="question" id="q4">
+  <p>Q4 — You need ceiling division: how many groups of 7 fit at least n=50 items? Which expression is correct integer arithmetic?</p>
+  <ul class="options" data-correct="3">
+    <li>(int) Math.ceil((double) 50 / 7)</li>
+    <li>50 / 7 + (50 % 7 != 0 ? 1 : 0)</li>
+    <li>50 / 7 + 1 regardless of remainder</li>
+    <li>(50 + 7 - 1) / 7 via integer arithmetic</li>
+  </ul>
+  <div class="explanation"><code>(50 + 6) / 7 = 56 / 7 = 8</code>. Option 1 works but involves float. Option 2 works but has a branch. Option 3 over-counts when 50 is exactly divisible. Option 4 is the canonical branchless integer ceiling formula.</div>
+</div>
+
+<div class="question" id="q5">
+  <p>Q5 — XOR all numbers 1..5, then XOR the array [1,2,4,5]. What does the result represent?</p>
+  <ul class="options" data-correct="1">
+    <li>Sum of all paired elements combined</li>
+    <li>Missing number since paired values cancel</li>
+    <li>Duplicate element found via cancellation</li>
+    <li>XOR of remaining elements after pairing</li>
+  </ul>
+  <div class="explanation">1^2^3^4^5 ^ 1^2^4^5 = 3 — each value that appears twice cancels to 0, leaving only the unpaired value (3, the missing number). This is the O(n) time O(1) space missing-number algorithm.</div>
+</div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="callout" style="margin-top:3rem">
+  <strong>Primary source</strong>
+  <em>Competitive Programmer's Handbook</em> by Antti Laaksonen (free PDF, Chapter 9 — Range Queries, Chapter 10 — Bit Manipulation). Covers prefix sums, difference arrays, sparse tables, and Fenwick trees with worked problems. Trust level: high (used in ICPC training worldwide).
+</div>
+
+<div class="callout pass">
+  <strong>Ask your teacher</strong>
+  Confused about when to use prefix sum vs difference array vs Fenwick tree? Not sure how Floyd's cycle detection actually finds the entry point (not just the cycle)? Ask a follow-up question in the chat — that's what I'm here for.
+</div>
+
+<footer>
+  <a href="0001-math-tricks-for-devs.html">← Lesson 1: Powers, Logs, Bits, Estimation</a> ·
+  Math for Developers · Part 2 of 2
+</footer>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.dataset.answered) return;
+      ul.dataset.answered = '1';
+      ul.querySelectorAll('li').forEach((el, j) => {
+        if (j === correct) el.classList.add(i === correct ? 'correct' : 'reveal');
+        else if (j === i)  el.classList.add('wrong');
+      });
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (exp) exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</body>
+</html>

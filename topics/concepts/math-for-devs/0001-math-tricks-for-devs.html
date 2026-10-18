@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Math for Developers</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#555;--border:#ddd;--bg-code:#f7f7f5;--accent:#2563eb;--pass:#16a34a;--fail:#dc2626;--warn:#d97706;--bg:#fefefe;--sidebar:#f3f4f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:17px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:860px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem}
+  h2{font-size:1.35rem;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+  h3{font-size:1.05rem;margin:1.5rem 0 .4rem;color:var(--muted)}
+  p{margin-bottom:.9rem}
+  ul,ol{margin:.5rem 0 1rem 1.5rem}
+  li{margin-bottom:.4rem}
+  .meta{color:var(--muted);font-size:.85rem;font-family:monospace;margin-bottom:2rem}
+  .lesson-nav{font-size:.85rem;margin-bottom:3rem;color:var(--muted)}
+  .lesson-nav a{color:var(--accent);text-decoration:none}
+  .callout{border-left:4px solid var(--accent);background:var(--sidebar);padding:.9rem 1.2rem;margin:1.5rem 0;border-radius:0 6px 6px 0}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.pass{border-color:var(--pass);background:#f0fdf4}
+  .callout.fail{border-color:var(--fail);background:#fef2f2}
+  .callout strong{display:block;margin-bottom:.3rem;font-family:monospace;font-size:.9rem}
+  pre{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:1.2rem 1.4rem;overflow-x:auto;font-size:.83rem;line-height:1.6;margin:1rem 0 1.5rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.87em;background:var(--bg-code);padding:.1em .35em;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0 1.5rem;font-size:.9rem}
+  th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);background:var(--sidebar)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  .trick-box{border:1.5px solid var(--accent);border-radius:8px;padding:1rem 1.4rem;margin:1.2rem 0;background:#f0f6ff}
+  .trick-box .label{font-family:monospace;font-size:.78rem;color:var(--accent);font-weight:bold;margin-bottom:.4rem}
+  .quiz{margin:2rem 0}
+  .question{margin:1.5rem 0}
+  .question p{font-weight:bold;margin-bottom:.75rem}
+  .options{list-style:none;margin:0}
+  .options li{padding:.6rem 1rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.4rem;cursor:pointer;transition:background .15s;font-size:.92rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--pass)}
+  .options li.wrong{background:#fee2e2;border-color:var(--fail)}
+  .options li.reveal{background:#dcfce7;border-color:var(--pass);opacity:.6}
+  .explanation{font-size:.88rem;color:var(--muted);margin-top:.5rem;display:none;padding:.5rem .8rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.5rem;font-size:.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="lesson-nav"><a href="../">← Concepts</a></div>
+<h1>Math for Developers</h1>
+<div class="meta">Powers of 2 · Logarithms · Modular arithmetic · Bit tricks · Float precision · Estimation · Percentiles</div>
+
+<div class="callout">
+  <strong>Why this matters</strong>
+  You don't need a maths degree. You need seven patterns that appear constantly in system design, algorithm analysis, and production debugging — and a fast intuition for when each one is in play.
+</div>
+
+<!-- ============================================================ -->
+<h2>1. Powers of 2 — the developer's times table</h2>
+
+<p>Every capacity decision in software maps to a power of 2. Memorise this table cold.</p>
+
+<table>
+  <thead><tr><th>Power</th><th>Exact value</th><th>Approximate</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td>2<sup>8</sup></td><td>256</td><td>256</td><td>Max value of one byte (unsigned)</td></tr>
+    <tr><td>2<sup>10</sup></td><td>1,024</td><td>~1 thousand (1 KB)</td><td>Kilobyte</td></tr>
+    <tr><td>2<sup>16</sup></td><td>65,536</td><td>~65 K</td><td>Max TCP port number, max short int</td></tr>
+    <tr><td>2<sup>20</sup></td><td>1,048,576</td><td>~1 million (1 MB)</td><td>Megabyte</td></tr>
+    <tr><td>2<sup>30</sup></td><td>1,073,741,824</td><td>~1 billion (1 GB)</td><td>Gigabyte</td></tr>
+    <tr><td>2<sup>32</sup></td><td>4,294,967,296</td><td>~4 billion</td><td>Max value of 32-bit int; max IPv4 addresses</td></tr>
+    <tr><td>2<sup>40</sup></td><td>—</td><td>~1 trillion (1 TB)</td><td>Terabyte</td></tr>
+    <tr><td>2<sup>64</sup></td><td>—</td><td>~18 quintillion</td><td>Max 64-bit int; Snowflake ID space</td></tr>
+  </tbody>
+</table>
+
+<div class="trick-box">
+  <div class="label">TRICK: multiply by 2 = shift left by 1 bit</div>
+  <p style="margin:0">Every time you multiply by 2 you add 1 to the exponent. 2<sup>10</sup> = 1 KB → 2<sup>20</sup> = 1 MB → 2<sup>30</sup> = 1 GB. Each step is exactly ×1024 (≈×1000). Chain three steps: 1 byte × 1000 × 1000 × 1000 ≈ 1 GB.</p>
+</div>
+
+<h3>Practical use: capacity estimation</h3>
+<p>A user profile record is 1 KB. 1 million users = 1 KB × 10<sup>6</sup> = 1 GB. 1 billion users = 1 TB. Instant, no calculator.</p>
+
+<!-- ============================================================ -->
+<h2>2. Logarithms — the key to understanding Big-O</h2>
+
+<p><strong>log<sub>2</sub>(n)</strong> answers: "how many times do I have to halve n before I reach 1?" This is exactly what binary search and balanced trees do.</p>
+
+<table>
+  <thead><tr><th>n</th><th>log<sub>2</sub>(n)</th><th>Real meaning</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>0</td><td>Already there</td></tr>
+    <tr><td>8</td><td>3</td><td>3 halvings: 8→4→2→1</td></tr>
+    <tr><td>1,024</td><td>10</td><td>10 comparisons to find one item in 1,024</td></tr>
+    <tr><td>1,000,000</td><td>~20</td><td>Binary search through 1M records = 20 comparisons</td></tr>
+    <tr><td>1,000,000,000</td><td>~30</td><td>Binary search through 1B records = 30 comparisons</td></tr>
+  </tbody>
+</table>
+
+<div class="callout pass">
+  <strong>The O(log n) intuition</strong>
+  If doubling the input only adds ONE more step, the algorithm is O(log n). B-tree index lookup, binary search, balanced BST operations — all grow by 1 step per doubling. A billion-row table with a B-tree index requires ~30 comparisons. Without the index (O(n)): 1 billion comparisons.
+</div>
+
+<div class="trick-box">
+  <div class="label">TRICK: log₂(n) ≈ log₁₀(n) × 3.32</div>
+  <p style="margin:0">If you know the number of digits (log₁₀), multiply by ~3.3 to get log₂. 1 million has 6 digits → log₂(1M) ≈ 6 × 3.32 ≈ 20. ✓</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Modular arithmetic — clocks, hashing, and ring buffers</h2>
+
+<p><code>a mod m</code> is the remainder after dividing a by m. The answer is always in [0, m-1]. Intuition: a clock is mod 12.</p>
+
+<h3>Where it appears</h3>
+<ul>
+  <li><strong>Hash maps:</strong> <code>bucket = hash(key) % numBuckets</code> — maps any hash to a valid bucket index.</li>
+  <li><strong>Consistent hashing:</strong> ring of 2<sup>32</sup> positions, node placed at <code>hash(node) % 2^32</code>.</li>
+  <li><strong>Ring buffers:</strong> <code>nextIndex = (currentIndex + 1) % capacity</code> — wraps around without an if-statement.</li>
+  <li><strong>Rate limiting (fixed window):</strong> <code>window = timestamp / windowSize</code> — divides time into slots.</li>
+</ul>
+
+<div class="trick-box">
+  <div class="label">TRICK: power of 2 modulo via bitwise AND</div>
+  <pre style="margin:.5rem 0">// x % 8  is expensive (division)
+// x & 7  is free   (bitmask) — works when m is a power of 2
+// General rule: x % 2^k  ==  x & (2^k - 1)
+int bucket = hash & (numBuckets - 1);  // numBuckets must be a power of 2</pre>
+  <p style="margin:0">This is why HashMap, ring buffers, and many caches require capacity to be a power of 2.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Bit manipulation tricks</h2>
+
+<p>Interviewers test these because they reveal whether you understand how computers actually represent numbers.</p>
+
+<table>
+  <thead><tr><th>Goal</th><th>Code</th><th>Why it works</th></tr></thead>
+  <tbody>
+    <tr><td>Check if n is even</td><td><code>(n &amp; 1) == 0</code></td><td>Last bit is 0 for all even numbers</td></tr>
+    <tr><td>Check if n is a power of 2</td><td><code>n &gt; 0 &amp;&amp; (n &amp; (n-1)) == 0</code></td><td>Powers of 2 have exactly one bit set; n-1 flips it and all lower bits</td></tr>
+    <tr><td>Set bit k</td><td><code>n | (1 &lt;&lt; k)</code></td><td>OR with a mask that has only bit k set</td></tr>
+    <tr><td>Clear bit k</td><td><code>n &amp; ~(1 &lt;&lt; k)</code></td><td>AND with complement — zero out bit k only</td></tr>
+    <tr><td>Toggle bit k</td><td><code>n ^ (1 &lt;&lt; k)</code></td><td>XOR: 0→1, 1→0</td></tr>
+    <tr><td>Multiply by 2<sup>k</sup></td><td><code>n &lt;&lt; k</code></td><td>Left shift = multiply by 2 per shift</td></tr>
+    <tr><td>Divide by 2<sup>k</sup> (integer)</td><td><code>n &gt;&gt; k</code></td><td>Right shift = floor divide by 2 per shift</td></tr>
+    <tr><td>Swap two ints (no temp)</td><td><code>a^=b; b^=a; a^=b;</code></td><td>XOR trick: x XOR x = 0; x XOR 0 = x</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Power-of-2 check in interviews</strong>
+  <code>(n &amp; (n-1)) == 0</code> is a common interview question for "check if capacity is valid." Appears in HashMap resizing, allocator alignment, ring buffer implementation. Understand it — don't just memorise it: if n = 8 (1000₂), then n-1 = 7 (0111₂), AND = 0000₂. Any number with two or more bits set will leave a non-zero result.
+</div>
+
+<!-- ============================================================ -->
+<h2>5. Floating-point precision — why <code>double</code> breaks money</h2>
+
+<p>Computers store real numbers in <strong>IEEE 754</strong> binary format. The mantissa is finite (52 bits for <code>double</code>), so most decimal fractions cannot be represented exactly.</p>
+
+<pre>// In Java / most languages:
+System.out.println(0.1 + 0.2);        // 0.30000000000000004
+System.out.println(0.1 + 0.2 == 0.3); // false
+
+// The actual stored value of 0.1 in binary is:
+// 0.1000000000000000055511151231257827021181583404541015625</pre>
+
+<h3>Why this matters in production</h3>
+<ul>
+  <li><strong>Money:</strong> £0.10 × 1,000,000 transactions. Double error accumulates → statement doesn't reconcile → regulatory issue.</li>
+  <li><strong>Betting odds:</strong> payout = stake × odds. £10.00 × 3.25 with double arithmetic may yield £32.49999999... not £32.50.</li>
+  <li><strong>Tax calculation:</strong> rounding errors in VAT or interest calculation cause audit failures.</li>
+</ul>
+
+<div class="trick-box">
+  <div class="label">FIX: use BigDecimal for anything financial</div>
+  <pre style="margin:.5rem 0">// Never:
+double payout = stake * odds;
+
+// Always:
+BigDecimal payout = stake.multiply(odds);  // exact decimal arithmetic
+
+// When constructing: use String constructor, not double
+new BigDecimal("0.10")   // exact: 0.10
+new BigDecimal(0.10)     // WRONG: captures the IEEE 754 approximation</pre>
+</div>
+
+<div class="callout warn">
+  <strong>Comparison gotcha</strong>
+  <code>BigDecimal.equals()</code> is scale-sensitive: <code>new BigDecimal("100.0")</code> ≠ <code>new BigDecimal("100.00")</code>. Always use <code>compareTo()</code>: <code>a.compareTo(b) == 0</code>.
+</div>
+
+<!-- ============================================================ -->
+<h2>6. Back-of-envelope estimation</h2>
+
+<p>System design interviews require order-of-magnitude estimates. The goal is not precision — it's ruling out designs that don't fit the numbers.</p>
+
+<h3>Traffic estimates — useful constants</h3>
+<table>
+  <thead><tr><th>Time period</th><th>Seconds (approx)</th></tr></thead>
+  <tbody>
+    <tr><td>1 minute</td><td>60</td></tr>
+    <tr><td>1 hour</td><td>3,600</td></tr>
+    <tr><td>1 day</td><td>86,400 ≈ 10<sup>5</sup></td></tr>
+    <tr><td>1 month</td><td>2.6 million ≈ 3×10<sup>6</sup></td></tr>
+    <tr><td>1 year</td><td>~31.5 million ≈ 3×10<sup>7</sup></td></tr>
+  </tbody>
+</table>
+
+<div class="trick-box">
+  <div class="label">ESTIMATION TEMPLATE</div>
+  <pre style="margin:.5rem 0">1. Active users:           e.g. 100M daily active users
+2. Requests per user/day:  e.g. 10 actions/day
+3. Total requests/day:     100M × 10 = 1B/day
+4. Requests/second:        1B / 86,400 ≈ 1B / 10^5 = 10,000 RPS
+5. Storage per request:    e.g. 1 KB per event
+6. Storage/day:            1B × 1 KB = 1 TB/day</pre>
+  Always state assumptions out loud. The interviewer is evaluating your reasoning, not the number.
+</div>
+
+<h3>Latency order of magnitude (Dean's numbers)</h3>
+<table>
+  <thead><tr><th>Operation</th><th>Latency</th></tr></thead>
+  <tbody>
+    <tr><td>L1 cache reference</td><td>~0.5 ns</td></tr>
+    <tr><td>L2 cache reference</td><td>~7 ns</td></tr>
+    <tr><td>RAM access</td><td>~100 ns</td></tr>
+    <tr><td>SSD random read</td><td>~150 µs</td></tr>
+    <tr><td>Disk seek</td><td>~10 ms</td></tr>
+    <tr><td>Network round-trip (same DC)</td><td>~0.5 ms</td></tr>
+    <tr><td>Network round-trip (cross-region)</td><td>~100–200 ms</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Key takeaway:</strong> RAM is ~200× faster than SSD. SSD is ~70× faster than spinning disk. A cache hit vs a DB query is a 1,000× difference in latency. This is why caching exists.</p>
+
+<!-- ============================================================ -->
+<h2>7. Percentiles — reading p50 / p99 / p999</h2>
+
+<p>Mean latency lies. If 1% of requests take 10 seconds and 99% take 1ms, the mean is ~100ms — but users experience either 1ms or 10s, never 100ms. Percentiles tell the truth.</p>
+
+<h3>What they mean</h3>
+<ul>
+  <li><strong>p50 (median):</strong> 50% of requests completed in this time or less. The "typical" experience.</li>
+  <li><strong>p95:</strong> 95% of requests. Catches the slower tail while ignoring outliers.</li>
+  <li><strong>p99:</strong> 1 in 100 requests is at least this slow. The "almost worst case."</li>
+  <li><strong>p999:</strong> 1 in 1,000. Matters when you process millions of requests/minute — thousands of users hit this every minute.</li>
+</ul>
+
+<div class="callout pass">
+  <strong>SLO definition pattern</strong>
+  "p99 latency &lt; 200ms over a 5-minute window." This means: in any 5-minute window, at most 1% of requests may exceed 200ms. Datadog, Prometheus, and every APM tool measure this. When defining an SLA with a payment partner, p99 is the standard contract metric — not mean.
+</div>
+
+<div class="trick-box">
+  <div class="label">CALCULATION: percentile from a sorted list</div>
+  <pre style="margin:.5rem 0">// Given N latency samples, sorted ascending:
+p99 = sample at index ceil(0.99 × N)
+
+// Practical example: 100 requests, sorted by response time
+// p99 = the 99th value (the second-worst)
+// p50 = the 50th value (the median)</pre>
+  In production: use histograms (Prometheus <code>histogram_quantile</code>) or pre-sorted structures (HdrHistogram), not sorted arrays — sorting 1M values per second is not feasible.
+</div>
+
+<!-- ============================================================ -->
+<hr style="margin:2.5rem 0">
+<div class="quiz">
+<h2>Quiz</h2>
+
+<div class="question" id="q1">
+  <p>Q1: A binary search through 1 billion records requires approximately how many comparisons?</p>
+  <ul class="options" data-correct="3">
+    <li>About 1,000 comparisons — proportional to the cube root</li>
+    <li>About 1,000,000 comparisons — proportional to the square root</li>
+    <li>About 100 comparisons — based on log base 10</li>
+    <li>About 30 comparisons — log₂(1,000,000,000) ≈ 30</li>
+  </ul>
+  <div class="explanation"><strong>D is correct.</strong> log₂(10⁹) = log₂(2³⁰) ≈ 30. Each comparison halves the search space. 2³⁰ ≈ 1 billion, so 30 halvings reach 1 element. This is why B-tree indexes make billion-row tables fast — the depth is about 30 levels.</div>
+</div>
+
+<div class="question" id="q2">
+  <p>Q2: Why does <code>new BigDecimal(0.1)</code> not store the value 0.1 exactly?</p>
+  <ul class="options" data-correct="2">
+    <li>BigDecimal has a precision limit of 15 significant digits by default</li>
+    <li>The double literal 0.1 is already an IEEE 754 approximation before BigDecimal sees it</li>
+    <li>Java's compiler rounds decimal literals to the nearest representable float</li>
+    <li>BigDecimal uses base-16 internally and 0.1 is not representable in hex</li>
+  </ul>
+  <div class="explanation"><strong>B is correct.</strong> The double value <code>0.1</code> is actually stored as 0.1000000000000000055511… before it is passed to the BigDecimal constructor. BigDecimal faithfully wraps that approximation. Use <code>new BigDecimal("0.1")</code> (String constructor) to get exact decimal 0.1.</div>
+</div>
+
+<div class="question" id="q3">
+  <p>Q3: Your service processes 100 million requests per day. What is the approximate requests-per-second rate?</p>
+  <ul class="options" data-correct="1">
+    <li>Approximately 1,000–1,200 RPS</li>
+    <li>Approximately 100,000 RPS — dividing by minutes, not seconds</li>
+    <li>Approximately 100 RPS — 100M per day / 1M seconds per day</li>
+    <li>Approximately 10,000,000 RPS — dividing by 10 seconds</li>
+  </ul>
+  <div class="explanation"><strong>A is correct.</strong> 100M ÷ 86,400 ≈ 100M ÷ 10⁵ = 1,000 RPS. The approximation 86,400 ≈ 10⁵ is the key trick. This is a common system design interview calculation — memorise that 1 day ≈ 100,000 seconds.</div>
+</div>
+
+<div class="question" id="q4">
+  <p>Q4: <code>(n &amp; (n-1)) == 0</code> checks whether n is a power of 2. Why does this work?</p>
+  <ul class="options" data-correct="4">
+    <li>Powers of 2 are always divisible by n-1 due to Fermat's little theorem</li>
+    <li>The AND operation extracts only the sign bit, which is 0 for powers of 2</li>
+    <li>n-1 is always odd when n is a power of 2, and AND with an odd number is 0</li>
+    <li>Powers of 2 have exactly one bit set; subtracting 1 flips that bit and all lower bits to zero, making AND equal zero</li>
+  </ul>
+  <div class="explanation"><strong>D is correct.</strong> n = 8 is 1000₂. n-1 = 7 is 0111₂. 1000 AND 0111 = 0000. Any number with two bits set (e.g. 12 = 1100₂) will have n-1 = 11 = 1011₂, and 1100 AND 1011 = 1000 ≠ 0. Also always check n &gt; 0 — zero would satisfy the bit test but is not a power of 2.</div>
+</div>
+
+<div class="question" id="q5">
+  <p>Q5: A Datadog SLO says "p99 latency &lt; 200ms." Your service handles 1 million requests per minute. In the worst compliant minute, how many requests may exceed 200ms?</p>
+  <ul class="options" data-correct="3">
+    <li>200 requests — p99 means 99.8% must be under the threshold</li>
+    <li>100 requests — p99 means exactly 1 request per 100 may exceed it</li>
+    <li>10,000 requests — p99 means 1% of 1 million may exceed the threshold</li>
+    <li>1,000 requests — p99 is measured per thousand requests only</li>
+  </ul>
+  <div class="explanation"><strong>C is correct.</strong> p99 = 99th percentile means at most 1% of requests may exceed the threshold. 1% of 1,000,000 = 10,000 requests. At high volume this is still a lot of slow requests — which is why p999 matters too: at 1M RPS, p999 = 1,000 slow requests per minute.</div>
+</div>
+
+</div>
+
+<div class="callout" style="margin-top:2.5rem">
+  <strong>Ask your teacher</strong>
+  Confused about any of these? Ask Claude directly — "why does binary search give log₂ comparisons?", "show me a real floating-point precision bug", "how do I calculate consistent hashing ring positions?" — this lesson is a starting point, not the full picture.
+</div>
+
+<footer>Math for Developers · Lesson 0001 · topics/concepts/math-for-devs</footer>
+</body>
+<script>
+document.querySelectorAll('.options').forEach(opts=>{
+  const correct=parseInt(opts.dataset.correct)-1;
+  opts.querySelectorAll('li').forEach((li,i)=>{
+    li.addEventListener('click',()=>{
+      if(opts.dataset.answered)return;
+      opts.dataset.answered=true;
+      opts.querySelectorAll('li').forEach((l,j)=>{
+        if(j===correct)l.classList.add('reveal');
+      });
+      li.classList.add(i===correct?'correct':'wrong');
+      if(i!==correct)opts.querySelectorAll('li')[correct].classList.add('reveal');
+      const exp=opts.closest('.question').querySelector('.explanation');
+      if(exp)exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</html>

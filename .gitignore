@@ -14,7 +14,8 @@ build/
 .DS_Store
 __pycache__/
 *.pyc
-.claude/settings.local.json
+.claude/
 .superpowers/
 
 # Excluded from this repo — kept local only
+topics/projects/

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OOD — Booking Lifecycle State Machine</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 840px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #2563eb; padding-bottom: 8px; }
+  h2 { border-left: 5px solid #2563eb; padding-left: 12px; margin-top: 40px; }
+  h3 { color: #374151; margin-top: 24px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 0.9em; background: #f1f5f9; padding: 2px 5px; border-radius: 3px; }
+  .callout { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .warn { background: #fffbeb; border-left-color: #f59e0b; }
+  .pass { background: #f0fdf4; border-left-color: #16a34a; }
+  .question { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .options { list-style: none; padding: 0; }
+  .options li { padding: 8px 12px; margin: 6px 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.93em; }
+  .options li:hover { background: #f0f9ff; }
+  .options li.correct { border-color: #16a34a; background: #f0fdf4; }
+  .options li.wrong { border-color: #dc2626; background: #fef2f2; }
+  .options li.reveal { border-color: #16a34a; background: #f0fdf4; opacity: 0.7; }
+  .explanation { margin-top: 10px; padding: 10px; background: #fffbeb; border-left: 4px solid #f59e0b; display: none; font-size: 0.9em; }
+  .explanation.show { display: block; }
+  svg { width: 100%; height: auto; display: block; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92em; }
+  th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; background: #f8fafc; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+</style>
+</head>
+<body>
+
+<h1>Booking Lifecycle — State Machine with Enum Guards</h1>
+<p><strong>Question this lesson prepares you for:</strong> q081 — implement a rail booking
+lifecycle with correct transition guards, BigDecimal money, and an exception on invalid transitions.</p>
+
+<h2>The problem with String status</h2>
+
+<p>The naive implementation stores status as a String:</p>
+
+<pre><code>booking.setStatus("CONFIRMED");
+if (booking.getStatus().equals("CONFIRMED")) { ... }</code></pre>
+
+<p>Three problems: (1) a typo (<code>"CONFIMED"</code>) compiles fine and fails silently at runtime;
+(2) nothing prevents <code>cancel()</code> being called on a TICKETED booking — a printed ticket
+can't be refunded, but the code doesn't know that; (3) the valid transitions are scattered
+across service methods rather than declared in one place.</p>
+
+<h2>Solution: enum that owns its transition rules</h2>
+
+<p>The key insight: put the state machine rules <em>on the enum</em>, not in the service.
+Each constant declares which states it can be reached from.</p>
+
+<pre><code>public enum BookingStatus {
+
+    PENDING  (Set.of()),
+    CONFIRMED(Set.of(PENDING)),
+    TICKETED (Set.of(CONFIRMED)),
+    CANCELLED(Set.of(PENDING, CONFIRMED));
+    // TICKETED is deliberately absent from CANCELLED's predecessors —
+    // a printed ticket cannot be cancelled
+
+    private final Set&lt;BookingStatus&gt; validPredecessors;
+
+    BookingStatus(Set&lt;BookingStatus&gt; validPredecessors) {
+        this.validPredecessors = validPredecessors;
+    }
+
+    public boolean canTransitionFrom(BookingStatus current) {
+        return validPredecessors.contains(current);
+    }
+}</code></pre>
+
+<div class="callout pass">
+  <strong>Open/Closed principle in action</strong>
+  Adding a new state (e.g. <code>ON_HOLD</code>) only requires adding one enum constant with its predecessors.
+  <code>BookingService</code> does not change — its guard logic works for any state.
+  Compare to the alternative: a <code>Map&lt;BookingStatus, Set&lt;BookingStatus&gt;&gt;</code> in BookingService —
+  adding a state requires updating the map separately, easy to forget.
+</div>
+
+<h2>State diagram</h2>
+
+<svg viewBox="0 0 620 160" xmlns="http://www.w3.org/2000/svg" font-family="monospace" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <!-- States -->
+  <rect x="10"  y="60" width="110" height="40" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="65"  y="85" text-anchor="middle" fill="#1e40af" font-weight="bold">PENDING</text>
+
+  <rect x="180" y="60" width="110" height="40" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="235" y="85" text-anchor="middle" fill="#14532d" font-weight="bold">CONFIRMED</text>
+
+  <rect x="350" y="60" width="110" height="40" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="405" y="85" text-anchor="middle" fill="#78350f" font-weight="bold">TICKETED</text>
+
+  <rect x="200" y="130" width="110" height="35" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="255" y="152" text-anchor="middle" fill="#991b1b" font-weight="bold">CANCELLED</text>
+
+  <!-- Transitions -->
+  <!-- PENDING → CONFIRMED -->
+  <line x1="120" y1="80" x2="178" y2="80" stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="149" y="73" text-anchor="middle" fill="#374151" font-size="10">confirm</text>
+
+  <!-- CONFIRMED → TICKETED -->
+  <line x1="290" y1="80" x2="348" y2="80" stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="319" y="73" text-anchor="middle" fill="#374151" font-size="10">issue</text>
+
+  <!-- PENDING → CANCELLED -->
+  <line x1="65" y1="100" x2="210" y2="132" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="110" y="128" text-anchor="middle" fill="#dc2626" font-size="10">cancel</text>
+
+  <!-- CONFIRMED → CANCELLED -->
+  <line x1="235" y1="100" x2="245" y2="128" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="265" y="118" text-anchor="middle" fill="#dc2626" font-size="10">cancel</text>
+
+  <!-- TICKETED: terminal marker -->
+  <text x="405" y="118" text-anchor="middle" fill="#78350f" font-size="10">terminal</text>
+  <text x="405" y="130" text-anchor="middle" fill="#78350f" font-size="10">(no cancel)</text>
+</svg>
+
+<h2>The guard in BookingService</h2>
+
+<pre><code>public class BookingService {
+
+    private static final BigDecimal CANCELLATION_REFUND_RATE = new BigDecimal("0.80");
+
+    private final BookingRepository repository;
+
+    public BookingService(BookingRepository repository) {
+        this.repository = repository;
+    }
+
+    public void confirm(String bookingId) {
+        Booking booking = repository.findById(bookingId);
+        transition(booking, BookingStatus.CONFIRMED);
+        repository.save(booking);
+    }
+
+    public void cancel(String bookingId) {
+        Booking booking = repository.findById(bookingId);
+        transition(booking, BookingStatus.CANCELLED);
+        repository.save(booking);
+    }
+
+    public void issue(String bookingId) {
+        Booking booking = repository.findById(bookingId);
+        transition(booking, BookingStatus.TICKETED);
+        repository.save(booking);
+    }
+
+    public BigDecimal calculateRefund(String bookingId) {
+        Booking booking = repository.findById(bookingId);
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            return booking.getAmount()
+                          .multiply(CANCELLATION_REFUND_RATE)
+                          .setScale(2, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    // Single guard — if this method is missing from ANY operation,
+    // it's immediately obvious. Not inlined per-method.
+    private void transition(Booking booking, BookingStatus target) {
+        BookingStatus current = booking.getStatus();
+        if (!target.canTransitionFrom(current)) {
+            throw new InvalidStateTransitionException(booking.getId(), current, target);
+        }
+        booking.setStatus(target);
+    }
+}</code></pre>
+
+<h2>Why BigDecimal, not double</h2>
+
+<table>
+  <thead><tr><th>Expression</th><th>double result</th><th>BigDecimal result</th></tr></thead>
+  <tbody>
+    <tr><td><code>199.99 * 0.8</code></td><td><code>159.99199999999998</code></td><td><code>159.99</code></td></tr>
+    <tr><td><code>0.1 + 0.2</code></td><td><code>0.30000000000000004</code></td><td><code>0.3</code></td></tr>
+    <tr><td><code>1.005 * 100</code></td><td><code>100.49999999999999</code></td><td><code>100.50</code></td></tr>
+  </tbody>
+</table>
+
+<p><code>double</code> is IEEE 754 — it cannot represent most decimal fractions exactly. For money,
+use <code>new BigDecimal("0.80")</code> (string constructor) or <code>BigDecimal.valueOf(0.80)</code>
+— never <code>new BigDecimal(0.80)</code> (double constructor, inherits the imprecision).</p>
+
+<div class="callout warn">
+  <strong>BigDecimal comparison trap</strong>
+  <code>new BigDecimal("2.00").equals(new BigDecimal("2.0"))</code> returns <strong>false</strong>
+  — <code>equals()</code> compares scale too. Always use
+  <code>compareTo() == 0</code> to compare values, not <code>equals()</code>.
+</div>
+
+<h2>Where to put the guard: enum vs service vs entity</h2>
+
+<table>
+  <thead><tr><th>Approach</th><th>Pro</th><th>Con</th></tr></thead>
+  <tbody>
+    <tr><td>Rules on the enum (this solution)</td><td>Adding a state = one place to edit; Open/Closed</td><td>Enum has logic — slightly heavier than a plain value enum</td></tr>
+    <tr><td>Map in BookingService</td><td>Rules visible in one service method</td><td>Adding a state = edit both enum AND the map; easy to forget one</td></tr>
+    <tr><td>Full State pattern (separate classes)</td><td>Each state object handles its own behaviour</td><td>Overkill for a simple lifecycle — 5 classes for 4 states</td></tr>
+  </tbody>
+</table>
+
+<p>For a simple lifecycle with no state-specific behaviour beyond transition rules, enum-with-predecessors
+is the cleanest choice. The full GoF State pattern earns its weight when each state has
+materially different behaviour (not just different allowed transitions).</p>
+
+<!-- Quiz -->
+<div class="question" id="q1">
+  <p><strong>Q1.</strong> Why is <code>TICKETED</code> absent from <code>CANCELLED</code>'s valid predecessors set?</p>
+  <ul class="options" data-correct="2">
+    <li>A ticket can always be cancelled if the passenger requests it</li>
+    <li>A printed ticket represents a committed physical document — cancellation after issue creates a financial/operational contradiction the system must prevent at the model level</li>
+    <li>TICKETED bookings are stored in a different database and cannot be looked up</li>
+    <li>To simplify the unit tests for the cancel() method</li>
+  </ul>
+  <div class="explanation">The state machine encodes a real-world constraint: once a ticket is printed, there is no reversing it without a separate refund process. Encoding this in the enum (not as a comment or documentation) means the system enforces it at every call site automatically.</div>
+</div>
+
+<div class="question" id="q2">
+  <p><strong>Q2.</strong> A test asserts <code>assertEquals(new BigDecimal("159.99"), service.calculateRefund("B1"))</code> where the booking amount is £199.99. What subtle bug could make this test fail even with correct logic?</p>
+  <ul class="options" data-correct="3">
+    <li>BigDecimal.multiply() always returns a scale-0 result</li>
+    <li>HALF_UP rounding rounds £159.992 up to £160.00</li>
+    <li>BigDecimal.equals() compares scale — <code>159.990</code> and <code>159.99</code> are not equal by equals(), only by compareTo()</li>
+    <li>new BigDecimal("199.99") cannot be multiplied by a two-decimal factor</li>
+  </ul>
+  <div class="explanation">BigDecimal.equals() is scale-sensitive. <code>new BigDecimal("159.99").equals(new BigDecimal("159.990"))</code> is false. Use <code>compareTo() == 0</code> in tests. This is why the solution uses <code>setScale(2, HALF_UP)</code> — it normalises the scale — but tests should still use compareTo to be safe.</div>
+</div>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.querySelector('.correct') || ul.querySelector('.wrong')) return;
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (i + 1 === correct) { li.classList.add('correct'); }
+      else { li.classList.add('wrong'); ul.querySelectorAll('li')[correct - 1].classList.add('reveal'); }
+      if (exp) exp.classList.add('show');
+    });
+  });
+});
+</script>
+
+</body>
+</html>
