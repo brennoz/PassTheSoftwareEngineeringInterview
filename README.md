@@ -119,6 +119,51 @@ code-review/q{NNN}_{slug}/
 
 ---
 
+## Pairing Drill Questions
+
+Live mentoring/refactor roleplay — real compiled Java, two junior personas, iterative `review` / `done` cycle.  
+Invoke with `next pairing-drill` (never in the weighted `next` rotation).
+
+| # | Slug | Flavor | Domain |
+|---|---|---|---|
+| q072 | Customer Membership Pricing | Service smells — duplication, magic numbers, encapsulation leaks | General SaaS |
+| q073 | Order Fulfillment | Correctness-in-disguise — partial-failure ordering, swallowed exception | E-commerce |
+| q074 | Bet Placement | OOD structural + Concurrency — State pattern, missing synchronization | Sport Betting |
+| q075 | Transaction Reconciliation | Java SDK / functional idioms — streams, `Optional`, `CompletableFuture` | Fintech |
+| q076 | Loan Disbursement | Spring-specific — field injection, `@Transactional` boundary, missing circuit breaker | Banking |
+| q077 | Market Settlement | Type safety / primitive obsession — `double` → `BigDecimal`, String status → enum | Sport Betting |
+| q078 | Payment Search | Search / filtering — `Specification<T>`, `Predicate` composition, unbounded scan | Fintech |
+| q079 | Account Statement | Code-review hybrid — spot bugs + structural refactor | Banking |
+| q080 | Live Odds Service | Concurrency / synchronization — race conditions, non-atomic check-then-act | Sport Betting |
+| q081 | Invoice Billing Service | Type safety + Service smells — primitive obsession, missing `@Transactional` | Billing |
+
+Each question ships with:
+- Seeded messy `{Domain}.java` (read-only reference)
+- `solution/` — complete heavily-commented fix (pre-seeded from day one)
+- `answer/` — where you actually work
+- `transcript.md` — appended on every `review`
+
+---
+
+## MCP Integration — agent-whiteboard
+
+This repo ships with `.mcp.json` wiring Claude Code to [agent-whiteboard](https://github.com/bobpuley/agent-whiteboard) — a local MCP server that renders step-through whiteboards live in your browser.
+
+Used to generate all visual lessons under `topics/` (whiteboard HTML exports committed alongside each lesson). To use:
+
+```bash
+# Clone and build agent-whiteboard
+git clone https://github.com/bobpuley/agent-whiteboard.git
+cd agent-whiteboard && npm install && npm run build && npm link
+
+# Start the server (port 3000)
+agent-whiteboard
+```
+
+Then open Claude Code in this repo — `.mcp.json` auto-connects the `agent-whiteboard` MCP server.
+
+---
+
 ## Stack
 
 Java 21 · Spring Boot 3 · Kafka · Redis · PostgreSQL · MongoDB · AWS · Docker · JUnit 5 · Mockito
