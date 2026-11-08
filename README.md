@@ -38,6 +38,8 @@ progress                      # show your scoreboard
 
 No setup beyond `claude` CLI and Java 21 / Maven for the coding modules.
 
+**Recommended IDE: Visual Studio Code.** Open the repo in VS Code alongside the Claude Code extension — you edit `MyAnswer.java` in the editor while Claude runs in the integrated terminal. The side-by-side workflow (question in one panel, your code in another, Claude reviewing in the terminal) is the intended experience.
+
 ---
 
 ## Teaching system — `/teach`
