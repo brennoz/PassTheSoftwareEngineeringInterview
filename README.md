@@ -1,8 +1,73 @@
 # PassTheSoftwareEngineeringInterview
 
-Exam simulation lab for senior Java / backend engineers. Claude picks questions across categories, you answer, Claude reviews with a rubric and writes `review.md`.
+A personal AI-powered study lab for passing **senior Java / backend software engineering interviews** — built on top of [Claude Code](https://claude.ai/code) and driven by a custom teaching system.
 
-Different from a deep-build lab — this is **breadth + time pressure + feedback loop**.
+> **Goal:** arrive at any senior Java interview — OOD, system design, algorithms, code review, live pairing — and perform confidently under time pressure. Domain focus: fintech, trading OMS, banking, sport betting.
+
+---
+
+## What this is
+
+Most interview prep is passive — read a book, watch a video. This lab is **active and adaptive**:
+
+- **Claude picks questions** from a weighted category distribution (30% algo, 20% system design, 15% code review, 10% OOD, …)
+- **You answer** in real Java code or Markdown, in your IDE, under realistic time pressure
+- **Claude reviews** against a rubric and writes `review.md` — what you got right, what you missed, what breaks in production or at AWS scale
+- **Difficulty auto-adjusts** — 2 consecutive passes bumps you up; 2 fails drops you down
+- **Lessons generate on demand** — if a topic hasn't been taught yet, Claude generates a full HTML lesson + whiteboard before the question
+
+It is not a framework or a library. It is a conversation with Claude Code where you type commands like `next`, `hint`, `done`, `review`.
+
+---
+
+## How it works with Claude Code
+
+This project is designed to be opened in [Claude Code](https://claude.ai/code) (CLI or IDE extension). The `CLAUDE.md` file contains the full instruction set — question distribution, delivery conventions, rubrics, pairing-drill rules, lesson pipeline. Claude reads it at session start and operates as your exam coach.
+
+```
+# Start a session
+claude                        # open Claude Code in this directory
+
+next                          # Claude picks a question
+next algo hard                # force category + difficulty
+next pairing-drill senior     # live refactor roleplay with a senior peer persona
+hint                          # get a nudge
+done                          # submit — Claude writes review.md
+progress                      # show your scoreboard
+```
+
+No setup beyond `claude` CLI and Java 21 / Maven for the coding modules.
+
+---
+
+## Teaching system — `/teach`
+
+Before the first question on any new topic, Claude auto-generates a **self-contained HTML lesson** saved under `topics/{category}/{slug}/`. Lessons are:
+
+- Linked to the question via `question.md`
+- Stored permanently in git — build up a personal reference library over time
+- Paired with **step-through whiteboard exports** (via [agent-whiteboard](https://github.com/bobpuley/agent-whiteboard) MCP) for visual concepts
+
+You can also trigger lessons directly:
+
+```
+/teach explain CompletableFuture pipelines with thenApply vs thenCompose
+/teach how does consistent hashing work in a distributed KV store
+```
+
+---
+
+## Domain focus — three industry verticals
+
+Questions rotate across three real-world domains so every answer is grounded in production consequences, not toy examples:
+
+| Vertical | What it probes |
+|---|---|
+| **Fintech / Payments** | Card auth flow, idempotency keys, PCI-DSS, race conditions on balance (`@Version`), fraud detection, outbox pattern |
+| **Banking** | Double-entry ledger, `BigDecimal` for money, loan origination saga, KYC/AML, SWIFT/SEPA, SOX audit trail |
+| **Sport Betting** | Real-time odds feed, liability management, bet settlement saga, in-play latency, responsible gambling compliance |
+
+Code review questions in these domains always flag domain-specific landmines (e.g. `double` for odds → wrong payouts, missing idempotency key → duplicate bet on retry).
 
 ---
 
