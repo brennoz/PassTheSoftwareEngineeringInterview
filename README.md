@@ -57,6 +57,114 @@ You can also trigger lessons directly:
 
 ---
 
+## Examples
+
+### Example 1 — Algorithm question (`next algo medium`)
+
+Claude picks a question, you implement in `MyAnswer.java`, then `done`:
+
+```
+> next algo medium
+
+Q082 — Sliding Window Rate Limiter (Medium)
+Implement a per-user rate limiter: allow at most N requests in a rolling T-second window.
+Return true if the request is allowed, false otherwise.
+
+Ideal time: 20 min
+File: algorithms/src/main/java/.../q082_sliding_window_rate_limiter/MyAnswer.java
+```
+
+You implement it. Then:
+
+```
+> done
+
+✅ Correctness: sliding window deque logic correct — evicts stale timestamps before counting.
+✅ Time complexity: O(1) amortised per call.
+⚠️  Missing: no thread safety — HashMap + ArrayDeque are not safe under concurrent access.
+    Fix: ConcurrentHashMap + synchronized block per userId, or a per-key ReentrantLock.
+⚠️  AWS/Distributed: in-memory per-instance state breaks on multi-pod ECS/EKS deployment.
+    Fix: replace local map with Redis ZRANGEBYSCORE + ZADD + EXPIRE (atomic via Lua script).
+
+Score: 3/5 — good core logic, missed concurrency + distributed failure mode.
+```
+
+---
+
+### Example 2 — Code Review (`next code-review banking hard`)
+
+Claude shows legacy Java with planted bugs. You find them in `MyAnswer.md`:
+
+```java
+// Planted snippet (excerpt) — find what's wrong
+
+@Service
+public class LoanDisbursementService {
+
+    @Autowired
+    private LoanRepository loanRepository;      // field injection
+
+    public void disburse(String loanId, double amount) {   // double for money
+        Loan loan = loanRepository.findById(loanId).get(); // .get() with no check
+        loan.setStatus("DISBURSED");
+        loan.setAmount(loan.getAmount() + amount);         // mutable posted entry
+        loanRepository.save(loan);
+        externalBankClient.transfer(amount);               // no @Transactional
+    }
+}
+```
+
+Your `MyAnswer.md` lists issues. Claude scores:
+
+```
+> done
+
+Issues found: 4/6
+
+✅ [Banking] double for monetary amount → BigDecimal (line 6) — precision loss, regulatory non-compliance
+✅ [Spring]  field injection → constructor injection (line 3) — not testable, hides dependencies  
+✅ [Spring]  missing @Transactional — DB save + external call not atomic; partial failure = inconsistent state
+✅ [JPA]     .get() without isPresent() check → NoSuchElementException in production
+❌ Missed: no audit log on balance-changing operation → SOX violation
+❌ Missed: no timeout/circuit breaker on externalBankClient.transfer() → cascading failure on bank API slowdown
+```
+
+---
+
+### Example 3 — Pairing Drill (`next pairing-drill junior`)
+
+Roleplay: you mentor two junior devs refactoring live production code.
+
+```
+> next pairing-drill junior
+
+[Emma 👩‍💻] Hey! So we've been asked to fix this BetPlacementService before the World Cup launch.
+           I think the issue is in validateAndPlace()... but I'm not sure where to start?
+
+[Noah 👨‍💻] I ran the tests — they pass! So maybe it's fine?
+
+// You open answer/BetPlacementService.java and start refactoring...
+
+> review
+
+[Emma] Oh nice, you extracted the liability check into its own method! 
+       But wait — shouldn't that counter be thread-safe? We get like 50k bets/sec during live matches.
+
+[Noah] I mean... it's just an int, it'll be fine right?
+
+// transcript.md updated — Claude reacts in character, notes what you caught vs missed
+
+> done
+
+review.md written:
+✅ Technical communication: explained BigDecimal fix clearly without jargon
+✅ Leading safely: didn't rewrite everything — guided Emma/Noah to the solution
+⚠️  Missed: liability counter as int → non-atomic on concurrent requests → overselling exposure
+⚠️  Missed: no idempotency key on bet placement → duplicate bet on client retry
+```
+
+---
+
 ## Domain focus — three industry verticals
 
 Questions rotate across three real-world domains so every answer is grounded in production consequences, not toy examples:
