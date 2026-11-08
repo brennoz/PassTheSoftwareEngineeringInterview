@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Algorithm Strategies — Interview Reference</title>
+<style>
+  :root {
+    --ink:#1a1a1a;--muted:#555;--border:#ddd;--bg:#fefefe;--sidebar:#f3f4f6;--bg-code:#0f172a;
+    --blue:#2563eb;--blue-bg:#eff6ff;--purple:#7c3aed;--green:#16a34a;--green-bg:#f0fdf4;
+    --red:#dc2626;--red-bg:#fef2f2;--amber:#d97706;--amber-bg:#fffbeb;
+    --teal:#0d9488;--teal-bg:#f0fdfa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;font-size:16px;line-height:1.7;color:var(--ink);background:var(--bg);max-width:980px;margin:0 auto;padding:3rem 2rem 6rem}
+  h1{font-size:2rem;line-height:1.2;margin-bottom:.4rem;border-bottom:3px solid var(--blue);padding-bottom:.5rem}
+  h2{font-size:1.25rem;margin:3rem 0 .8rem;border-left:5px solid var(--blue);padding-left:.9rem;background:var(--blue-bg);padding:.5rem .9rem;border-radius:0 6px 6px 0}
+  h3{font-size:1.05rem;margin:1.6rem 0 .5rem;color:var(--muted)}
+  p{margin-bottom:.85rem}
+  ul,ol{margin:.4rem 0 .9rem 1.5rem}
+  li{margin-bottom:.35rem}
+  .meta{color:var(--muted);font-size:.83rem;font-family:monospace;margin-bottom:.5rem}
+  a{color:var(--blue)}
+
+  pre{background:var(--bg-code);color:#e2e8f0;border-radius:7px;padding:1.1rem 1.3rem;overflow-x:auto;font-size:.8rem;line-height:1.6;margin:.8rem 0 1.3rem;font-family:'Menlo','Consolas',monospace}
+  code{font-family:'Menlo','Consolas',monospace;font-size:.85em;background:var(--sidebar);padding:.1em .35em;border-radius:3px}
+  pre code{background:transparent;padding:0;color:inherit}
+
+  table{border-collapse:collapse;width:100%;margin:.8rem 0 1.4rem;font-size:.88rem}
+  th{text-align:left;padding:.55rem .85rem;border-bottom:2px solid var(--border);background:var(--sidebar);font-family:monospace;font-size:.82rem}
+  td{padding:.45rem .85rem;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:hover td{background:#f9fafb}
+
+  .callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:.85rem 1.1rem;margin:1.2rem 0;border-radius:0 6px 6px 0;font-size:.93rem}
+  .callout.green{border-color:var(--green);background:var(--green-bg)}
+  .callout.amber{border-color:var(--amber);background:var(--amber-bg)}
+  .callout.red{border-color:var(--red);background:var(--red-bg)}
+  .callout strong{display:block;margin-bottom:.25rem;font-family:monospace;font-size:.88rem}
+
+  .toc{background:var(--green-bg);border:1px solid #86efac;border-radius:8px;padding:1rem 1.4rem;margin:1.5rem 0;font-size:.88rem;column-count:2;column-gap:2rem}
+  .toc a{color:#166534;display:block;margin-bottom:.25rem}
+
+  .strategy-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin:1.2rem 0}
+  .strategy-card{border:2px solid var(--border);border-radius:8px;padding:.9rem 1rem;font-size:.85rem}
+  .strategy-card h4{font-family:monospace;font-size:.88rem;margin-bottom:.4rem}
+  .strategy-card .tag{display:inline-block;font-family:monospace;font-size:.72rem;padding:.1rem .45rem;border-radius:3px;margin-bottom:.4rem;color:#fff}
+  .tag.easy{background:var(--green)}
+  .tag.medium{background:var(--amber)}
+  .tag.hard{background:var(--red)}
+  .tag.pattern{background:var(--blue)}
+  .tag.java{background:var(--purple)}
+
+  .anim-box{border:1px solid var(--border);border-radius:8px;background:#fff;padding:1rem 1.1rem;margin:1.3rem 0;box-shadow:0 2px 6px rgba(0,0,0,.05)}
+  .anim-label{font-family:monospace;font-size:.78rem;color:var(--muted);font-weight:bold;text-transform:uppercase;margin-bottom:.6rem}
+  .anim-controls{display:flex;gap:.5rem;margin-top:.7rem}
+  .anim-controls button{padding:.3rem .85rem;border:1px solid var(--border);border-radius:4px;background:var(--sidebar);cursor:pointer;font-size:.8rem;font-family:monospace}
+  .anim-controls button:hover{background:#e5e7eb}
+  .anim-status{font-family:monospace;font-size:.75rem;color:var(--muted);margin-top:.4rem;min-height:1.1rem}
+
+  .decision-tree{background:#0f172a;border-radius:8px;padding:1.2rem 1.5rem;color:#e2e8f0;font-family:'Menlo','Consolas',monospace;font-size:.78rem;line-height:1.8;margin:1rem 0 1.5rem;white-space:pre;overflow-x:auto}
+  .dt-q{color:#93c5fd}
+  .dt-y{color:#86efac}
+  .dt-n{color:#fca5a5}
+  .dt-ans{color:#fcd34d;font-weight:bold}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .split-box{border:2px solid var(--border);border-radius:7px;padding:.9rem 1.1rem;font-size:.87rem}
+  .split-box h4{font-family:monospace;font-size:.88rem;margin-bottom:.5rem;color:var(--blue)}
+
+  .badge{display:inline-block;font-family:monospace;font-size:.72rem;padding:.1em .45em;border-radius:3px;color:#fff;margin:0 .2rem .2rem 0}
+  .badge.q{background:#475569}
+  .badge.tc{background:var(--teal)}
+  .badge.sc{background:var(--purple)}
+
+  .quiz-block{margin:2rem 0}
+  .question{margin:1.4rem 0}
+  .question p{font-weight:bold;margin-bottom:.7rem}
+  .options{list-style:none;margin:0}
+  .options li{padding:.55rem .95rem;border:1px solid var(--border);border-radius:5px;margin-bottom:.35rem;cursor:pointer;transition:background .12s;font-size:.9rem}
+  .options li:hover{background:var(--sidebar)}
+  .options li.correct{background:#dcfce7;border-color:var(--green)}
+  .options li.wrong{background:#fee2e2;border-color:var(--red)}
+  .options li.reveal{background:#dcfce7;border-color:var(--green);opacity:.55}
+  .explanation{font-size:.86rem;color:var(--muted);margin-top:.45rem;display:none;padding:.45rem .75rem;background:var(--sidebar);border-radius:4px}
+  .explanation.visible{display:block}
+
+  footer{margin-top:4rem;border-top:1px solid var(--border);padding-top:1.3rem;font-size:.82rem;color:var(--muted)}
+  @media(max-width:700px){.strategy-grid{grid-template-columns:1fr}.split{grid-template-columns:1fr}.toc{column-count:1}}
+</style>
+</head>
+<body>
+
+<h1>Algorithm Strategies — Interview Reference</h1>
+<div class="meta">Based on 125 questions across 17 categories · Java 21 · Interview-ready patterns</div>
+
+<div class="callout green">
+  <strong>HOW TO USE THIS DOC</strong>
+  The hardest part of an interview is not writing code — it's recognising which strategy fits the problem in 60 seconds. Use the decision tree first, then jump to the strategy section for the canonical Java template. Every strategy includes: when to reach for it, the key insight, complexity, and a template you can adapt on the spot.
+</div>
+
+<div class="toc">
+  <a href="#decision">▶ Strategy Decision Tree</a>
+  <a href="#overview">▶ Strategy Overview Table</a>
+  <a href="#s1">1 · HashMap / HashSet</a>
+  <a href="#s2">2 · Two Pointers</a>
+  <a href="#s3">3 · Sliding Window</a>
+  <a href="#s4">4 · Binary Search</a>
+  <a href="#s5">5 · Stack</a>
+  <a href="#s6">6 · Linked List Pointers</a>
+  <a href="#s7">7 · Tree DFS (recursion)</a>
+  <a href="#s8">8 · Tree BFS (queue)</a>
+  <a href="#s9">9 · Graph BFS / DFS</a>
+  <a href="#s10">10 · Dynamic Programming</a>
+  <a href="#s11">11 · Greedy</a>
+  <a href="#s12">12 · Intervals</a>
+  <a href="#s13">13 · Backtracking</a>
+  <a href="#s14">14 · Trie</a>
+  <a href="#s15">15 · Bit Manipulation</a>
+  <a href="#quiz">▶ Quiz</a>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="decision">Strategy Decision Tree</h2>
+<p>Read top to bottom. First matching branch = your starting strategy.</p>
+
+<div class="decision-tree"><span class="dt-q">Is the input SORTED (or can you sort it cheaply)?</span>
+  ├── YES + find pair/triplet summing to target → <span class="dt-ans">TWO POINTERS</span>  (q029 3Sum, q124 Container)
+  ├── YES + search for a value                  → <span class="dt-ans">BINARY SEARCH</span>  (q092 rotated array)
+  └── YES + merge/schedule overlapping ranges   → <span class="dt-ans">INTERVALS</span>     (q007 Merge Intervals)
+
+<span class="dt-q">Is the input a CONTIGUOUS SUBARRAY / SUBSTRING problem?</span>
+  ├── Fixed window size                         → <span class="dt-ans">SLIDING WINDOW (fixed)</span>
+  ├── "Longest/shortest ... with constraint"    → <span class="dt-ans">SLIDING WINDOW (variable)</span> (q004, q108, q109)
+  └── "Best time to buy/sell" (one pass max)    → <span class="dt-ans">SLIDING WINDOW</span>  (q009)
+
+<span class="dt-q">Is it a LOOKUP / FREQUENCY / DUPLICATE problem?</span>
+  ├── "Has duplicate / seen before?"            → <span class="dt-ans">HASHSET</span>         (q082 Contains Duplicate)
+  ├── "Two sum / complement exists?"            → <span class="dt-ans">HASHMAP</span>         (q001 Two Sum)
+  ├── "Group / count / frequency"               → <span class="dt-ans">HASHMAP</span>         (q084 Group Anagrams, q086 Top-K)
+  └── "Longest consecutive sequence"            → <span class="dt-ans">HASHSET + scan</span>  (q088)
+
+<span class="dt-q">Is it a TREE problem?</span>
+  ├── "Max depth / path sum / same tree"        → <span class="dt-ans">TREE DFS (recursive)</span> (q113–q116)
+  ├── "Level order / zig-zag traversal"         → <span class="dt-ans">TREE BFS (queue)</span>    (q117, q119)
+  ├── "Validate BST / LCA"                      → <span class="dt-ans">TREE DFS + bounds</span>  (q120, q121)
+  └── "Prefix search / autocomplete"            → <span class="dt-ans">TRIE</span>               (q122)
+
+<span class="dt-q">Is it a GRAPH problem?</span>
+  ├── "Shortest path (unweighted)"              → <span class="dt-ans">BFS</span>                (q097)
+  ├── "Connected components / flood fill"       → <span class="dt-ans">DFS or BFS</span>        (q022 Islands, q098)
+  ├── "Shortest path (weighted)"               → <span class="dt-ans">DIJKSTRA</span>           (q099)
+  └── "Topological order / cycle detect"        → <span class="dt-ans">DAG DFS</span>           (q100)
+
+<span class="dt-q">Is it a MATCHING / NESTING problem?</span>
+  └── Brackets / operator precedence            → <span class="dt-ans">STACK</span>              (q003 Valid Parentheses)
+
+<span class="dt-q">Is it a LINKED LIST problem?</span>
+  ├── Reverse / reorder                         → <span class="dt-ans">THREE POINTERS (prev/cur/next)</span> (q101, q105)
+  ├── Cycle detection                           → <span class="dt-ans">FAST/SLOW POINTERS</span>            (q103)
+  └── Nth from end / middle                     → <span class="dt-ans">FAST/SLOW POINTERS</span>            (q104)
+
+<span class="dt-q">Does the problem have OVERLAPPING SUBPROBLEMS?</span>
+  ├── Fibonacci / climb stairs / paths          → <span class="dt-ans">DYNAMIC PROGRAMMING (bottom-up)</span> (q106)
+  ├── Max/min over choices at each step         → <span class="dt-ans">DP or GREEDY</span>
+  └── "Generate all / explore all combinations" → <span class="dt-ans">BACKTRACKING (DFS + undo)</span>    (q091)
+
+<span class="dt-q">Can you make a LOCALLY OPTIMAL choice at each step?</span>
+  └── YES and it leads to global optimum        → <span class="dt-ans">GREEDY</span>             (q019, intervals)
+
+<span class="dt-q">BIT-LEVEL operation or integer property?</span>
+  └── Count ones / XOR / power of 2             → <span class="dt-ans">BIT MANIPULATION</span>  (q094–q096)</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="overview">Strategy Overview Table</h2>
+
+<table>
+  <tr><th>Strategy</th><th>Time</th><th>Space</th><th>Recognise it when…</th><th>Key questions from your repo</th></tr>
+  <tr><td><strong>HashMap/HashSet</strong></td><td>O(n)</td><td>O(n)</td><td>Lookup, duplicate check, frequency count, complement search</td><td>q001 Two Sum, q082–q090, q084 Group Anagrams, q086 Top-K</td></tr>
+  <tr><td><strong>Two Pointers</strong></td><td>O(n)</td><td>O(1)</td><td>Sorted input, find pair/triplet, palindrome check, container/water</td><td>q018, q029 3Sum, q123 Palindrome, q124 Container</td></tr>
+  <tr><td><strong>Sliding Window</strong></td><td>O(n)</td><td>O(k)</td><td>Contiguous subarray/substring, longest/shortest with constraint</td><td>q004, q009, q108, q109 Min Window Substring</td></tr>
+  <tr><td><strong>Binary Search</strong></td><td>O(log n)</td><td>O(1)</td><td>Sorted input (even rotated), search on answer space</td><td>q092 Find Min Rotated, q093 Search Rotated</td></tr>
+  <tr><td><strong>Stack</strong></td><td>O(n)</td><td>O(n)</td><td>Nested/matching structure, "next greater element", operator eval</td><td>q003 Valid Parentheses, q110 Stack impl</td></tr>
+  <tr><td><strong>Linked List</strong></td><td>O(n)</td><td>O(1)</td><td>In-place reversal, cycle, nth-from-end, merge sorted lists</td><td>q101–q105</td></tr>
+  <tr><td><strong>Tree DFS</strong></td><td>O(n)</td><td>O(h)</td><td>Max/min path, same tree, subtree match, validate BST</td><td>q113–q116, q118, q120, q121</td></tr>
+  <tr><td><strong>Tree BFS</strong></td><td>O(n)</td><td>O(w)</td><td>Level-order, zig-zag, right-side view</td><td>q117, q119</td></tr>
+  <tr><td><strong>Graph BFS</strong></td><td>O(V+E)</td><td>O(V)</td><td>Shortest path unweighted, level-by-level spread</td><td>q097, q022 Islands</td></tr>
+  <tr><td><strong>Graph DFS</strong></td><td>O(V+E)</td><td>O(V)</td><td>Connected components, cycle detection, topological sort</td><td>q022, q098, q100 DAG</td></tr>
+  <tr><td><strong>Dijkstra</strong></td><td>O((V+E)logV)</td><td>O(V)</td><td>Weighted graph, shortest path, "min cost to reach"</td><td>q099</td></tr>
+  <tr><td><strong>Dynamic Programming</strong></td><td>O(n²) or better</td><td>O(n)</td><td>Overlapping subproblems, optimal substructure, "max/min over choices"</td><td>q011 Max Subarray, q106 Fibonacci, q107</td></tr>
+  <tr><td><strong>Greedy</strong></td><td>O(n log n)</td><td>O(1)</td><td>Local optimal = global optimal, scheduling, activity selection</td><td>q019, interval problems</td></tr>
+  <tr><td><strong>Intervals</strong></td><td>O(n log n)</td><td>O(n)</td><td>Overlapping ranges, meeting rooms, merge/insert interval</td><td>q007 Merge Intervals</td></tr>
+  <tr><td><strong>Backtracking</strong></td><td>O(b^d)</td><td>O(d)</td><td>Generate all combinations/permutations, constraint satisfaction</td><td>q091 Sudoku Solver</td></tr>
+  <tr><td><strong>Trie</strong></td><td>O(L) per op</td><td>O(L·N)</td><td>Prefix search, autocomplete, word lookup with common prefixes</td><td>q122</td></tr>
+  <tr><td><strong>Bit Manipulation</strong></td><td>O(n) or O(log n)</td><td>O(1)</td><td>Count set bits, XOR, power of 2, set/clear/toggle a bit</td><td>q020, q094–q096</td></tr>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s1">1 · HashMap / HashSet</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Trade O(n) space for O(1) lookup. Instead of nested loops (O(n²)), scan once and store seen values / frequencies / complements in a map.
+</div>
+
+<table>
+  <tr><th>Pattern</th><th>Data structure</th><th>Example</th></tr>
+  <tr><td>Has duplicate?</td><td><code>HashSet.add(x)</code> returns false if already present</td><td>q082 Contains Duplicate</td></tr>
+  <tr><td>Find complement (a+b=target)?</td><td><code>HashMap&lt;value, index&gt;</code>: check <code>map.containsKey(target-x)</code></td><td>q001 Two Sum</td></tr>
+  <tr><td>Frequency count</td><td><code>map.merge(key, 1, Integer::sum)</code></td><td>q083 Anagram, q086 Top-K</td></tr>
+  <tr><td>Group by canonical form</td><td>Sort chars as key → list of originals</td><td>q084 Group Anagrams</td></tr>
+  <tr><td>Longest consecutive</td><td>Put all in HashSet; only start scan at sequence start (no n-1 in set)</td><td>q088</td></tr>
+</table>
+
+<pre>
+// TWO SUM — canonical HashMap template (q001)
+public int[] twoSum(int[] nums, int target) {
+    Map&lt;Integer, Integer&gt; seen = new HashMap&lt;&gt;();  // value → index
+    for (int i = 0; i &lt; nums.length; i++) {
+        int complement = target - nums[i];
+        if (seen.containsKey(complement))
+            return new int[]{seen.get(complement), i};
+        seen.put(nums[i], i);
+    }
+    return new int[]{};
+}
+
+// FREQUENCY COUNT template
+Map&lt;Character, Integer&gt; freq = new HashMap&lt;&gt;();
+for (char c : s.toCharArray())
+    freq.merge(c, 1, Integer::sum);   // Java 8+: add 1, or insert 1 if absent
+
+// LONGEST CONSECUTIVE — HashSet + only scan from sequence start
+Set&lt;Integer&gt; set = new HashSet&lt;&gt;(Arrays.asList(nums));
+int best = 0;
+for (int n : set) {
+    if (!set.contains(n - 1)) {      // n is a sequence start
+        int len = 0;
+        while (set.contains(n++)) len++;
+        best = Math.max(best, len);
+    }
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s2">2 · Two Pointers</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> On a sorted array, two pointers converging from opposite ends let you adjust the sum by moving left (increase) or right (decrease) — O(n) instead of O(n²) brute force.
+</div>
+
+<div class="anim-box">
+  <div class="anim-label">Animation — Two Pointers converging on sorted array</div>
+  <canvas id="tpCanvas" width="860" height="120" style="width:100%;max-width:860px"></canvas>
+  <div class="anim-controls">
+    <button onclick="tpPlay()">&#9654; Play</button>
+    <button onclick="tpReset()">&#8634; Reset</button>
+  </div>
+  <div class="anim-status" id="tpStatus"></div>
+</div>
+
+<pre>
+// TWO POINTERS template — sorted array, find pair summing to target
+public int[] twoSum(int[] sorted, int target) {
+    int left = 0, right = sorted.length - 1;
+    while (left &lt; right) {
+        int sum = sorted[left] + sorted[right];
+        if (sum == target)  return new int[]{left, right};
+        else if (sum &lt; target) left++;   // too small → move left pointer right
+        else                   right--;  // too large → move right pointer left
+    }
+    return new int[]{};
+}
+
+// 3SUM (q029) — fix one, two-pointer on the rest
+Arrays.sort(nums);
+for (int i = 0; i &lt; nums.length - 2; i++) {
+    if (i > 0 &amp;&amp; nums[i] == nums[i-1]) continue;  // skip duplicates
+    int left = i + 1, right = nums.length - 1;
+    while (left &lt; right) {
+        int sum = nums[i] + nums[left] + nums[right];
+        if (sum == 0) { result.add(...); left++; right--; }
+        else if (sum &lt; 0) left++;
+        else right--;
+    }
+}
+
+// VALID PALINDROME (q123) — converge, skip non-alphanumeric
+int l = 0, r = s.length() - 1;
+while (l &lt; r) {
+    while (l &lt; r &amp;&amp; !Character.isLetterOrDigit(s.charAt(l))) l++;
+    while (l &lt; r &amp;&amp; !Character.isLetterOrDigit(s.charAt(r))) r--;
+    if (Character.toLowerCase(s.charAt(l)) != Character.toLowerCase(s.charAt(r))) return false;
+    l++; r--;
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s3">3 · Sliding Window</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> A window [left, right] slides over the array. Expand right to grow; shrink from left when a constraint is violated. Frequency map or counter tracks what's inside the window.
+</div>
+
+<div class="anim-box">
+  <div class="anim-label">Animation — Variable sliding window: longest substring without repeat</div>
+  <canvas id="swCanvas" width="860" height="140" style="width:100%;max-width:860px"></canvas>
+  <div class="anim-controls">
+    <button onclick="swPlay()">&#9654; Play</button>
+    <button onclick="swReset()">&#8634; Reset</button>
+  </div>
+  <div class="anim-status" id="swStatus"></div>
+</div>
+
+<pre>
+// VARIABLE WINDOW — longest substring without repeating chars (q004)
+public int lengthOfLongestSubstring(String s) {
+    Map&lt;Character, Integer&gt; window = new HashMap&lt;&gt;();
+    int left = 0, best = 0;
+    for (int right = 0; right &lt; s.length(); right++) {
+        char c = s.charAt(right);
+        window.merge(c, 1, Integer::sum);          // add to window
+        while (window.get(c) &gt; 1) {                // constraint violated
+            char lc = s.charAt(left++);
+            window.merge(lc, -1, Integer::sum);    // shrink from left
+            if (window.get(lc) == 0) window.remove(lc);
+        }
+        best = Math.max(best, right - left + 1);
+    }
+    return best;
+}
+
+// MINIMUM WINDOW SUBSTRING (q109) — need/have counter pattern
+// 1. Build 'need' map from t.  2. Expand right; when char in need, have++.
+// 3. When have == need.size(), try to shrink left.  4. Track min window.
+int have = 0, need = needMap.size();
+while (have == need) {
+    // update result with window [left, right]
+    char lc = s.charAt(left++);
+    if (needMap.containsKey(lc)) {
+        windowMap.merge(lc, -1, Integer::sum);
+        if (windowMap.get(lc) &lt; needMap.get(lc)) have--;
+    }
+}
+
+// BEST TIME TO BUY AND SELL (q009) — single pass, track min so far
+int minPrice = Integer.MAX_VALUE, maxProfit = 0;
+for (int price : prices) {
+    minPrice = Math.min(minPrice, price);
+    maxProfit = Math.max(maxProfit, price - minPrice);
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s4">4 · Binary Search</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Every iteration halves the search space. Works on any monotonic condition — not just sorted arrays. If you can ask "is the answer ≤ x?" in O(n), you can binary search on the answer space.
+</div>
+
+<pre>
+// STANDARD binary search template — avoids overflow
+int left = 0, right = nums.length - 1;
+while (left &lt;= right) {
+    int mid = left + (right - left) / 2;   // NOT (left+right)/2 — overflow risk
+    if (nums[mid] == target) return mid;
+    else if (nums[mid] &lt; target) left = mid + 1;
+    else right = mid - 1;
+}
+return -1;
+
+// ROTATED SORTED ARRAY — find minimum (q092)
+// Key: one half is always sorted; check which half and narrow search
+int left = 0, right = nums.length - 1;
+while (left &lt; right) {
+    int mid = left + (right - left) / 2;
+    if (nums[mid] &gt; nums[right]) left = mid + 1;  // min is in right half
+    else right = mid;                              // min is in left half (or mid)
+}
+return nums[left];
+
+// SEARCH IN ROTATED SORTED ARRAY (q093)
+// At every mid, one half is sorted. Use that to decide which half to search.
+while (left &lt;= right) {
+    int mid = left + (right - left) / 2;
+    if (nums[mid] == target) return mid;
+    if (nums[left] &lt;= nums[mid]) {                 // left half sorted
+        if (nums[left] &lt;= target &amp;&amp; target &lt; nums[mid]) right = mid - 1;
+        else left = mid + 1;
+    } else {                                       // right half sorted
+        if (nums[mid] &lt; target &amp;&amp; target &lt;= nums[right]) left = mid + 1;
+        else right = mid - 1;
+    }
+}
+</pre>
+
+<div class="callout amber">
+  <strong>Binary search on answer space</strong> Classic pattern: "find minimum X such that condition(X) is true." Set left=minPossible, right=maxPossible, binary search. At each mid, check condition(mid) in O(n). Total: O(n log n). Example: "minimum speed to eat bananas in H hours."
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s5">5 · Stack</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Stack = last-in-first-out. Push when opening; pop when closing. Peek to compare with current. Use for matching brackets, expression evaluation, "next greater element" (monotonic stack).
+</div>
+
+<pre>
+// VALID PARENTHESES (q003)
+Deque&lt;Character&gt; stack = new ArrayDeque&lt;&gt;();
+Map&lt;Character, Character&gt; pairs = Map.of(')', '(', ']', '[', '}', '{');
+for (char c : s.toCharArray()) {
+    if (!pairs.containsKey(c)) { stack.push(c); continue; }  // open bracket
+    if (stack.isEmpty() || stack.peek() != pairs.get(c)) return false;
+    stack.pop();
+}
+return stack.isEmpty();
+
+// MONOTONIC STACK — "next greater element to the right"
+int[] result = new int[nums.length];
+Deque&lt;Integer&gt; stack = new ArrayDeque&lt;&gt;();  // indices
+for (int i = 0; i &lt; nums.length; i++) {
+    while (!stack.isEmpty() &amp;&amp; nums[i] &gt; nums[stack.peek()])
+        result[stack.pop()] = nums[i];   // i is the "next greater" for popped index
+    stack.push(i);
+}
+// remaining in stack: no next greater element → result[i] = -1 (default)
+
+// STACK IMPLEMENTATION without array (q110) — use linked list node
+class Stack {
+    private record Node(int val, Node next) {}
+    private Node top;
+    public void push(int x) { top = new Node(x, top); }
+    public int pop()  { int v = top.val(); top = top.next(); return v; }
+    public int peek() { return top.val(); }
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s6">6 · Linked List Pointers</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Two classic techniques: (1) prev/cur/next in-place mutation for reversal; (2) fast/slow (Floyd's) for cycle detection and nth-from-end. Both O(1) space.
+</div>
+
+<pre>
+// REVERSE LINKED LIST (q101) — iterative prev/cur/next
+ListNode prev = null, cur = head;
+while (cur != null) {
+    ListNode next = cur.next;  // save next
+    cur.next = prev;           // reverse link
+    prev = cur;                // advance prev
+    cur = next;                // advance cur
+}
+return prev;  // new head
+
+// CYCLE DETECTION — Floyd's fast/slow (q103)
+ListNode slow = head, fast = head;
+while (fast != null &amp;&amp; fast.next != null) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow == fast) return true;  // cycle
+}
+return false;
+
+// NTH FROM END (q104) — advance fast by n first, then move both
+ListNode fast = head, slow = head;
+for (int i = 0; i &lt; n; i++) fast = fast.next;
+while (fast.next != null) { slow = slow.next; fast = fast.next; }
+slow.next = slow.next.next;  // remove nth from end
+
+// MERGE TWO SORTED LISTS (q102) — dummy head avoids edge cases
+ListNode dummy = new ListNode(0), cur = dummy;
+while (l1 != null &amp;&amp; l2 != null) {
+    if (l1.val &lt;= l2.val) { cur.next = l1; l1 = l1.next; }
+    else                   { cur.next = l2; l2 = l2.next; }
+    cur = cur.next;
+}
+cur.next = (l1 != null) ? l1 : l2;
+return dummy.next;
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s7">7 · Tree DFS (recursion)</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Recursive DFS decomposes a tree problem into: base case (null) + left subtree result + right subtree result + combine. Most tree problems are 3–5 lines once you see the recurrence.
+</div>
+
+<pre>
+// MAX DEPTH (q113)
+public int maxDepth(TreeNode root) {
+    if (root == null) return 0;
+    return 1 + Math.max(maxDepth(root.left), maxDepth(root.right));
+}
+
+// INVERT BINARY TREE (q114)
+public TreeNode invertTree(TreeNode root) {
+    if (root == null) return null;
+    TreeNode tmp = root.left;
+    root.left = invertTree(root.right);
+    root.right = invertTree(tmp);
+    return root;
+}
+
+// VALIDATE BST (q120) — pass bounds down the recursion
+public boolean isValidBST(TreeNode node, long min, long max) {
+    if (node == null) return true;
+    if (node.val &lt;= min || node.val &gt;= max) return false;
+    return isValidBST(node.left, min, node.val)
+        &amp;&amp; isValidBST(node.right, node.val, max);
+}
+// call: isValidBST(root, Long.MIN_VALUE, Long.MAX_VALUE)
+
+// LOWEST COMMON ANCESTOR BST (q121)
+public TreeNode lca(TreeNode root, TreeNode p, TreeNode q) {
+    if (p.val &lt; root.val &amp;&amp; q.val &lt; root.val) return lca(root.left, p, q);
+    if (p.val &gt; root.val &amp;&amp; q.val &gt; root.val) return lca(root.right, p, q);
+    return root;  // split point = LCA
+}
+
+// DFS TRAVERSALS (q118)
+// Pre-order:  process node, then left, then right
+// In-order:   left, node, right  → sorted output for BST
+// Post-order: left, right, node  → used for deletion, expression eval
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s8">8 · Tree BFS (queue)</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> BFS uses a queue. Process all nodes at level N before moving to level N+1. At the start of each level, the queue size = number of nodes at that level — snapshot it before the inner loop.
+</div>
+
+<pre>
+// LEVEL ORDER TRAVERSAL (q119) — canonical BFS template
+public List&lt;List&lt;Integer&gt;&gt; levelOrder(TreeNode root) {
+    List&lt;List&lt;Integer&gt;&gt; result = new ArrayList&lt;&gt;();
+    if (root == null) return result;
+    Queue&lt;TreeNode&gt; queue = new LinkedList&lt;&gt;();
+    queue.offer(root);
+    while (!queue.isEmpty()) {
+        int levelSize = queue.size();    // snapshot BEFORE inner loop
+        List&lt;Integer&gt; level = new ArrayList&lt;&gt;();
+        for (int i = 0; i &lt; levelSize; i++) {
+            TreeNode node = queue.poll();
+            level.add(node.val);
+            if (node.left  != null) queue.offer(node.left);
+            if (node.right != null) queue.offer(node.right);
+        }
+        result.add(level);
+    }
+    return result;
+}
+</pre>
+
+<div class="callout amber">
+  <strong>BFS vs DFS on trees</strong><br>
+  Use BFS when the answer involves <em>level</em> (depth, width, level-order output). Use DFS when the answer can be computed at a single node using only its subtree results (max depth, path sum, validate BST). DFS space = O(h); BFS space = O(w) = O(n) at worst for a complete binary tree.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s9">9 · Graph BFS / DFS / Dijkstra</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Always track visited nodes to avoid infinite loops. BFS gives shortest path in unweighted graphs (level = distance). DFS is simpler for connectivity/cycle. Dijkstra handles weighted edges via a min-heap.
+</div>
+
+<div class="anim-box">
+  <div class="anim-label">Animation — BFS (level-by-level) | DFS (depth-first) | Dijkstra (weighted shortest path)</div>
+  <canvas id="graphCanvas" width="870" height="230" style="width:100%;max-width:870px"></canvas>
+  <div class="anim-controls">
+    <button onclick="graphPlay()">&#9654; Play</button>
+    <button onclick="graphReset()">&#8634; Reset</button>
+  </div>
+  <div class="anim-status" id="graphStatus"></div>
+</div>
+
+<pre>
+// BFS — shortest path unweighted (q097)
+public Map&lt;Integer, Integer&gt; bfs(Map&lt;Integer, List&lt;Integer&gt;&gt; adj, int start) {
+    Map&lt;Integer, Integer&gt; dist = new HashMap&lt;&gt;();
+    Queue&lt;Integer&gt; queue = new LinkedList&lt;&gt;();
+    queue.offer(start); dist.put(start, 0);
+    while (!queue.isEmpty()) {
+        int node = queue.poll();
+        for (int nb : adj.getOrDefault(node, List.of())) {
+            if (!dist.containsKey(nb)) {
+                dist.put(nb, dist.get(node) + 1);
+                queue.offer(nb);
+            }
+        }
+    }
+    return dist;
+}
+
+// DFS — number of islands (q022)  [grid BFS/DFS same idea]
+private void dfs(char[][] grid, int r, int c) {
+    if (r &lt; 0 || r &gt;= grid.length || c &lt; 0 || c &gt;= grid[0].length || grid[r][c] != '1') return;
+    grid[r][c] = '0';  // mark visited in-place
+    dfs(grid, r+1, c); dfs(grid, r-1, c);
+    dfs(grid, r, c+1); dfs(grid, r, c-1);
+}
+int count = 0;
+for (int r = 0; r &lt; grid.length; r++)
+    for (int c = 0; c &lt; grid[0].length; c++)
+        if (grid[r][c] == '1') { dfs(grid, r, c); count++; }
+
+// DIJKSTRA — weighted shortest path (q099)
+PriorityQueue&lt;int[]&gt; pq = new PriorityQueue&lt;&gt;(Comparator.comparingInt(a -&gt; a[1]));
+pq.offer(new int[]{start, 0});
+Map&lt;Integer, Integer&gt; dist = new HashMap&lt;&gt;();
+while (!pq.isEmpty()) {
+    int[] curr = pq.poll();
+    int node = curr[0], d = curr[1];
+    if (dist.containsKey(node)) continue;   // already settled
+    dist.put(node, d);
+    for (int[] edge : adj.getOrDefault(node, List.of())) {
+        int nb = edge[0], w = edge[1];
+        if (!dist.containsKey(nb)) pq.offer(new int[]{nb, d + w});
+    }
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s10">10 · Dynamic Programming</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> DP = recursion + memoisation. Top-down: write the recursion, add a cache. Bottom-up: fill a table from smallest subproblem to largest. Identify: (1) state definition, (2) recurrence, (3) base case.
+</div>
+
+<div class="split">
+  <div class="split-box">
+    <h4>Top-down (memoisation)</h4>
+    <ul>
+      <li>Write the natural recursion first</li>
+      <li>Add <code>Map&lt;State, Result&gt; memo</code></li>
+      <li>Return cached value if present</li>
+      <li>Easier to reason about; overhead of map + stack frames</li>
+    </ul>
+  </div>
+  <div class="split-box">
+    <h4>Bottom-up (tabulation)</h4>
+    <ul>
+      <li>Fill <code>dp[i]</code> from <code>dp[0]</code> upwards</li>
+      <li>No recursion overhead; often space-optimisable</li>
+      <li>Requires identifying the right iteration order</li>
+      <li>Preferred in interviews (clearer, no stack overflow risk)</li>
+    </ul>
+  </div>
+</div>
+
+<pre>
+// MAXIMUM SUBARRAY — Kadane's algorithm (q011)
+// dp[i] = max subarray ending at i = max(nums[i], dp[i-1] + nums[i])
+int maxSum = nums[0], cur = nums[0];
+for (int i = 1; i &lt; nums.length; i++) {
+    cur = Math.max(nums[i], cur + nums[i]);   // extend or restart
+    maxSum = Math.max(maxSum, cur);
+}
+
+// FIBONACCI — bottom-up O(1) space (q106)
+int a = 0, b = 1;
+for (int i = 2; i &lt;= n; i++) { int c = a + b; a = b; b = c; }
+return b;
+
+// FIBONACCI — top-down memoisation (q106 alt)
+Map&lt;Integer, Long&gt; memo = new HashMap&lt;&gt;();
+long fib(int n) {
+    if (n &lt;= 1) return n;
+    if (memo.containsKey(n)) return memo.get(n);
+    long res = fib(n-1) + fib(n-2);
+    memo.put(n, res);
+    return res;
+}
+
+// DP TEMPLATE — "climb stairs" / coin change pattern
+int[] dp = new int[n + 1];
+dp[0] = 1;  // base case: one way to reach 0
+for (int i = 1; i &lt;= n; i++)
+    for (int coin : coins)
+        if (i - coin &gt;= 0)
+            dp[i] += dp[i - coin];
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s11">11 · Greedy</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Make the locally optimal choice at each step. Works when the problem has the <em>greedy choice property</em> — optimal substructure + no need to backtrack. Sort first, then greedily pick.
+</div>
+
+<pre>
+// ACTIVITY SELECTION / INTERVAL SCHEDULING — greedily pick earliest end time
+Arrays.sort(intervals, Comparator.comparingInt(a -&gt; a[1]));  // sort by end time
+int count = 0, lastEnd = Integer.MIN_VALUE;
+for (int[] interval : intervals) {
+    if (interval[0] &gt;= lastEnd) {  // no overlap with last selected
+        count++;
+        lastEnd = interval[1];
+    }
+}
+
+// JUMP GAME — greedily track max reachable index
+int maxReach = 0;
+for (int i = 0; i &lt; nums.length; i++) {
+    if (i &gt; maxReach) return false;           // stuck — can't reach i
+    maxReach = Math.max(maxReach, i + nums[i]);
+}
+return true;
+</pre>
+
+<div class="callout amber">
+  <strong>DP vs Greedy</strong> If you can always pick the locally optimal choice without looking ahead and it provably leads to the global optimum — use Greedy (faster). If choices affect future options and you need to explore alternatives — use DP. Greedy is O(n log n) at worst; DP is usually O(n²) or O(n·k).
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s12">12 · Intervals</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Sort by start time. Two intervals overlap when <code>b.start &lt;= a.end</code>. Merge by extending the current end: <code>end = max(end, b.end)</code>. A min-heap on end times handles "meeting rooms" style problems.
+</div>
+
+<pre>
+// MERGE INTERVALS (q007)
+Arrays.sort(intervals, Comparator.comparingInt(a -&gt; a[0]));
+List&lt;int[]&gt; merged = new ArrayList&lt;&gt;();
+for (int[] cur : intervals) {
+    if (merged.isEmpty() || cur[0] &gt; merged.get(merged.size()-1)[1]) {
+        merged.add(cur);                                   // no overlap
+    } else {
+        merged.get(merged.size()-1)[1] =
+            Math.max(merged.get(merged.size()-1)[1], cur[1]);  // extend
+    }
+}
+
+// MEETING ROOMS II — min rooms needed (PriorityQueue on end times)
+Arrays.sort(intervals, Comparator.comparingInt(a -&gt; a[0]));
+PriorityQueue&lt;Integer&gt; ends = new PriorityQueue&lt;&gt;();
+for (int[] iv : intervals) {
+    if (!ends.isEmpty() &amp;&amp; ends.peek() &lt;= iv[0]) ends.poll();  // free a room
+    ends.offer(iv[1]);
+}
+return ends.size();  // rooms in use = answer
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s13">13 · Backtracking</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> DFS on an implicit decision tree. At each step: choose an option, recurse, then undo the choice (backtrack). Prune early when a partial solution already violates constraints.
+</div>
+
+<pre>
+// GENERAL BACKTRACKING TEMPLATE
+void backtrack(State state, List&lt;State&gt; result) {
+    if (isSolution(state)) { result.add(copy(state)); return; }
+    for (Choice c : getChoices(state)) {
+        if (isValid(state, c)) {
+            apply(state, c);           // choose
+            backtrack(state, result);  // explore
+            undo(state, c);            // un-choose (backtrack)
+        }
+    }
+}
+
+// SUDOKU SOLVER (q091) — find empty cell, try 1–9, recurse
+boolean solve(char[][] board) {
+    for (int r = 0; r &lt; 9; r++) for (int c = 0; c &lt; 9; c++) {
+        if (board[r][c] != '.') continue;
+        for (char ch = '1'; ch &lt;= '9'; ch++) {
+            if (isValid(board, r, c, ch)) {
+                board[r][c] = ch;
+                if (solve(board)) return true;
+                board[r][c] = '.';  // backtrack
+            }
+        }
+        return false;  // no valid digit → trigger backtrack in caller
+    }
+    return true;  // all cells filled
+}
+
+// SUBSETS — generate all subsets (include/exclude pattern)
+void subsets(int[] nums, int idx, List&lt;Integer&gt; current, List&lt;List&lt;Integer&gt;&gt; result) {
+    result.add(new ArrayList&lt;&gt;(current));    // every state is a valid subset
+    for (int i = idx; i &lt; nums.length; i++) {
+        current.add(nums[i]);
+        subsets(nums, i + 1, current, result);
+        current.remove(current.size() - 1);  // backtrack
+    }
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s14">14 · Trie (Prefix Tree)</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Each node represents a character; the path from root to node = a prefix. Insert and search are O(L) where L = word length. Beats HashMap for prefix queries — no need to check every key.
+</div>
+
+<pre>
+// TRIE IMPLEMENTATION (q122)
+class TrieNode {
+    TrieNode[] children = new TrieNode[26];
+    boolean isEnd;
+}
+
+class Trie {
+    private final TrieNode root = new TrieNode();
+
+    public void insert(String word) {
+        TrieNode cur = root;
+        for (char c : word.toCharArray()) {
+            int i = c - 'a';
+            if (cur.children[i] == null) cur.children[i] = new TrieNode();
+            cur = cur.children[i];
+        }
+        cur.isEnd = true;
+    }
+
+    public boolean search(String word) {
+        TrieNode cur = root;
+        for (char c : word.toCharArray()) {
+            int i = c - 'a';
+            if (cur.children[i] == null) return false;
+            cur = cur.children[i];
+        }
+        return cur.isEnd;
+    }
+
+    public boolean startsWith(String prefix) {
+        TrieNode cur = root;
+        for (char c : prefix.toCharArray()) {
+            int i = c - 'a';
+            if (cur.children[i] == null) return false;
+            cur = cur.children[i];
+        }
+        return true;  // any node reached = prefix exists
+    }
+}
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="s15">15 · Bit Manipulation</h2>
+
+<div class="callout">
+  <strong>Core insight</strong> Bitwise ops are O(1) and very fast. Key tricks: <code>n &amp; (n-1)</code> clears the lowest set bit; <code>n &amp; 1</code> checks if odd; <code>x ^ x = 0</code> (XOR cancellation for finding the lone element).
+</div>
+
+<pre>
+// COUNT SET BITS (q095) — Brian Kernighan
+int count = 0;
+while (n != 0) { n = n &amp; (n - 1); count++; }  // clear lowest set bit each time
+
+// COUNTING BITS for 0..n (q094) — DP: dp[i] = dp[i >> 1] + (i &amp; 1)
+int[] dp = new int[n + 1];
+for (int i = 1; i &lt;= n; i++)
+    dp[i] = dp[i &gt;&gt; 1] + (i &amp; 1);  // i>>1 = i/2; (i&amp;1) = last bit
+
+// REVERSE BITS (q096)
+int result = 0;
+for (int i = 0; i &lt; 32; i++) {
+    result = (result &lt;&lt; 1) | (n &amp; 1);  // shift result left, add LSB of n
+    n &gt;&gt;&gt;= 1;                           // unsigned right shift n
+}
+
+// COMMON BIT TRICKS
+n &amp; 1           // is odd?
+n &amp; (n-1)       // clear lowest set bit
+n &amp; (-n)        // isolate lowest set bit
+(n &amp; (n-1)) == 0  // is power of 2?
+a ^ b           // XOR: find single non-duplicate in array (pairs cancel)
+1 &lt;&lt; k          // set bit k
+n &gt;&gt;&gt; k         // unsigned right shift (no sign extension)
+</pre>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>Interview Mental Models — The Big Picture</h2>
+
+<table>
+  <tr><th>Signal in problem statement</th><th>Think of</th></tr>
+  <tr><td>"Find pair / two numbers that sum to…"</td><td>HashMap complement, or Two Pointers (if sorted)</td></tr>
+  <tr><td>"Longest / shortest contiguous subarray/substring"</td><td>Sliding Window</td></tr>
+  <tr><td>"Sorted array, search for value"</td><td>Binary Search</td></tr>
+  <tr><td>"Level order / minimum depth"</td><td>BFS on tree</td></tr>
+  <tr><td>"Path sum / max depth / validate"</td><td>DFS on tree (recursion)</td></tr>
+  <tr><td>"Connected components / islands"</td><td>DFS/BFS on grid as graph</td></tr>
+  <tr><td>"Shortest path" — unweighted</td><td>BFS</td></tr>
+  <tr><td>"Shortest path" — weighted positive edges</td><td>Dijkstra + PriorityQueue</td></tr>
+  <tr><td>"All combinations / permutations / generate all"</td><td>Backtracking</td></tr>
+  <tr><td>"Overlapping subproblems / count ways"</td><td>Dynamic Programming</td></tr>
+  <tr><td>"Matching brackets / nested structure"</td><td>Stack</td></tr>
+  <tr><td>"Merge overlapping intervals"</td><td>Sort by start + greedy merge</td></tr>
+  <tr><td>"Count set bits / power of 2 / find lone element"</td><td>Bit manipulation</td></tr>
+  <tr><td>"Prefix search / autocomplete"</td><td>Trie</td></tr>
+  <tr><td>"Cycle in linked list / middle of list"</td><td>Fast/slow pointers</td></tr>
+  <tr><td>"Reverse linked list in-place"</td><td>prev/cur/next three pointers</td></tr>
+  <tr><td>"Top K most frequent"</td><td>HashMap + PriorityQueue (heap), or bucket sort</td></tr>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>Complexity Quick Reference</h2>
+
+<table>
+  <tr><th>Structure / Op</th><th>Access</th><th>Search</th><th>Insert</th><th>Delete</th></tr>
+  <tr><td>Array</td><td>O(1)</td><td>O(n)</td><td>O(n)</td><td>O(n)</td></tr>
+  <tr><td>HashMap</td><td>O(1) avg</td><td>O(1) avg</td><td>O(1) avg</td><td>O(1) avg</td></tr>
+  <tr><td>Sorted Array + Binary Search</td><td>O(1)</td><td>O(log n)</td><td>O(n)</td><td>O(n)</td></tr>
+  <tr><td>Binary Search Tree (balanced)</td><td>O(log n)</td><td>O(log n)</td><td>O(log n)</td><td>O(log n)</td></tr>
+  <tr><td>PriorityQueue (heap)</td><td>O(1) peek</td><td>O(n)</td><td>O(log n)</td><td>O(log n)</td></tr>
+  <tr><td>Trie (L = word length)</td><td>O(L)</td><td>O(L)</td><td>O(L)</td><td>O(L)</td></tr>
+  <tr><td>Linked List</td><td>O(n)</td><td>O(n)</td><td>O(1) head</td><td>O(1) if at node</td></tr>
+  <tr><td>Stack / Queue</td><td>O(1) top</td><td>O(n)</td><td>O(1)</td><td>O(1)</td></tr>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2 id="quiz">Quiz — which strategy?</h2>
+<div class="quiz-block">
+
+  <div class="question" id="q1">
+    <p>Q1. Given an unsorted array, find all pairs that sum to a target value. What is the optimal approach?</p>
+    <ul class="options" data-correct="2">
+      <li>Sort the array and use nested loops to find each pair in O(n²)</li>
+      <li>Scan once storing each value in a HashSet; check if complement exists — O(n)</li>
+      <li>Sort the array and use two pointers converging from both ends — O(n log n)</li>
+      <li>Use dynamic programming with a 2D table tracking partial sums — O(n²)</li>
+    </ul>
+    <div class="explanation">HashSet complement lookup: for each element x, check if (target - x) is already in the set. O(n) time, O(n) space. Note: Two Pointers also works (O(n log n) due to sort) but requires sorting. If the array is already sorted, two pointers is optimal O(n). If unsorted, HashMap wins.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. "Find the longest substring with at most K distinct characters." Which strategy?</p>
+    <ul class="options" data-correct="1">
+      <li>Sliding window with a frequency map; shrink left when distinct count exceeds K</li>
+      <li>Sort the string and use binary search to find the longest run</li>
+      <li>Dynamic programming with dp[i][j] = longest ending at i with j distinct chars</li>
+      <li>Backtracking: generate all substrings and filter by distinct count</li>
+    </ul>
+    <div class="explanation">Classic variable sliding window. Maintain a frequency map of chars in the window. Expand right always. When map.size() > K, shrink from left (decrement freq, remove if 0). Update max window size at each right. O(n) time — each character is added once and removed at most once.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. You have a linked list and need to find the middle node in one pass. Which technique?</p>
+    <ul class="options" data-correct="3">
+      <li>Store all nodes in an ArrayList, return the middle index — O(n) space</li>
+      <li>Count nodes first, then traverse again to the middle — two passes</li>
+      <li>Fast/slow pointers: fast moves 2 steps, slow 1; when fast reaches end, slow is at middle</li>
+      <li>Use recursion: unwind the call stack to count from the tail — O(n) stack</li>
+    </ul>
+    <div class="explanation">Fast/slow (Floyd's) pattern. Fast pointer moves 2 nodes per step, slow moves 1. When fast.next == null (odd length) or fast.next.next == null (even length), slow is at the middle. O(n) time, O(1) space — no extra storage, single pass.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. You need to find the shortest path in a graph where all edges have equal weight. Which algorithm?</p>
+    <ul class="options" data-correct="2">
+      <li>DFS with a visited set — explores deep before wide, misses shortest path</li>
+      <li>BFS with a queue — each level = one step; first time a node is visited = shortest path</li>
+      <li>Dijkstra with a priority queue — correct but overkill for uniform edge weights</li>
+      <li>Dynamic programming with dp[node] = min cost — requires topological order</li>
+    </ul>
+    <div class="explanation">BFS guarantees shortest path in an unweighted (or equal-weight) graph because it explores all nodes at distance d before distance d+1. The first time BFS visits a node, it has taken the fewest hops. Dijkstra also works but has O((V+E) log V) overhead from the priority queue — wasteful when all weights are equal. BFS is O(V+E).</div>
+  </div>
+
+  <div class="question" id="q5">
+    <p>Q5. "Given n tasks with deadlines and profits, find maximum profit if you can do one task per time slot." Which strategy?</p>
+    <ul class="options" data-correct="4">
+      <li>DP with dp[t] = max profit achievable in t time slots — O(n·T)</li>
+      <li>BFS exploring all task orderings — exponential branches</li>
+      <li>Backtracking: try all assignments and keep the best — O(n!)</li>
+      <li>Greedy: sort by profit descending; for each task, assign to latest available slot before deadline</li>
+    </ul>
+    <div class="explanation">Greedy job scheduling: sort tasks by profit descending (take the most valuable first). For each task, try to schedule it in the latest available slot ≤ deadline (use Union-Find or a boolean slot array). This greedy works because higher-profit tasks should "claim" the latest possible slot, leaving earlier slots for lower-profit tasks. O(n log n) sort + O(n·d) slot scan.</div>
+  </div>
+
+  <div class="question" id="q6">
+    <p>Q6. You're generating all valid combinations of N pairs of brackets. Which strategy?</p>
+    <ul class="options" data-correct="3">
+      <li>Dynamic programming: build dp[i] from dp[i-1] by prepending/appending brackets</li>
+      <li>BFS: start from empty string, branch into two states at each step</li>
+      <li>Backtracking: add '(' if open count &lt; n; add ')' if close count &lt; open count; base case: length = 2n</li>
+      <li>Sliding window over a prebuilt string of brackets to extract valid substrings</li>
+    </ul>
+    <div class="explanation">Backtracking with pruning. State = (current string, open count, close count). Two choices at each step: add '(' if open < n; add ')' if close < open. Backtrack when neither is valid. This avoids generating invalid strings early — much more efficient than brute force. The constraint "close < open" is the pruning condition that makes backtracking efficient here.</div>
+  </div>
+
+</div>
+
+<footer>
+  <p>Ask follow-up questions to your agent — it can deep-dive any strategy, generate more questions on a category, or walk through a specific problem step by step.</p>
+  <p style="margin-top:.5rem">
+    <a href="../../projects/tradingco/0001-tradingco-interview-prep.html">← TradingCo Interview Prep</a>
+  </p>
+</footer>
+
+<script>
+// ── Animation 1: Two Pointers ─────────────────────────────────────────────────
+const tpc = document.getElementById('tpCanvas');
+const tpctx = tpc.getContext('2d');
+let tpAnim = null, tpT = 0;
+
+const tpArr = [-3, -1, 0, 2, 4, 6, 8, 11];
+const tpTarget = 8;
+
+function tpDraw(t) {
+  const W = tpc.width, H = tpc.height;
+  tpctx.clearRect(0, 0, W, H);
+
+  // Determine pointer positions based on animation progress
+  // Steps: (0,7)→sum5→left++; (1,7)→sum7→left++; (2,7)→sum8→FOUND!
+  const steps = [{l:0,r:7},{l:1,r:7},{l:2,r:7}];
+  const stepIdx = Math.min(2, Math.floor(t * 3.5));
+  const {l, r} = steps[stepIdx];
+  const sum = tpArr[l] + tpArr[r];
+  const found = (l === 2 && r === 7);
+
+  const boxW = 80, boxH = 44, startX = 30, y = 38;
+  const spacing = (W - startX * 2 - tpArr.length * boxW) / (tpArr.length - 1) + boxW;
+
+  tpArr.forEach((v, i) => {
+    const x = startX + i * spacing;
+    tpctx.fillStyle = (i === l || i === r) ? (found ? '#dcfce7' : '#dbeafe') : '#f8fafc';
+    tpctx.strokeStyle = (i === l || i === r) ? (found ? '#16a34a' : '#2563eb') : '#cbd5e1';
+    tpctx.lineWidth = (i === l || i === r) ? 2 : 1;
+    tpctx.fillRect(x, y, boxW - 8, boxH); tpctx.strokeRect(x, y, boxW - 8, boxH);
+    tpctx.fillStyle = '#1a1a1a'; tpctx.font = 'bold 15px Menlo'; tpctx.textAlign = 'center';
+    tpctx.fillText(v, x + (boxW - 8) / 2, y + 28);
+    tpctx.fillStyle = '#94a3b8'; tpctx.font = '10px Menlo';
+    tpctx.fillText('[' + i + ']', x + (boxW - 8) / 2, y + 56);
+  });
+
+  // Pointer labels
+  const lx = startX + l * spacing + (boxW - 8) / 2;
+  const rx = startX + r * spacing + (boxW - 8) / 2;
+  tpctx.fillStyle = '#2563eb'; tpctx.font = 'bold 11px Menlo'; tpctx.textAlign = 'center';
+  tpctx.fillText('LEFT', lx, y - 6);
+  tpctx.fillText('RIGHT', rx, y - 6);
+
+  // Status
+  const msg = found
+    ? `FOUND: arr[${l}](${tpArr[l]}) + arr[${r}](${tpArr[r]}) = ${sum} = target ${tpTarget} ✓`
+    : `arr[${l}](${tpArr[l]}) + arr[${r}](${tpArr[r]}) = ${sum} ${sum < tpTarget ? '< target → move LEFT right' : '> target → move RIGHT left'}`;
+  tpctx.fillStyle = found ? '#16a34a' : '#555'; tpctx.font = '11px Georgia'; tpctx.textAlign = 'left';
+  tpctx.fillText(msg, 10, H - 6);
+  tpctx.textAlign = 'left';
+}
+
+function tpPlay() {
+  if (tpAnim) return; tpT = 0;
+  document.getElementById('tpStatus').textContent = 'target = 8 on sorted array [-3,-1,0,2,4,6,8,11]';
+  tpAnim = setInterval(() => {
+    tpT = Math.min(1, tpT + 0.018); tpDraw(tpT);
+    if (tpT >= 1) {
+      clearInterval(tpAnim); tpAnim = null;
+      document.getElementById('tpStatus').textContent = 'Found: indices [2,7] → values 0+8=8. Two moves from initial position.';
+    }
+  }, 50);
+}
+function tpReset() { clearInterval(tpAnim); tpAnim=null; tpT=0; tpDraw(0); document.getElementById('tpStatus').textContent=''; }
+tpDraw(0);
+
+// ── Animation 2: Sliding Window ───────────────────────────────────────────────
+const swc = document.getElementById('swCanvas');
+const swctx = swc.getContext('2d');
+let swAnim = null, swT = 0;
+const swStr = 'A B C A B C B B'.split(' ');
+
+function swDraw(t) {
+  const W = swc.width, H = swc.height;
+  swctx.clearRect(0, 0, W, H);
+
+  // Steps: show window expanding and contracting
+  const allSteps = [
+    {l:0,r:0,best:1},{l:0,r:1,best:2},{l:0,r:2,best:3},
+    {l:1,r:3,best:3},{l:2,r:4,best:3},{l:3,r:5,best:3},
+    {l:4,r:6,best:3},{l:5,r:7,best:3}
+  ];
+  const si = Math.min(allSteps.length - 1, Math.floor(t * (allSteps.length + 0.5)));
+  const {l, r, best} = allSteps[si];
+
+  const boxW = 78, boxH = 40, startX = 20, y = 30;
+  const spacing = (W - startX * 2 - swStr.length * boxW) / (swStr.length - 1) + boxW;
+
+  swStr.forEach((ch, i) => {
+    const x = startX + i * spacing;
+    const inWindow = i >= l && i <= r;
+    swctx.fillStyle = inWindow ? '#dbeafe' : '#f8fafc';
+    swctx.strokeStyle = inWindow ? '#2563eb' : '#cbd5e1';
+    swctx.lineWidth = inWindow ? 2 : 1;
+    swctx.fillRect(x, y, boxW - 6, boxH); swctx.strokeRect(x, y, boxW - 6, boxH);
+    swctx.fillStyle = '#1a1a1a'; swctx.font = 'bold 16px Menlo'; swctx.textAlign = 'center';
+    swctx.fillText(ch, x + (boxW - 6) / 2, y + 27);
+  });
+
+  // Window bracket
+  const lx = startX + l * spacing;
+  const rx = startX + r * spacing + boxW - 6;
+  swctx.strokeStyle = '#2563eb'; swctx.lineWidth = 2; swctx.setLineDash([]);
+  swctx.beginPath();
+  swctx.moveTo(lx, y - 4); swctx.lineTo(lx, y + boxH + 4);
+  swctx.moveTo(rx, y - 4); swctx.lineTo(rx, y + boxH + 4);
+  swctx.stroke();
+
+  const winLen = r - l + 1;
+  swctx.fillStyle = '#2563eb'; swctx.font = '11px Menlo'; swctx.textAlign = 'center';
+  swctx.fillText('window size = ' + winLen, (lx + rx) / 2, y + boxH + 18);
+
+  swctx.fillStyle = '#16a34a'; swctx.textAlign = 'left';
+  swctx.fillText('best = ' + best, W - 80, H - 8);
+  swctx.fillStyle = '#555'; swctx.font = '11px Georgia';
+  swctx.fillText('left=' + l + '  right=' + r, 10, H - 8);
+  swctx.textAlign = 'left';
+}
+
+function swPlay() {
+  if (swAnim) return; swT = 0;
+  document.getElementById('swStatus').textContent = 'Input: "ABCABCBB" → find longest substring without repeating chars';
+  swAnim = setInterval(() => {
+    swT = Math.min(1, swT + 0.025); swDraw(swT);
+    if (swT >= 1) {
+      clearInterval(swAnim); swAnim = null;
+      document.getElementById('swStatus').textContent = 'Answer: 3 ("ABC"). Window slides right; shrinks when duplicate enters.';
+    }
+  }, 55);
+}
+function swReset() { clearInterval(swAnim); swAnim=null; swT=0; swDraw(0); document.getElementById('swStatus').textContent=''; }
+swDraw(0);
+
+// ── Animation 3: BFS | DFS | Dijkstra — three panels ─────────────────────────
+const gc = document.getElementById('graphCanvas');
+const gctx = gc.getContext('2d');
+let gAnim = null, gT = 0;
+
+// Panel width: 870 / 3 = 290px each
+const PANEL = 290;
+
+// Shared 6-node graph for BFS & DFS (fits in 260×190)
+// Layout:
+//         1
+//        / \
+//       2   3
+//      / \   \
+//     4   5   6
+const bdNodes = {
+  1:{x:120,y:28}, 2:{x:60,y:95}, 3:{x:200,y:95},
+  4:{x:22,y:168}, 5:{x:100,y:168}, 6:{x:200,y:168}
+};
+const bdEdges = [[1,2],[1,3],[2,4],[2,5],[3,6]];
+const bfsOrder = [1,2,3,4,5,6];  // level 0:{1} level1:{2,3} level2:{4,5,6}
+const dfsOrder = [1,2,4,5,3,6];  // go deep left before right
+
+// Dijkstra graph — 5 nodes, weighted edges (panel 3, offset 580)
+// Layout:
+//   1 --4-- 2 --1-- 4
+//   |       |       |
+//   1       2       3
+//   |       |       |
+//   3 --5-- 5--(no)--
+// Interesting: 1→2 directly costs 4, but 1→3→2 costs 1+2=3 (cheaper!)
+const djNodes = {
+  1:{x:28, y:110},
+  2:{x:128,y:50},
+  3:{x:128,y:170},
+  4:{x:228,y:50},
+  5:{x:228,y:170}
+};
+const djEdges = [
+  {a:1,b:2,w:4}, {a:1,b:3,w:1},
+  {a:3,b:2,w:2}, {a:2,b:4,w:1},
+  {a:3,b:5,w:5}, {a:4,b:5,w:3}
+];
+// Dijkstra from node 1: settle order 1(0), 3(1), 2(3), 4(4), 5(6)
+// dist: {1:0, 2:3, 3:1, 4:4, 5:6}
+const djSettleOrder = [1,3,2,4,5];
+const djFinalDist   = {1:0,3:1,2:3,4:4,5:6};
+// dist after settling each node (for animation)
+const djDistSnapshots = [
+  {1:0, 2:4, 3:1, 4:'∞',5:'∞'},  // after settling 1
+  {1:0, 2:3, 3:1, 4:'∞',5:6},    // after settling 3 (2 updated 4→3 via 3)
+  {1:0, 2:3, 3:1, 4:4,  5:6},    // after settling 2 (4 updated ∞→4)
+  {1:0, 2:3, 3:1, 4:4,  5:6},    // after settling 4 (5: min(6, 4+3)=6 unchanged)
+  {1:0, 2:3, 3:1, 4:4,  5:6},    // after settling 5
+];
+
+function drawNode(ctx, cx, cy, label, color, textColor, badge) {
+  ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = textColor; ctx.font = 'bold 13px Menlo'; ctx.textAlign = 'center';
+  ctx.fillText(label, cx, cy + 5);
+  if (badge !== undefined && badge !== null) {
+    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 10px Menlo';
+    ctx.fillText(badge, cx + 13, cy - 10);
+  }
+}
+
+function drawEdge(ctx, x1, y1, x2, y2, color, width, label) {
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  if (label !== undefined) {
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    ctx.fillStyle = '#fff'; ctx.fillRect(mx-9, my-9, 18, 15);
+    ctx.fillStyle = '#475569'; ctx.font = 'bold 10px Menlo'; ctx.textAlign = 'center';
+    ctx.fillText(label, mx, my+2);
+  }
+}
+
+function drawPanel(ctx, ox, title, color, nodes, edges, visitedSet, visitOrder, distMap, settledSet) {
+  const H = gc.height;
+  // Title
+  ctx.fillStyle = color; ctx.font = 'bold 11px Menlo'; ctx.textAlign = 'center';
+  ctx.fillText(title, ox + PANEL/2, 14);
+
+  // Edges
+  edges.forEach(e => {
+    const [a, b] = e.a !== undefined ? [e.a, e.b] : e;
+    const na = nodes[a], nb = nodes[b];
+    const isPath = visitedSet && visitedSet.has(a) && visitedSet.has(b);
+    drawEdge(ctx, ox+na.x, na.y, ox+nb.x, nb.y,
+      isPath ? color : '#cbd5e1', isPath ? 2.5 : 1.5,
+      e.w);
+  });
+
+  // Nodes
+  Object.entries(nodes).forEach(([id, pos]) => {
+    const n = parseInt(id);
+    const settled = settledSet ? settledSet.has(n) : (visitedSet ? visitedSet.has(n) : false);
+    const visitIdx = visitOrder ? visitOrder.indexOf(n) : -1;
+    const badge = visitOrder && visitIdx !== -1 && settled ? (visitIdx+1) : null;
+
+    let nodeColor = '#f1f5f9', textColor = '#475569', strokeColor = '#94a3b8';
+    if (settled) { nodeColor = color; textColor = '#fff'; strokeColor = color; }
+
+    ctx.fillStyle = nodeColor; ctx.strokeStyle = strokeColor; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ox+pos.x, pos.y, 16, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = textColor; ctx.font = 'bold 13px Menlo'; ctx.textAlign = 'center';
+    ctx.fillText(id, ox+pos.x, pos.y+5);
+
+    // Visit order badge (top-right of node)
+    if (badge !== null) {
+      ctx.fillStyle = '#0f172a'; ctx.font = 'bold 9px Menlo';
+      ctx.fillText('#'+badge, ox+pos.x+16, pos.y-10);
+    }
+
+    // Dijkstra distance label (below node)
+    if (distMap) {
+      const d = distMap[n] !== undefined ? distMap[n] : '∞';
+      ctx.fillStyle = settled ? color : '#94a3b8';
+      ctx.font = 'bold 11px Menlo'; ctx.textAlign = 'center';
+      ctx.fillText('d=' + d, ox+pos.x, pos.y + 32);
+    }
+  });
+}
+
+function gDraw(t) {
+  const W = gc.width, H = gc.height;
+  gctx.clearRect(0, 0, W, H);
+
+  const step = Math.floor(t * (bfsOrder.length + 0.99));  // 0..6
+
+  // ── Panel 1: BFS ─────────────────────────────────────────────────────────
+  const bfsVisited = new Set(bfsOrder.slice(0, step));
+  drawPanel(gctx, 0, 'BFS — level by level', '#2563eb', bdNodes, bdEdges.map(e=>({a:e[0],b:e[1]})),
+            bfsVisited, bfsOrder, null, bfsVisited);
+  // Level annotations
+  if (step >= 1) { gctx.fillStyle='#93c5fd'; gctx.font='9px Menlo'; gctx.textAlign='left'; gctx.fillText('L0',4,38); }
+  if (step >= 2) { gctx.fillStyle='#93c5fd'; gctx.fillText('L1',4,105); }
+  if (step >= 4) { gctx.fillStyle='#93c5fd'; gctx.fillText('L2',4,178); }
+
+  // ── Panel 2: DFS ─────────────────────────────────────────────────────────
+  const dfsVisited = new Set(dfsOrder.slice(0, step));
+  drawPanel(gctx, PANEL, 'DFS — depth first', '#d97706', bdNodes, bdEdges.map(e=>({a:e[0],b:e[1]})),
+            dfsVisited, dfsOrder, null, dfsVisited);
+
+  // ── Panel 3: Dijkstra ─────────────────────────────────────────────────────
+  const djStep = Math.min(djSettleOrder.length, step);
+  const djSettled = new Set(djSettleOrder.slice(0, djStep));
+  const distSnap = djDistSnapshots[Math.max(0, djStep-1)];
+  drawPanel(gctx, PANEL*2, 'Dijkstra — weighted shortest', '#7c3aed', djNodes,
+            djEdges, djSettled, djSettleOrder, distSnap, djSettled);
+
+  // Separators
+  gctx.strokeStyle = '#e2e8f0'; gctx.lineWidth = 1; gctx.setLineDash([4,3]);
+  [PANEL, PANEL*2].forEach(x => {
+    gctx.beginPath(); gctx.moveTo(x, 0); gctx.lineTo(x, H); gctx.stroke();
+  });
+  gctx.setLineDash([]);
+
+  // Bottom sequence labels
+  const bfsSeq = bfsOrder.slice(0, step).join('→');
+  const dfsSeq = dfsOrder.slice(0, step).join('→');
+  const djSeq  = djSettleOrder.slice(0, djStep).join('→');
+  gctx.font = '9px Menlo'; gctx.textAlign = 'left';
+  gctx.fillStyle = '#2563eb'; gctx.fillText(bfsSeq, 4, H-4);
+  gctx.fillStyle = '#d97706'; gctx.fillText(dfsSeq, PANEL+4, H-4);
+  gctx.fillStyle = '#7c3aed'; gctx.fillText(djSeq, PANEL*2+4, H-4);
+}
+
+function graphPlay() {
+  if (gAnim) return; gT = 0;
+  document.getElementById('graphStatus').textContent = 'Same 6-node graph for BFS/DFS. Dijkstra panel uses weighted edges — note 1→3→2 (cost 3) beats 1→2 direct (cost 4).';
+  gAnim = setInterval(() => {
+    gT = Math.min(1, gT + 0.022); gDraw(gT);
+    if (gT >= 1) {
+      clearInterval(gAnim); gAnim = null;
+      document.getElementById('graphStatus').textContent = 'BFS visits level-by-level (1→2→3→4→5→6). DFS dives deep (1→2→4→5→3→6). Dijkstra settles by min distance — node 2 reached via 3, not directly.';
+    }
+  }, 55);
+}
+function graphReset() { clearInterval(gAnim); gAnim=null; gT=0; gDraw(0); document.getElementById('graphStatus').textContent=''; }
+gDraw(0);
+
+// Quiz interaction
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.querySelector('.correct') || ul.querySelector('.wrong')) return;
+      const exp = ul.closest('.question').querySelector('.explanation');
+      li.classList.add(i + 1 === correct ? 'correct' : 'wrong');
+      if (i + 1 !== correct) ul.querySelectorAll('li')[correct - 1].classList.add('reveal');
+      if (exp) exp.classList.add('visible');
+    });
+  });
+});
+</script>
+</body>
+</html>

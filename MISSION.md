@@ -1,24 +1,27 @@
-# Mission: Object-Oriented Design — Bank System in Java
+# Mission: Pass Senior Java Software Engineering Interviews
 
 ## Why
-Pass the OOD category of software engineering interviews. The bank system is a canonical
-interview problem that probes domain modelling, inheritance hierarchies, design patterns,
-and thread safety — all things that appear repeatedly in senior engineer interviews at
-fintech and banking companies.
+Pass all categories of software engineering interviews at senior level — OOD, Java concurrency,
+system design, algorithms — with focus on fintech/trading domain (OMS, low-latency, event-driven).
+Current target: TradingCo (IG Group) Senior Java Engineer — OMS, event sourcing, low latency.
 
 ## Success looks like
-- Given "design a bank system", produce a clean class diagram and Java skeleton within 25 minutes
-- Name the correct design pattern for each design decision and justify it
-- Identify where thread safety is required and apply `@Version` / `synchronized` / `AtomicLong` correctly
-- Extend the design without modifying existing classes (Open/Closed)
-- Spot OOD violations in code review questions (missing abstraction, broken SRP, wrong pattern)
+- OOD: given "design a bank/OMS/parking lot", produce clean class diagram + Java skeleton in 25 min
+- Concurrency: explain and correctly implement ExecutorService, ForkJoinPool, CompletableFuture,
+  thread safety patterns (`@Version`, `synchronized`, `AtomicLong`, `ConcurrentHashMap`)
+- System design: explain event sourcing + CQRS tradeoffs with concrete numbers
+- Code review: spot thread safety, JPA N+1, BigDecimal, missing idempotency in legacy Java
+- Name the correct pattern for each design decision and justify it
 
 ## Constraints
-- Interview simulation context — no Spring, no Hibernate, pure Java 21
+- Interview simulation context — Java 21, no Spring unless specifically asked
 - Each lesson completable in < 20 minutes
-- Prior OOD: passed Parking Lot (q013) — understands basic abstraction and interfaces
+- Domain grounding: payments, banking, sport betting, trading OMS
 
-## Out of scope
-- Persistence layer (JPA, Hibernate) — this is domain modelling only
-- Spring Security / JWT — covered separately in project 09
-- Full microservices decomposition — this is single-system OOD
+## Learning tracks
+| Track | Status |
+|---|---|
+| OOD — Bank system | In progress (Lesson 01 done) |
+| Java Concurrency — ExecutorService, ForkJoin, CompletableFuture | Starting |
+| System Design — Event Sourcing + CQRS | Whiteboard lessons done |
+| Algorithms | Ongoing via question practice |

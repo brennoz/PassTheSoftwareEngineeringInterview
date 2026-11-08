@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<title>HashMap — Concept → Java → C → Distributed KV (Whiteboard)</title>
+<style>* { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; display: flex; background: #f9f9f9; }
+  nav { width: 240px; min-width: 200px; padding: 24px 16px; background: #fff; border-right: 1px solid #e0e0e0; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+  nav h2 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 12px; }
+  nav ul { list-style: none; margin: 0; padding: 0; }
+  nav li { margin: 2px 0; }
+  nav a { font-size: 13px; color: #2980b9; text-decoration: none; display: block; padding: 2px 0 2px 8px; }
+  nav a:hover { text-decoration: underline; }
+  nav .toc-ws { font-weight: 600; color: #333; font-size: 12px; margin-top: 10px; padding-left: 0 !important; }
+  nav .toc-ws > a { font-weight: 600; color: #333; padding-left: 0; }
+  nav .toc-frames { padding-left: 12px; }
+  nav .toc-frames a { font-size: 12px; color: #5b8ab8; }
+  main { flex: 1; padding: 32px 40px; min-width: 0; }
+  .workspace-section { margin-bottom: 48px; }
+  .workspace-heading { font-size: 20px; font-weight: 700; color: #222; margin: 0 0 20px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+  .item-section { margin-bottom: 28px; padding: 20px; background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow-x: auto; }
+  .item-heading { font-size: 15px; font-weight: 600; color: #333; margin: 0 0 4px; }
+  .item-meta { font-size: 12px; color: #888; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+  .type-badge { background: #e8f4fd; color: #2980b9; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .frame-section { margin-top: 16px; padding: 12px 16px; border: 1px solid #f0f0f0; border-radius: 4px; background: #fafafa; overflow-x: auto; }
+  .frame-heading { font-size: 12px; color: #777; margin: 0 0 10px; font-style: italic; }
+  svg { max-width: 100%; height: auto; }
+  table { max-width: 100%; border-collapse: collapse; }
+  pre, code { max-width: 100%; }</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+</head>
+<body>
+<nav>
+<h2>Contents</h2>
+<ul>
+  <li class="toc-ws"><a href="#ws-hashmap-lesson">hashmap-lesson</a>
+    <ul>
+      <li><a href="#item-1-frame-0">HashMap — Concept → Java → C → Distributed KV</a>
+        <ul class="toc-frames">
+          <li><a href="#item-1-frame-0">Frame 1 — What is a HashMap?</a></li>
+          <li><a href="#item-1-frame-1">Frame 2 — Java HashMap internals</a></li>
+          <li><a href="#item-1-frame-2">Frame 3 — Collision: chain → tree</a></li>
+          <li><a href="#item-1-frame-3">Frame 4 — hashCode() / equals() contract</a></li>
+          <li><a href="#item-1-frame-4">Frame 5 — C struct concept</a></li>
+          <li><a href="#item-1-frame-5">Frame 6 — C HashMap: djb2 + put/get</a></li>
+          <li><a href="#item-1-frame-6">Frame 7 — Distributed KV Store</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+</nav>
+<main>
+<section class="workspace-section" id="ws-hashmap-lesson">
+<h2 class="workspace-heading">hashmap-lesson</h2>
+<section class="item-section" id="item-1">
+<h3 class="item-heading">HashMap — Concept → Java → C → Distributed KV</h3>
+<p class="item-meta"><span class="type-badge">step-frames</span><span>Nov 7, 2026</span></p>
+
+<section class="frame-section" id="item-1-frame-0">
+<h4 class="frame-heading">Frame 1 — What is a HashMap?</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">HASHMAP — CORE CONCEPT</h4>
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card" style="background:#313244;border:1px solid #45475a">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="text-center">
+              <div style="color:#f38ba8;font-size:.8rem">KEY</div>
+              <div style="background:#45475a;padding:6px 14px;border-radius:6px;color:#cba6f7">"name"</div>
+            </div>
+            <div style="color:#a6e3a1;font-size:1.4rem">→</div>
+            <div class="text-center">
+              <div style="color:#f38ba8;font-size:.8rem">HASH FUNCTION</div>
+              <div style="background:#45475a;padding:6px 14px;border-radius:6px;color:#fab387">hash("name") = 7429</div>
+            </div>
+            <div style="color:#a6e3a1;font-size:1.4rem">→</div>
+            <div class="text-center">
+              <div style="color:#f38ba8;font-size:.8rem">BUCKET INDEX</div>
+              <div style="background:#45475a;padding:6px 14px;border-radius:6px;color:#a6e3a1">7429 % 16 = <strong>5</strong></div>
+            </div>
+            <div style="color:#a6e3a1;font-size:1.4rem">→</div>
+            <div class="text-center">
+              <div style="color:#f38ba8;font-size:.8rem">VALUE</div>
+              <div style="background:#45475a;padding:6px 14px;border-radius:6px;color:#cdd6f4">"Alice"</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div style="display:flex;gap:4px;align-items:flex-end">
+        <div style="font-size:.7rem;color:#a6adc8;writing-mode:vertical-rl;transform:rotate(180deg);margin-right:4px">buckets[ ]</div>
+        <div style="display:flex;gap:2px">
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;line-height:20px;border-radius:4px;color:#a6adc8;font-size:.8rem;padding-top:4px">[0]<br><small>null</small></div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;line-height:20px;border-radius:4px;color:#a6adc8;font-size:.8rem;padding-top:4px">[1]<br><small>null</small></div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;border-radius:4px"><div style="font-size:.7rem;color:#a6e3a1;padding-top:4px">[2]</div><div style="font-size:.65rem;color:#cba6f7">"age"→25</div></div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;line-height:20px;border-radius:4px;color:#a6adc8;font-size:.8rem;padding-top:4px">[3]<br><small>null</small></div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;line-height:20px;border-radius:4px;color:#a6adc8;font-size:.8rem;padding-top:4px">[4]<br><small>null</small></div></div>
+          <div class="text-center" style="width:60px;border:2px solid #89b4fa;border-radius:6px"><div style="font-size:.7rem;color:#89b4fa;padding-top:4px">[5] ◀</div><div style="font-size:.65rem;color:#fab387">"name"→"Alice"</div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;line-height:20px;border-radius:4px;color:#a6adc8;font-size:.8rem;padding-top:4px">[6]<br><small>null</small></div></div>
+          <div class="text-center" style="width:60px"><div style="background:#313244;border:1px solid #45475a;height:40px;border-radius:4px"><div style="font-size:.7rem;color:#a6e3a1;padding-top:4px">[7]</div><div style="font-size:.65rem;color:#cba6f7">"city"→"NY"</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card" style="background:#1e3a2f;border:1px solid #a6e3a1"><div class="card-body py-2">
+        <div style="color:#a6e3a1;font-size:.8rem;font-weight:bold">✓ O(1) average lookup</div>
+        <div style="color:#cdd6f4;font-size:.75rem">hash(key) → index → direct access</div>
+      </div></div>
+    </div>
+    <div class="col-6">
+      <div class="card" style="background:#3a1e1e;border:1px solid #f38ba8"><div class="card-body py-2">
+        <div style="color:#f38ba8;font-size:.8rem;font-weight:bold">✗ No ordering</div>
+        <div style="color:#cdd6f4;font-size:.75rem">keys have no sorted sequence</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-1">
+<h4 class="frame-heading">Frame 2 — Java HashMap internals</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">JAVA HashMap INTERNALS</h4>
+  <div class="row g-3">
+    <div class="col-12">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:12px;font-size:.8rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">// Java source (simplified)</span>
+<span style="color:#89b4fa">class</span> <span style="color:#a6e3a1">HashMap</span>&lt;K,V&gt; {
+    <span style="color:#89b4fa">Node</span>&lt;K,V&gt;[] table;          <span style="color:#a6adc8">// array of buckets</span>
+    <span style="color:#89b4fa">int</span> size;                   <span style="color:#a6adc8">// number of key-value pairs</span>
+    <span style="color:#89b4fa">float</span> loadFactor = <span style="color:#fab387">0.75f</span>;   <span style="color:#a6adc8">// resize when size &gt; capacity * 0.75</span>
+
+    <span style="color:#89b4fa">static class</span> <span style="color:#a6e3a1">Node</span>&lt;K,V&gt; {
+        <span style="color:#89b4fa">final int</span> hash;
+        <span style="color:#89b4fa">final</span> K key;
+        V value;
+        Node&lt;K,V&gt; next;         <span style="color:#a6adc8">// linked list for collision</span>
+    }
+}</pre>
+    </div>
+    <div class="col-4">
+      <div class="card h-100" style="background:#1e3a2f;border:1px solid #a6e3a1"><div class="card-body py-2">
+        <div style="color:#a6e3a1;font-weight:bold;font-size:.85rem">Default capacity</div>
+        <div style="font-size:1.6rem;color:#cdd6f4;text-align:center"><strong>16</strong></div>
+        <div style="color:#a6adc8;font-size:.75rem">always a power of 2 — enables bit-mask instead of modulo</div>
+      </div></div>
+    </div>
+    <div class="col-4">
+      <div class="card h-100" style="background:#3a2e1e;border:1px solid #fab387"><div class="card-body py-2">
+        <div style="color:#fab387;font-weight:bold;font-size:.85rem">Load factor</div>
+        <div style="font-size:1.6rem;color:#cdd6f4;text-align:center"><strong>0.75</strong></div>
+        <div style="color:#a6adc8;font-size:.75rem">resize at 12 entries in a 16-bucket table</div>
+      </div></div>
+    </div>
+    <div class="col-4">
+      <div class="card h-100" style="background:#2e1e3a;border:1px solid #cba6f7"><div class="card-body py-2">
+        <div style="color:#cba6f7;font-weight:bold;font-size:.85rem">Resize doubles</div>
+        <div style="font-size:1.6rem;color:#cdd6f4;text-align:center"><strong>×2</strong></div>
+        <div style="color:#a6adc8;font-size:.75rem">16→32→64… rehashes all existing entries</div>
+      </div></div>
+    </div>
+    <div class="col-12">
+      <div class="card" style="background:#313244;border:1px solid #45475a"><div class="card-body py-2">
+        <div style="color:#89b4fa;font-size:.8rem;font-weight:bold;margin-bottom:4px">hash() — why it XORs with high bits</div>
+        <pre style="background:#181825;border-radius:4px;padding:8px;font-size:.78rem;margin:0;color:#cdd6f4"><span style="color:#a6adc8">// Java's actual spread function:</span>
+<span style="color:#89b4fa">static final int</span> hash(Object key) {
+    <span style="color:#89b4fa">int</span> h = key.hashCode();
+    <span style="color:#89b4fa">return</span> (h == <span style="color:#fab387">0</span>) ? <span style="color:#fab387">0</span> : (h ^ (h &gt;&gt;&gt; <span style="color:#fab387">16</span>));
+}
+<span style="color:#a6adc8">// Mixes high 16 bits into low 16 bits so small tables
+// (capacity 16–32) don't ignore half the hash bits.
+// bucket = hash &amp; (capacity - 1)  ← bit-mask, not modulo</span></pre>
+      </div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-2">
+<h4 class="frame-heading">Frame 3 — Collision: chain → tree</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">COLLISION HANDLING — CHAIN → RED-BLACK TREE</h4>
+  <div class="row g-3">
+    <div class="col-6">
+      <div class="card h-100" style="background:#313244;border:1px solid #45475a"><div class="card-body">
+        <div style="color:#a6e3a1;font-weight:bold;margin-bottom:8px">Bucket 3 — 3 entries (chain)</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div style="background:#2e3a2e;border:1px solid #a6e3a1;padding:4px 10px;border-radius:4px;font-size:.8rem">key="a" h=3</div>
+          <div style="color:#89b4fa">→</div>
+          <div style="background:#2e3a2e;border:1px solid #a6e3a1;padding:4px 10px;border-radius:4px;font-size:.8rem">key="q" h=3</div>
+          <div style="color:#89b4fa">→</div>
+          <div style="background:#2e3a2e;border:1px solid #a6e3a1;padding:4px 10px;border-radius:4px;font-size:.8rem">key="z" h=3</div>
+          <div style="color:#a6adc8">→ null</div>
+        </div>
+        <div style="margin-top:8px;color:#a6adc8;font-size:.75rem">Lookup: traverse list, compare key with <code>.equals()</code></div>
+        <div style="margin-top:4px;background:#181825;border-radius:4px;padding:6px;font-size:.75rem"><span style="color:#fab387">O(n)</span> lookup in worst case — all keys collide</div>
+      </div></div>
+    </div>
+    <div class="col-6">
+      <div class="card h-100" style="background:#313244;border:1px solid #cba6f7"><div class="card-body">
+        <div style="color:#cba6f7;font-weight:bold;margin-bottom:8px">Same bucket — 9+ entries → treeify (Java 8)</div>
+        <div style="text-align:center;font-size:.75rem;color:#a6adc8;margin-bottom:4px">Red-Black Tree (self-balancing BST)</div>
+        <div style="text-align:center">
+          <div style="display:inline-block;background:#3a1e3a;border:1px solid #cba6f7;padding:3px 10px;border-radius:4px;font-size:.75rem">"m"</div>
+          <div style="display:flex;justify-content:center;gap:30px;margin-top:4px">
+            <div>
+              <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:3px 8px;border-radius:4px;font-size:.75rem">"e"</div>
+              <div style="display:flex;justify-content:center;gap:12px;margin-top:4px">
+                <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:2px 6px;border-radius:4px;font-size:.7rem">"a"</div>
+                <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:2px 6px;border-radius:4px;font-size:.7rem">"h"</div>
+              </div>
+            </div>
+            <div>
+              <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:3px 8px;border-radius:4px;font-size:.75rem">"r"</div>
+              <div style="display:flex;justify-content:center;gap:12px;margin-top:4px">
+                <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:2px 6px;border-radius:4px;font-size:.7rem">"p"</div>
+                <div style="background:#3a1e3a;border:1px solid #cba6f7;padding:2px 6px;border-radius:4px;font-size:.7rem">"z"</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:#181825;border-radius:4px;padding:6px;font-size:.75rem"><span style="color:#a6e3a1">O(log n)</span> lookup in that bucket</div>
+      </div></div>
+    </div>
+    <div class="col-12">
+      <div class="card" style="background:#1e1e2e;border:1px solid #89b4fa"><div class="card-body py-2">
+        <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:12px">
+          <div><div style="color:#89b4fa;font-size:.75rem">TREEIFY_THRESHOLD</div><div style="font-size:1.3rem;color:#cba6f7"><strong>8</strong></div><div style="color:#a6adc8;font-size:.7rem">chain → tree when &gt; 8 nodes</div></div>
+          <div><div style="color:#89b4fa;font-size:.75rem">UNTREEIFY_THRESHOLD</div><div style="font-size:1.3rem;color:#a6e3a1"><strong>6</strong></div><div style="color:#a6adc8;font-size:.7rem">tree → chain on resize if ≤ 6</div></div>
+          <div><div style="color:#89b4fa;font-size:.75rem">MIN_TREEIFY_CAPACITY</div><div style="font-size:1.3rem;color:#fab387"><strong>64</strong></div><div style="color:#a6adc8;font-size:.7rem">only treeify if table ≥ 64 buckets</div></div>
+        </div>
+      </div></div>
+    </div>
+    <div class="col-12">
+      <div class="alert" style="background:#3a1e1e;border:1px solid #f38ba8;border-radius:6px;padding:10px 14px">
+        <strong style="color:#f38ba8">Interview trap:</strong>
+        <span style="font-size:.85rem"> "HashMap is O(1)" — true on average. With a bad <code>hashCode()</code> that returns a constant, ALL keys land in one bucket → O(n) lookup. <code>hashCode()</code> quality is load-bearing.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-3">
+<h4 class="frame-heading">Frame 4 — hashCode() / equals() contract</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">hashCode() / equals() CONTRACT</h4>
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card" style="background:#1e3a2f;border:1px solid #a6e3a1"><div class="card-body py-2">
+        <div style="color:#a6e3a1;font-weight:bold;font-size:.9rem">The rule (Java spec):</div>
+        <div style="font-size:.85rem;margin-top:4px">If <code>a.equals(b)</code> → <code>a.hashCode() == b.hashCode()</code></div>
+        <div style="color:#a6adc8;font-size:.8rem;margin-top:2px">Converse is NOT required: same hash ≠ equal (that's just a collision)</div>
+      </div></div>
+    </div>
+    <div class="col-12">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:12px;font-size:.78rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">// What HashMap.get() actually does — two-step lookup:</span>
+<span style="color:#89b4fa">Node</span>&lt;K,V&gt; getNode(Object key) {
+    <span style="color:#89b4fa">int</span> hash = hash(key);
+    <span style="color:#89b4fa">int</span> index = hash &amp; (table.length - <span style="color:#fab387">1</span>);  <span style="color:#a6adc8">// Step 1: find bucket</span>
+    Node&lt;K,V&gt; node = table[index];
+    <span style="color:#89b4fa">while</span> (node != <span style="color:#fab387">null</span>) {
+        <span style="color:#a6adc8">// Step 2: walk chain, match by hash THEN equals()</span>
+        <span style="color:#89b4fa">if</span> (node.hash == hash &amp;&amp; node.key.equals(key))
+            <span style="color:#89b4fa">return</span> node;
+        node = node.next;
+    }
+    <span style="color:#89b4fa">return null</span>;
+}</pre>
+    </div>
+    <div class="col-6">
+      <div class="card h-100" style="background:#3a1e1e;border:1px solid #f38ba8"><div class="card-body py-2">
+        <div style="color:#f38ba8;font-weight:bold;font-size:.85rem">Bug: override equals(), forget hashCode()</div>
+        <pre style="background:#181825;border-radius:4px;padding:8px;font-size:.75rem;margin-top:6px;color:#cdd6f4"><span style="color:#89b4fa">class</span> <span style="color:#a6e3a1">Order</span> {
+    String id;
+    <span style="color:#a6adc8">// @Override equals() ✓</span>
+    <span style="color:#a6adc8">// hashCode() NOT overridden ✗</span>
+}
+<span style="color:#a6e3a1">Order</span> o1 = <span style="color:#89b4fa">new</span> Order(<span style="color:#cba6f7">"X"</span>);
+<span style="color:#a6e3a1">Order</span> o2 = <span style="color:#89b4fa">new</span> Order(<span style="color:#cba6f7">"X"</span>);
+<span style="color:#a6adc8">// o1.equals(o2) == true</span>
+<span style="color:#a6adc8">// but different hashCode → different buckets</span>
+map.put(o1, <span style="color:#cba6f7">"data"</span>);
+map.get(o2); <span style="color:#f38ba8">// → null ! (bucket miss)</span></pre>
+      </div></div>
+    </div>
+    <div class="col-6">
+      <div class="card h-100" style="background:#1e3a2f;border:1px solid #a6e3a1"><div class="card-body py-2">
+        <div style="color:#a6e3a1;font-weight:bold;font-size:.85rem">Fix: always override both</div>
+        <pre style="background:#181825;border-radius:4px;padding:8px;font-size:.75rem;margin-top:6px;color:#cdd6f4"><span style="color:#a6adc8">// Java record auto-generates both:</span>
+<span style="color:#89b4fa">record</span> <span style="color:#a6e3a1">Order</span>(String id) {}
+
+<span style="color:#a6adc8">// Or manually with Objects.hash:</span>
+@Override <span style="color:#89b4fa">public int</span> hashCode() {
+    <span style="color:#89b4fa">return</span> Objects.hash(id);
+}
+@Override <span style="color:#89b4fa">public boolean</span> equals(Object o) {
+    <span style="color:#89b4fa">return</span> o <span style="color:#89b4fa">instanceof</span> Order x
+        &amp;&amp; Objects.equals(id, x.id);
+}</pre>
+      </div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-4">
+<h4 class="frame-heading">Frame 5 — C struct concept</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">C STRUCT — COMPOSITE TYPE IN MEMORY</h4>
+  <div class="row g-3">
+    <div class="col-12">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:12px;font-size:.8rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">/* struct = named block of fields laid out contiguously in memory */</span>
+<span style="color:#89b4fa">struct</span> <span style="color:#a6e3a1">Node</span> {
+    <span style="color:#89b4fa">char</span> *key;              <span style="color:#a6adc8">/* pointer to a string   8 bytes (64-bit) */</span>
+    <span style="color:#89b4fa">char</span> *value;            <span style="color:#a6adc8">/* pointer to a string   8 bytes          */</span>
+    <span style="color:#89b4fa">struct</span> <span style="color:#a6e3a1">Node</span> *next;      <span style="color:#a6adc8">/* pointer to next node  8 bytes          */</span>
+};                        <span style="color:#a6adc8">/*                 total: 24 bytes        */</span>
+
+<span style="color:#a6adc8">/* typedef removes the need to write "struct" every time */</span>
+<span style="color:#89b4fa">typedef struct</span> <span style="color:#a6e3a1">Node</span> <span style="color:#a6e3a1">Node</span>;</pre>
+    </div>
+    <div class="col-12">
+      <div style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:12px">
+        <div style="color:#89b4fa;font-size:.8rem;font-weight:bold;margin-bottom:8px">Memory layout (24 bytes at address 0x1000):</div>
+        <div style="display:flex;gap:0">
+          <div style="text-align:center;border:1px solid #a6e3a1;padding:8px 10px;background:#1e3a2f;min-width:80px"><div style="font-size:.7rem;color:#a6e3a1">0x1000</div><div style="font-size:.8rem">key*</div><div style="font-size:.65rem;color:#a6adc8">8 bytes</div></div>
+          <div style="text-align:center;border:1px solid #fab387;padding:8px 10px;background:#3a2e1e;min-width:80px"><div style="font-size:.7rem;color:#fab387">0x1008</div><div style="font-size:.8rem">value*</div><div style="font-size:.65rem;color:#a6adc8">8 bytes</div></div>
+          <div style="text-align:center;border:1px solid #cba6f7;padding:8px 10px;background:#2e1e3a;min-width:80px"><div style="font-size:.7rem;color:#cba6f7">0x1010</div><div style="font-size:.8rem">next*</div><div style="font-size:.65rem;color:#a6adc8">8 bytes</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:12px;font-size:.78rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">/* Three ways to access fields — KNOW ALL THREE */</span>
+
+Node node_val;           <span style="color:#a6adc8">/* value (on stack) */</span>
+node_val.key = <span style="color:#cba6f7">"hello"</span>;   <span style="color:#a6adc8">/* dot  → direct field access */</span>
+
+Node *node_ptr = &amp;node_val;         <span style="color:#a6adc8">/* pointer to the node */</span>
+node_ptr-&gt;key = <span style="color:#cba6f7">"hello"</span>;            <span style="color:#a6adc8">/* arrow → (*node_ptr).key shorthand */</span>
+(*node_ptr).key = <span style="color:#cba6f7">"hello"</span>;          <span style="color:#a6adc8">/* same thing, long form */</span>
+
+<span style="color:#a6adc8">/* malloc: allocate N bytes on the heap, returns void* */</span>
+Node *n = (Node *) malloc(<span style="color:#89b4fa">sizeof</span>(Node));
+<span style="color:#89b4fa">if</span> (!n) { <span style="color:#a6adc8">/* always check NULL — malloc fails under OOM */</span> }
+free(n);                 <span style="color:#a6adc8">/* release heap memory when done */</span></pre>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-5">
+<h4 class="frame-heading">Frame 6 — C HashMap: djb2 + put/get</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">C HASHMAP IMPLEMENTATION</h4>
+  <div class="row g-3">
+    <div class="col-6">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:10px;font-size:.72rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">/* Entry: one key-value pair in a chain */</span>
+<span style="color:#89b4fa">typedef struct</span> <span style="color:#a6e3a1">Entry</span> {
+    <span style="color:#89b4fa">char</span> *key;
+    <span style="color:#89b4fa">char</span> *value;
+    <span style="color:#89b4fa">struct</span> Entry *next;
+} <span style="color:#a6e3a1">Entry</span>;
+
+<span style="color:#a6adc8">/* HashMap: array of Entry* pointers */</span>
+<span style="color:#89b4fa">typedef struct</span> {
+    Entry **buckets;  <span style="color:#a6adc8">/* pointer-to-pointer */</span>
+    <span style="color:#89b4fa">int</span> capacity;
+} <span style="color:#a6e3a1">HashMap</span>;
+
+<span style="color:#a6adc8">/* djb2: fast string hash (Bernstein 1991) */</span>
+<span style="color:#89b4fa">unsigned int</span> djb2(<span style="color:#89b4fa">const char</span> *str) {
+    <span style="color:#89b4fa">unsigned int</span> h = <span style="color:#fab387">5381</span>;
+    <span style="color:#89b4fa">int</span> c;
+    <span style="color:#a6adc8">/* h = h*33 + c per character */</span>
+    <span style="color:#89b4fa">while</span> ((c = *str++))
+        h = ((h &lt;&lt; <span style="color:#fab387">5</span>) + h) + c;
+    <span style="color:#89b4fa">return</span> h;
+}
+
+<span style="color:#a6adc8">/* Create: calloc zeroes all bucket pointers */</span>
+<span style="color:#a6e3a1">HashMap</span>* hm_create(<span style="color:#89b4fa">int</span> cap) {
+    HashMap *m = malloc(<span style="color:#89b4fa">sizeof</span>(HashMap));
+    m-&gt;buckets = calloc(cap, <span style="color:#89b4fa">sizeof</span>(Entry*));
+    m-&gt;capacity = cap;
+    <span style="color:#89b4fa">return</span> m;
+}</pre>
+    </div>
+    <div class="col-6">
+      <pre style="background:#181825;border:1px solid #45475a;border-radius:6px;padding:10px;font-size:.72rem;color:#cdd6f4;overflow-x:auto"><span style="color:#a6adc8">/* put: insert or update */</span>
+<span style="color:#89b4fa">void</span> hm_put(HashMap *m, <span style="color:#89b4fa">const char</span> *k, <span style="color:#89b4fa">const char</span> *v) {
+    <span style="color:#89b4fa">int</span> idx = djb2(k) % m-&gt;capacity;
+    Entry *e = m-&gt;buckets[idx];
+    <span style="color:#a6adc8">/* walk chain: update if key exists */</span>
+    <span style="color:#89b4fa">while</span> (e) {
+        <span style="color:#89b4fa">if</span> (strcmp(e-&gt;key, k) == <span style="color:#fab387">0</span>) {
+            free(e-&gt;value);
+            e-&gt;value = strdup(v); <span style="color:#a6adc8">/* heap copy */</span>
+            <span style="color:#89b4fa">return</span>;
+        }
+        e = e-&gt;next;
+    }
+    <span style="color:#a6adc8">/* not found: prepend new entry */</span>
+    Entry *ne = malloc(<span style="color:#89b4fa">sizeof</span>(Entry));
+    ne-&gt;key   = strdup(k);
+    ne-&gt;value = strdup(v);
+    ne-&gt;next  = m-&gt;buckets[idx]; <span style="color:#a6adc8">/* head-insert */</span>
+    m-&gt;buckets[idx] = ne;
+}
+
+<span style="color:#a6adc8">/* get: return value or NULL */</span>
+<span style="color:#89b4fa">char</span>* hm_get(HashMap *m, <span style="color:#89b4fa">const char</span> *k) {
+    <span style="color:#89b4fa">int</span> idx = djb2(k) % m-&gt;capacity;
+    Entry *e = m-&gt;buckets[idx];
+    <span style="color:#89b4fa">while</span> (e) {
+        <span style="color:#89b4fa">if</span> (strcmp(e-&gt;key, k) == <span style="color:#fab387">0</span>)
+            <span style="color:#89b4fa">return</span> e-&gt;value;
+        e = e-&gt;next;
+    }
+    <span style="color:#89b4fa">return NULL</span>;
+}</pre>
+    </div>
+    <div class="col-12">
+      <div class="d-flex gap-2 flex-wrap">
+        <div class="badge" style="background:#1e3a2f;color:#a6e3a1;padding:5px 10px;font-size:.75rem"><code>strdup()</code> = malloc + strcpy — caller must free()</div>
+        <div class="badge" style="background:#2e1e3a;color:#cba6f7;padding:5px 10px;font-size:.75rem"><code>calloc(n, size)</code> = malloc(n*size) + zero-fills</div>
+        <div class="badge" style="background:#3a1e1e;color:#f38ba8;padding:5px 10px;font-size:.75rem"><code>strcmp(a,b)==0</code> means equal (not <code>a==b</code> which compares pointers)</div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="frame-section" id="item-1-frame-6">
+<h4 class="frame-heading">Frame 7 — Distributed KV Store</h4>
+<div class="container-fluid py-3" style="font-family:monospace;background:#1e1e2e;color:#cdd6f4;min-height:100vh">
+  <h4 class="text-center mb-3" style="color:#89b4fa;letter-spacing:.1em">DISTRIBUTED KV STORE — CONSISTENT HASHING</h4>
+  <div class="row g-3">
+    <div class="col-7">
+      <div class="card" style="background:#313244;border:1px solid #45475a"><div class="card-body py-2">
+        <div style="color:#89b4fa;font-size:.8rem;font-weight:bold;margin-bottom:8px">Consistent hash ring (3 servers, vnodes)</div>
+        <div style="text-align:center">
+          <svg width="240" height="240" viewBox="0 0 240 240">
+            <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f38ba8"/></marker></defs>
+            <circle cx="120" cy="120" r="90" fill="none" stroke="#45475a" stroke-width="2"/>
+            <circle cx="210" cy="120" r="10" fill="#89b4fa"/>
+            <text x="224" y="124" font-size="10" fill="#89b4fa">A1</text>
+            <circle cx="75" cy="42" r="10" fill="#89b4fa"/>
+            <text x="56" y="38" font-size="10" fill="#89b4fa">A2</text>
+            <circle cx="75" cy="198" r="10" fill="#89b4fa"/>
+            <text x="56" y="202" font-size="10" fill="#89b4fa">A3</text>
+            <circle cx="189" cy="62" r="10" fill="#a6e3a1"/>
+            <text x="202" y="58" font-size="10" fill="#a6e3a1">B1</text>
+            <circle cx="30" cy="120" r="10" fill="#a6e3a1"/>
+            <text x="12" y="124" font-size="10" fill="#a6e3a1">B2</text>
+            <circle cx="189" cy="178" r="10" fill="#a6e3a1"/>
+            <text x="202" y="182" font-size="10" fill="#a6e3a1">B3</text>
+            <circle cx="145" cy="34" r="10" fill="#fab387"/>
+            <text x="150" y="22" font-size="10" fill="#fab387">C1</text>
+            <circle cx="30" cy="175" r="10" fill="#fab387"/>
+            <text x="12" y="185" font-size="10" fill="#fab387">C2</text>
+            <circle cx="162" cy="205" r="10" fill="#fab387"/>
+            <text x="168" y="220" font-size="10" fill="#fab387">C3</text>
+            <circle cx="175" cy="47" r="6" fill="#f38ba8"/>
+            <text x="182" y="43" font-size="9" fill="#f38ba8">key</text>
+            <path d="M175 47 L189 62" stroke="#f38ba8" stroke-width="1.5" marker-end="url(#arr)"/>
+            <text x="90" y="128" font-size="9" fill="#6c7086" text-anchor="middle">ring</text>
+            <text x="90" y="140" font-size="9" fill="#6c7086" text-anchor="middle">0 → 2³²</text>
+          </svg>
+        </div>
+        <div style="font-size:.72rem;color:#a6adc8;text-align:center">key hashes → first clockwise node = owner (B1)</div>
+      </div></div>
+    </div>
+    <div class="col-5">
+      <div class="d-flex flex-column gap-2 h-100">
+        <div class="card" style="background:#313244;border:1px solid #45475a"><div class="card-body py-2">
+          <div style="color:#89b4fa;font-size:.78rem;font-weight:bold">HashMap → Distributed</div>
+          <table style="width:100%;font-size:.7rem;margin-top:4px">
+            <tr><td style="color:#a6adc8">hash(k) % cap</td><td style="color:#cdd6f4">→</td><td style="color:#a6e3a1">consistent_hash → ring</td></tr>
+            <tr><td style="color:#a6adc8">array bucket</td><td style="color:#cdd6f4">→</td><td style="color:#a6e3a1">server / vnode</td></tr>
+            <tr><td style="color:#a6adc8">collision chain</td><td style="color:#cdd6f4">→</td><td style="color:#a6e3a1">N replica servers</td></tr>
+            <tr><td style="color:#a6adc8">resize / rehash</td><td style="color:#cdd6f4">→</td><td style="color:#a6e3a1">rebalance on change</td></tr>
+          </table>
+        </div></div>
+        <div class="card" style="background:#1e3a2f;border:1px solid #a6e3a1"><div class="card-body py-2">
+          <div style="color:#a6e3a1;font-size:.78rem;font-weight:bold">N / W / R quorums</div>
+          <div style="font-size:.72rem;margin-top:4px">N = replicas (e.g. 3)</div>
+          <div style="font-size:.72rem">W = write ACKs needed</div>
+          <div style="font-size:.72rem">R = read responses needed</div>
+          <div style="margin-top:4px;background:#181825;padding:4px 6px;border-radius:4px;font-size:.72rem"><span style="color:#cba6f7">W + R &gt; N</span> → strong consistency</div>
+        </div></div>
+        <div class="card" style="background:#313244;border:1px solid #45475a"><div class="card-body py-2">
+          <div style="color:#fab387;font-size:.78rem;font-weight:bold">Real systems</div>
+          <div style="font-size:.7rem;margin-top:2px"><span style="color:#89b4fa">Redis Cluster</span> — 16384 slots, CRC16</div>
+          <div style="font-size:.7rem"><span style="color:#a6e3a1">DynamoDB</span> — vnodes, R/W configurable</div>
+          <div style="font-size:.7rem"><span style="color:#cba6f7">Cassandra</span> — tunable per query</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+</section>
+</section>
+</main>
+</body>
+</html>

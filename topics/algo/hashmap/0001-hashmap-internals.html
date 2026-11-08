@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 01 — HashMap: Concept, Java, C, Distributed KV</title>
+  <link rel="stylesheet" href="../../../../assets/lesson.css">
+</head>
+<body>
+
+<h1>HashMap — from Concept to Distributed KV</h1>
+<div class="meta">
+  <span class="tag">Algorithms</span>
+  <span class="tag">Data Structures</span>
+  <span class="tag">Lesson 01</span>
+  <span>~20 min</span>
+  <span>Java · C · System Design</span>
+</div>
+
+<p>
+  HashMap is the data structure interviewers probe most often — and not just "what is it?"
+  They want to know how it works inside (Java), how you'd build it without a standard library (C),
+  and how the same idea scales to a distributed system (Redis Cluster, DynamoDB). This lesson
+  covers all four layers.
+</p>
+
+<div class="callout">
+  <strong>Whiteboard companion</strong>
+  Open <a href="0001-hashmap-internals-whiteboard.html">0001-hashmap-internals-whiteboard.html</a>
+  alongside this lesson — it has frame-by-frame visuals for every section.
+</div>
+
+<h2>1. Core concept — what a HashMap is</h2>
+
+<p>
+  A HashMap solves the lookup problem: given a <em>key</em>, find the associated <em>value</em> in
+  O(1) average time. The trick is a <strong>hash function</strong> that converts any key into an
+  integer bucket index.
+</p>
+
+<pre><code>hash("name") = 7429
+7429 % 16   = 5          // bucket index
+buckets[5]  = {key="name", value="Alice"}</code></pre>
+
+<div class="decision">
+  <div class="decision-card">
+    <h4>What it gives you</h4>
+    <ul>
+      <li>O(1) average <code>get</code>, <code>put</code>, <code>remove</code></li>
+      <li>Key-value association (dictionary / map)</li>
+      <li>Flexible key types (any object with <code>hashCode</code>)</li>
+    </ul>
+  </div>
+  <div class="decision-card right">
+    <h4>What it doesn't give you</h4>
+    <ul>
+      <li>Ordering — keys have no sequence</li>
+      <li>Sorted range queries (use TreeMap)</li>
+      <li>O(1) worst-case (use a tree for that)</li>
+    </ul>
+  </div>
+</div>
+
+<h2>2. Java HashMap internals</h2>
+
+<h3>The data structure</h3>
+<pre><code>class HashMap&lt;K,V&gt; {
+    Node&lt;K,V&gt;[] table;         // array of bucket heads
+    int size;
+    float loadFactor = 0.75f;  // resize when size > capacity * 0.75
+
+    static class Node&lt;K,V&gt; {
+        final int hash;
+        final K key;
+        V value;
+        Node&lt;K,V&gt; next;        // linked list for collisions
+    }
+}</code></pre>
+
+<h3>Key numbers</h3>
+<table>
+  <tr><th>Constant</th><th>Value</th><th>Why</th></tr>
+  <tr><td>Default capacity</td><td>16</td><td>Power of 2 → bit-mask instead of modulo: <code>hash &amp; (cap-1)</code></td></tr>
+  <tr><td>Load factor</td><td>0.75</td><td>Resize at 12 entries in a 16-bucket table — balances memory vs collisions</td></tr>
+  <tr><td>Resize factor</td><td>×2</td><td>16→32→64 — doubles capacity, rehashes all entries</td></tr>
+  <tr><td>Treeify threshold</td><td>8</td><td>Chain longer than 8 → convert to Red-Black Tree (Java 8+)</td></tr>
+</table>
+
+<h3>Java's hash spread function</h3>
+<pre><code>static final int hash(Object key) {
+    int h = key.hashCode();
+    return (h == 0) ? 0 : (h ^ (h >>> 16));
+}
+// bucket = hash &amp; (capacity - 1)   ← bit-mask, not %</code></pre>
+
+<div class="callout warn">
+  <strong>Why XOR with the high 16 bits?</strong>
+  Small tables (capacity 16–32) only use the low bits of the hash. Without mixing,
+  keys that differ only in high bits would all collide. The XOR spreads entropy across the full width.
+</div>
+
+<h3>Collision: chain → tree</h3>
+<p>
+  Two keys with the same bucket index collide. Java uses <strong>separate chaining</strong>:
+  each bucket is a linked list. A chain longer than 8 nodes (and table ≥ 64 buckets)
+  is converted to a <strong>Red-Black Tree</strong> for O(log n) lookup in that bucket.
+</p>
+
+<div class="callout danger">
+  <strong>Interview trap — "HashMap is O(1)".</strong>
+  True on average, false in the worst case. A <code>hashCode()</code> that returns a constant
+  puts all keys in one bucket → O(n) lookup. <code>hashCode()</code> quality is load-bearing.
+</div>
+
+<h3>The <code>hashCode()</code> / <code>equals()</code> contract</h3>
+<pre><code>// Two-step lookup in HashMap.get():
+// Step 1 — find bucket via hashCode()
+// Step 2 — walk chain, compare via equals()
+
+// Java spec rule:
+// If a.equals(b) → a.hashCode() == b.hashCode()
+// (same hash does NOT imply equal — that's a collision)
+
+// Classic bug:
+class Order {
+    String id;
+    @Override public boolean equals(Object o) { ... } // ✓
+    // hashCode() NOT overridden                       // ✗ — silent bucket miss
+}
+Order o1 = new Order("X"), o2 = new Order("X");
+map.put(o1, "data");
+map.get(o2);  // → null — different hashCode, different bucket!
+
+// Fix: Java record auto-generates both:
+record Order(String id) {}</code></pre>
+
+<h2>3. Building a HashMap in C</h2>
+
+<h3>What a struct is</h3>
+<p>
+  C has no classes. A <code>struct</code> is a named block of fields laid out contiguously
+  in memory. <code>typedef struct X X</code> lets you write <code>X</code> instead of
+  <code>struct X</code> everywhere.
+</p>
+
+<pre><code>struct Node {
+    char *key;         // pointer to string — 8 bytes on 64-bit
+    char *value;       // pointer to string — 8 bytes
+    struct Node *next; // pointer to next node — 8 bytes
+};                     // total: 24 bytes, contiguous in RAM
+
+typedef struct Node Node;  // drop the "struct" keyword</code></pre>
+
+<h3>Pointer operators</h3>
+<pre><code>Node  val;         // value on the stack
+val.key = "hi";   // dot   = direct field access
+
+Node *ptr = &amp;val; // pointer to the node
+ptr-&gt;key  = "hi"; // arrow = (*ptr).key — dereference then access
+(*ptr).key = "hi";// same thing, long form</code></pre>
+
+<h3>Heap allocation</h3>
+<pre><code>Node *n = (Node *) malloc(sizeof(Node)); // allocate 24 bytes on heap
+if (!n) { /* OOM — always check NULL */ }
+n-&gt;key = strdup("hello"); // heap-copies the string; caller must free()
+free(n-&gt;key);
+free(n);</code></pre>
+
+<h3>Full HashMap implementation</h3>
+<pre><code>/* Entry: one key-value pair with chaining */
+typedef struct Entry {
+    char *key;
+    char *value;
+    struct Entry *next;
+} Entry;
+
+typedef struct {
+    Entry **buckets; // array of Entry* pointers
+    int capacity;
+} HashMap;
+
+/* djb2 hash — fast, good distribution for strings */
+unsigned int djb2(const char *str) {
+    unsigned int h = 5381;
+    int c;
+    while ((c = *str++))
+        h = ((h &lt;&lt; 5) + h) + c; // h*33 + c
+    return h;
+}
+
+HashMap* hm_create(int cap) {
+    HashMap *m = malloc(sizeof(HashMap));
+    m-&gt;buckets = calloc(cap, sizeof(Entry*)); // calloc zeros all pointers
+    m-&gt;capacity = cap;
+    return m;
+}
+
+void hm_put(HashMap *m, const char *k, const char *v) {
+    int idx = djb2(k) % m-&gt;capacity;
+    Entry *e = m-&gt;buckets[idx];
+    while (e) {
+        if (strcmp(e-&gt;key, k) == 0) { // strcmp: 0 = equal
+            free(e-&gt;value);
+            e-&gt;value = strdup(v);
+            return;
+        }
+        e = e-&gt;next;
+    }
+    // prepend new entry (head-insert = O(1))
+    Entry *ne = malloc(sizeof(Entry));
+    ne-&gt;key   = strdup(k);
+    ne-&gt;value = strdup(v);
+    ne-&gt;next  = m-&gt;buckets[idx];
+    m-&gt;buckets[idx] = ne;
+}
+
+char* hm_get(HashMap *m, const char *k) {
+    int idx = djb2(k) % m-&gt;capacity;
+    Entry *e = m-&gt;buckets[idx];
+    while (e) {
+        if (strcmp(e-&gt;key, k) == 0) return e-&gt;value;
+        e = e-&gt;next;
+    }
+    return NULL;
+}</code></pre>
+
+<div class="callout warn">
+  <strong>C pitfalls to know:</strong>
+  <code>a == b</code> compares pointer addresses, not string content — always use <code>strcmp</code>.
+  <code>strdup</code> heap-allocates; you must <code>free</code> it.
+  <code>calloc</code> zeroes memory; <code>malloc</code> does not.
+</div>
+
+<h2>4. Distributed KV Store — the same idea at scale</h2>
+
+<p>
+  A single-machine HashMap is bounded by RAM. At millions of keys you spread the hash table
+  across N machines. The core problem is identical: <strong>given a key, find which bucket owns
+  it</strong> — but now a "bucket" is a whole server.
+</p>
+
+<h3>Consistent hashing</h3>
+<p>
+  Naive sharding (<code>serverIndex = hash(key) % N</code>) breaks every time you add or remove
+  a node — all keys remap. <strong>Consistent hashing</strong> fixes this:
+</p>
+<ol>
+  <li>Map all servers AND all keys onto a <strong>ring</strong> (integers 0 → 2³²)</li>
+  <li>A key is owned by the <strong>first server clockwise</strong> from its hash position</li>
+  <li>Adding a node only remaps ~1/N keys; removing one only remaps its direct successor's keys</li>
+</ol>
+
+<h3>Virtual nodes</h3>
+<p>
+  A plain ring with 3 servers puts each server at one fixed point — load is uneven if keys
+  cluster. <strong>Virtual nodes</strong> (vnodes): each physical server appears at K positions
+  on the ring (e.g. K=150). DynamoDB and Cassandra both use this.
+</p>
+
+<h3>N / W / R quorums</h3>
+<table>
+  <tr><th>Variable</th><th>Meaning</th></tr>
+  <tr><td>N</td><td>Replication factor (e.g. 3 replicas)</td></tr>
+  <tr><td>W</td><td>Write quorum — ACKs required before success</td></tr>
+  <tr><td>R</td><td>Read quorum — responses required</td></tr>
+</table>
+<p>
+  <code>W + R &gt; N</code> guarantees you read at least one node that saw the latest write
+  (strong consistency). <code>W=1, R=1</code> is fastest but allows stale reads.
+</p>
+
+<h3>The analogy</h3>
+<table>
+  <tr><th>HashMap concept</th><th>Distributed KV equivalent</th></tr>
+  <tr><td><code>hash(key) % capacity</code></td><td><code>consistent_hash(key)</code> → position on ring</td></tr>
+  <tr><td>Bucket (array slot)</td><td>Partition / shard (server or vnode)</td></tr>
+  <tr><td>Collision chain</td><td>Replication chain (N clockwise servers)</td></tr>
+  <tr><td>Resize / rehash</td><td>Rebalance after node add/remove</td></tr>
+  <tr><td>loadFactor threshold</td><td>Cluster rebalance trigger</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Real systems</strong>
+  <ul>
+    <li><strong>Redis Cluster</strong>: 16 384 hash slots, <code>CRC16(key) % 16384</code></li>
+    <li><strong>DynamoDB</strong>: consistent hashing with vnodes; R/W quorums per table</li>
+    <li><strong>Cassandra</strong>: tunable consistency per query (<code>QUORUM</code>, <code>ONE</code>, <code>ALL</code>)</li>
+  </ul>
+</div>
+
+<h2>Quiz</h2>
+
+<div class="quiz" id="q1">
+  <div class="quiz-header">Question 1 of 4</div>
+  <div class="quiz-question">Java HashMap capacity is always a power of 2. Why?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q1" value="a"> To guarantee no collisions in small tables</label></li>
+    <li><label><input type="radio" name="q1" value="b"> To use bit-mask instead of modulo: <code>hash &amp; (cap-1)</code></label></li>
+    <li><label><input type="radio" name="q1" value="c"> Because the JVM aligns objects to power-of-2 addresses</label></li>
+    <li><label><input type="radio" name="q1" value="d"> To ensure load factor stays below 1.0 at all times</label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q1','b','Power-of-2 capacity means (capacity-1) is all 1-bits. ANDing the hash with it replaces the modulo operation with a single bitwise AND — much faster. This is why HashMap always doubles to the next power of 2 on resize.')">Check</button>
+  <div class="quiz-feedback" id="q1-fb"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-header">Question 2 of 4</div>
+  <div class="quiz-question">You override <code>equals()</code> on a custom key class but not <code>hashCode()</code>. What happens on <code>map.get(key2)</code> when key2 equals a stored key1?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q2" value="a"> Returns the value correctly because equals() was overridden</label></li>
+    <li><label><input type="radio" name="q2" value="b"> Returns null because key1 and key2 hash to different buckets</label></li>
+    <li><label><input type="radio" name="q2" value="c"> Throws NullPointerException at runtime</label></li>
+    <li><label><input type="radio" name="q2" value="d"> Causes a ConcurrentModificationException in the chain walk</label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q2','b','HashMap.get() first finds the bucket via hashCode(), then walks the chain using equals(). If key1 and key2 have different hashCodes (because you forgot to override it), they land in different buckets — get() never even calls equals() on the stored entry. Result: null.')">Check</button>
+  <div class="quiz-feedback" id="q2-fb"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-header">Question 3 of 4</div>
+  <div class="quiz-question">In C, you have <code>Entry *e</code>. Which expression correctly compares its key string to "hello"?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q3" value="a"> <code>e-&gt;key == "hello"</code></label></li>
+    <li><label><input type="radio" name="q3" value="b"> <code>strcmp(e-&gt;key, "hello") == 0</code></label></li>
+    <li><label><input type="radio" name="q3" value="c"> <code>*e-&gt;key == *"hello"</code></label></li>
+    <li><label><input type="radio" name="q3" value="d"> <code>e.key.equals("hello")</code></label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q3','b','e-&gt;key == \"hello\" compares pointer addresses, not string content — almost always false even if the strings are identical. strcmp() compares byte-by-byte and returns 0 when strings are equal. The other options are either wrong or not valid C.')">Check</button>
+  <div class="quiz-feedback" id="q3-fb"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <div class="quiz-header">Question 4 of 4</div>
+  <div class="quiz-question">A distributed KV store uses N=3, W=2, R=2. Is strong consistency guaranteed?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q4" value="a"> No — W+R=4 exceeds N so writes will fail</label></li>
+    <li><label><input type="radio" name="q4" value="b"> Yes — W+R=4 &gt; N=3 so at least one read replica saw the last write</label></li>
+    <li><label><input type="radio" name="q4" value="c"> No — only W=N guarantees consistency</label></li>
+    <li><label><input type="radio" name="q4" value="d"> Yes — but only if all 3 replicas are in the same availability zone</label></tr>
+  </ul>
+  <button class="quiz-btn" onclick="check('q4','b','W+R &gt; N is the quorum overlap rule. W=2 means at least 2 replicas acknowledged the write. R=2 means you read from at least 2 replicas. Because 2+2=4 &gt; 3, at least one of the read replicas must have been a write replica — so you are guaranteed to see the latest value. W+R exceeding N does not cause write failure; it just means the read and write sets overlap.')">Check</button>
+  <div class="quiz-feedback" id="q4-fb"></div>
+</div>
+
+<div class="ask-me">
+  💬 <strong>Ask me anything.</strong> Want to see open addressing (probing) vs separate chaining compared? Curious how a HashSet differs from HashMap internally? Want to implement resize/rehash in C? Ask your teaching agent.
+</div>
+
+<div class="lesson-nav">
+  <span>← <a href="../../java/concurrency/0001-executor-service-forkjoin.html">Java Concurrency: ExecutorService &amp; ForkJoinPool</a></span>
+  <span><a href="../../java/concurrency/0002-completable-future.html">Next: CompletableFuture →</a></span>
+</div>
+
+<script>
+function check(qid, correct, explanation) {
+  const selected = document.querySelector(`input[name="${qid}"]:checked`);
+  const fb = document.getElementById(`${qid}-fb`);
+  if (!selected) return;
+  if (selected.value === correct) {
+    fb.className = 'quiz-feedback correct';
+    fb.textContent = '✅ Correct. ' + explanation;
+  } else {
+    fb.className = 'quiz-feedback wrong';
+    fb.textContent = '❌ Not quite. ' + explanation;
+  }
+  fb.style.display = 'block';
+}
+</script>
+
+</body>
+</html>

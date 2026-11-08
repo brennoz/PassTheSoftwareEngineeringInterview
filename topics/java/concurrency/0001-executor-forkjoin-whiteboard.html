@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<title>Whiteboard — ExecutorService &amp; ForkJoinPool</title>
+<style>* { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; display: flex; background: #f9f9f9; }
+  nav { width: 240px; min-width: 200px; padding: 24px 16px; background: #fff; border-right: 1px solid #e0e0e0; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+  nav h2 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 12px; }
+  nav ul { list-style: none; margin: 0; padding: 0; }
+  nav li { margin: 2px 0; }
+  nav a { font-size: 13px; color: #2980b9; text-decoration: none; display: block; padding: 2px 0 2px 8px; }
+  nav a:hover { text-decoration: underline; }
+  nav .toc-ws { font-weight: 600; color: #333; font-size: 12px; margin-top: 10px; padding-left: 0 !important; }
+  nav .toc-ws > a { font-weight: 600; color: #333; padding-left: 0; }
+  nav .toc-frames { padding-left: 12px; }
+  nav .toc-frames a { font-size: 12px; color: #5b8ab8; }
+  main { flex: 1; padding: 32px 40px; min-width: 0; }
+  .workspace-section { margin-bottom: 48px; }
+  .workspace-heading { font-size: 20px; font-weight: 700; color: #222; margin: 0 0 20px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+  .item-section { margin-bottom: 28px; padding: 20px; background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow-x: auto; }
+  .item-heading { font-size: 15px; font-weight: 600; color: #333; margin: 0 0 4px; }
+  .item-meta { font-size: 12px; color: #888; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+  .type-badge { background: #e8f4fd; color: #2980b9; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .frame-section { margin-top: 16px; padding: 12px 16px; border: 1px solid #f0f0f0; border-radius: 4px; background: #fafafa; overflow-x: auto; }
+  .frame-heading { font-size: 12px; color: #777; margin: 0 0 10px; font-style: italic; }
+  svg { max-width: 100%; height: auto; }
+  table { max-width: 100%; border-collapse: collapse; }
+  pre, code { max-width: 100%; }</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+</head>
+<body>
+<nav>
+<h2>Contents</h2>
+<ul><li class="toc-ws"><a href="#ws-java-concurrency">java-concurrency</a><ul><li><a href="#item-1-frame-0">ExecutorService &amp; ForkJoinPool — Java Concurrency</a><ul class="toc-frames">
+  <li><a href="#item-1-frame-0">1 — The problem: raw threads don't scale</a></li>
+  <li><a href="#item-1-frame-1">2 — ExecutorService API</a></li>
+  <li><a href="#item-1-frame-2">3 — ForkJoinPool — work stealing</a></li>
+  <li><a href="#item-1-frame-3">4 — RecursiveTask pattern</a></li>
+  <li><a href="#item-1-frame-4">5 — When to use which</a></li>
+  <li><a href="#item-1-frame-5">6 — OMS trading example</a></li>
+</ul></li></ul></li></ul>
+</nav>
+<main><section class="workspace-section" id="ws-java-concurrency"><h2 class="workspace-heading">java-concurrency</h2>
+<section class="item-section" id="item-1">
+<h3 class="item-heading">ExecutorService &amp; ForkJoinPool — Java Concurrency</h3>
+<p class="item-meta"><span class="type-badge">step-frames</span><span>Nov 5, 2026</span></p>
+
+<section class="frame-section" id="item-1-frame-0"><h4 class="frame-heading">1 — The problem: raw threads don't scale</h4><div class="container py-4">
+  <h2 class="mb-1">Why Not Just Use <code>new Thread()</code>?</h2>
+  <p class="text-muted mb-4">Frame 1 / 6</p>
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card border-danger h-100">
+        <div class="card-header bg-danger text-white">❌ Raw threads — the naive approach</div>
+        <div class="card-body small">
+          <pre class="mb-2"><code>for (Order order : orders) {
+  new Thread(() -> validate(order)).start();
+}</code></pre>
+          <ul class="mb-0">
+            <li>1000 orders = <strong>1000 OS threads</strong></li>
+            <li>Each thread: ~1MB stack = <strong>1 GB RAM</strong></li>
+            <li>Thread creation: ~1ms each = <strong>1s just to start</strong></li>
+            <li>Context switching overhead at scale</li>
+            <li>No way to get results back (no <code>Future</code>)</li>
+            <li>No error handling, no lifecycle management</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-success h-100">
+        <div class="card-header bg-success text-white">✅ Thread pool — the fix</div>
+        <div class="card-body small">
+          <pre class="mb-2"><code>ExecutorService pool =
+  Executors.newFixedThreadPool(10);
+
+for (Order order : orders) {
+  pool.submit(() -> validate(order));
+}</code></pre>
+          <ul class="mb-0">
+            <li>1000 orders, only <strong>10 threads created</strong></li>
+            <li>Threads reused — creation cost paid once</li>
+            <li>Tasks queue up, workers drain queue</li>
+            <li><code>submit()</code> returns a <code>Future</code> — get result later</li>
+            <li>Lifecycle managed — <code>shutdown()</code> when done</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info mb-0">
+    <strong>Mental model:</strong> Thread pool = a fixed number of workers + a task queue. You put tasks in the queue, workers pick them up. Workers never die — they loop back and grab the next task.
+  </div>
+</div></section>
+
+<section class="frame-section" id="item-1-frame-1"><h4 class="frame-heading">2 — ExecutorService API</h4><div class="container py-4">
+  <h2 class="mb-1">ExecutorService — The Full API</h2>
+  <p class="text-muted mb-4">Frame 2 / 6</p>
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Pool flavours — which to pick</h6>
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-dark"><tr><th>Factory method</th><th>Threads</th><th>Use when</th></tr></thead>
+            <tbody>
+              <tr><td><code>newFixedThreadPool(n)</code></td><td>Fixed N</td><td>CPU-bound work — set N = CPU cores</td></tr>
+              <tr><td><code>newCachedThreadPool()</code></td><td>Grows/shrinks</td><td>Short-lived I/O tasks — many, fast bursts</td></tr>
+              <tr><td><code>newSingleThreadExecutor()</code></td><td>1</td><td>Serial ordering required (e.g. audit log writer)</td></tr>
+              <tr><td><code>newVirtualThreadPerTaskExecutor()</code></td><td>Virtual (Java 21)</td><td>Massive I/O concurrency — replaces cached pool</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card border-primary h-100">
+        <div class="card-body small">
+          <h6 class="text-primary">submit() → Future</h6>
+          <pre class="mb-0"><code>Future&lt;BigDecimal&gt; f =
+  pool.submit(() -> calculatePnL(order));
+
+// ... do other work ...
+
+BigDecimal pnl = f.get(); // blocks until done
+// f.get(500, MILLISECONDS) // with timeout</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-primary h-100">
+        <div class="card-body small">
+          <h6 class="text-primary">invokeAll() — batch + collect all results</h6>
+          <pre class="mb-0"><code>List&lt;Callable&lt;Result&gt;&gt; tasks = orders.stream()
+  .map(o -> (Callable&lt;Result&gt;) () -> validate(o))
+  .toList();
+
+List&lt;Future&lt;Result&gt;&gt; futures =
+  pool.invokeAll(tasks); // submits all, waits all</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card border-warning mb-3">
+    <div class="card-body small">
+      <h6 class="text-warning">⚠️ Shutdown — always required</h6>
+      <pre class="mb-0"><code>pool.shutdown();                          // stop accepting new tasks
+pool.awaitTermination(10, SECONDS);       // wait for in-flight tasks to finish
+// pool.shutdownNow();                    // interrupt running tasks (forceful)</code></pre>
+    </div>
+  </div>
+  <div class="alert alert-danger mb-0 small">
+    <strong>Interview trap:</strong> Forgetting <code>shutdown()</code> = threads run forever = JVM never exits. Always shutdown in a <code>finally</code> block or use try-with-resources (Java 19+ ExecutorService implements <code>AutoCloseable</code>).
+  </div>
+</div></section>
+
+<section class="frame-section" id="item-1-frame-2"><h4 class="frame-heading">3 — ForkJoinPool — work stealing</h4><div class="container py-4">
+  <h2 class="mb-1">ForkJoinPool — Work Stealing</h2>
+  <p class="text-muted mb-4">Frame 3 / 6</p>
+  <div class="alert alert-secondary mb-3">
+    Problem ExecutorService can't solve well: a task that <strong>recursively splits itself</strong> into subtasks (divide &amp; conquer). Fixed pool blocks a thread waiting for subtasks → deadlock risk.
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-5">
+      <div class="card h-100">
+        <div class="card-body small">
+          <h6>Work-stealing algorithm</h6>
+          <p>Each thread has its <strong>own deque</strong> of tasks.</p>
+          <ul class="mb-0">
+            <li>Thread pushes subtasks to its own deque (bottom)</li>
+            <li>Thread pops from bottom of its own deque</li>
+            <li>Idle thread <strong>steals</strong> from top of another thread's deque</li>
+            <li>Result: idle threads never spin — they always find work</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-7">
+      <div class="card h-100">
+        <div class="card-body small">
+          <h6>Visual — 3 threads, deques</h6>
+          <table class="table table-sm table-bordered text-center mb-0">
+            <thead class="table-dark"><tr><th>Thread 1 deque</th><th>Thread 2 deque</th><th>Thread 3 deque</th></tr></thead>
+            <tbody>
+              <tr><td>task-A5 ← pop (own)</td><td>task-B3 ← pop (own)</td><td class="table-warning"><em>idle → steals</em></td></tr>
+              <tr><td>task-A4</td><td>task-B2</td><td class="table-success">← steals task-A4</td></tr>
+              <tr><td>task-A3</td><td>task-B1</td><td></td></tr>
+            </tbody>
+          </table>
+          <p class="mt-2 mb-0 text-muted">Thread 3 was idle → stole A4 from Thread 1's deque. No task sits unprocessed while a thread is free.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card border-info">
+        <div class="card-body small py-2">
+          <h6 class="text-info">ForkJoinPool.commonPool()</h6>
+          <p class="mb-0">JVM-wide shared pool. Used automatically by parallel streams and <code>CompletableFuture.supplyAsync()</code> (when no executor given). Size = CPU cores − 1.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-warning">
+        <div class="card-body small py-2">
+          <h6 class="text-warning">⚠️ Don't block in ForkJoinPool</h6>
+          <p class="mb-0">ForkJoinPool is for CPU-bound tasks. A blocking I/O call inside a <code>RecursiveTask</code> occupies a thread, defeating work-stealing. Use <code>ManagedBlocker</code> or move I/O to ExecutorService.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section class="frame-section" id="item-1-frame-3"><h4 class="frame-heading">4 — RecursiveTask pattern</h4><div class="container py-4">
+  <h2 class="mb-1">RecursiveTask — The ForkJoin Pattern</h2>
+  <p class="text-muted mb-4">Frame 4 / 6</p>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card border-success h-100">
+        <div class="card-body small">
+          <h6 class="text-success">RecursiveTask&lt;T&gt; — returns a value</h6>
+          <pre><code>class SumTask extends RecursiveTask&lt;Long&gt; {
+  private final int[] arr;
+  private final int lo, hi;
+  static final int THRESHOLD = 1000;
+
+  @Override
+  protected Long compute() {
+    if (hi - lo &lt;= THRESHOLD) {
+      long sum = 0;
+      for (int i = lo; i &lt; hi; i++) sum += arr[i];
+      return sum;
+    }
+    int mid = (lo + hi) / 2;
+    SumTask left  = new SumTask(arr, lo, mid);
+    SumTask right = new SumTask(arr, mid, hi);
+    left.fork();
+    long rightResult = right.compute();
+    long leftResult  = left.join();
+    return leftResult + rightResult;
+  }
+}</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-info h-100">
+        <div class="card-body small">
+          <h6 class="text-info">Invoking it</h6>
+          <pre class="mb-3"><code>ForkJoinPool pool = new ForkJoinPool();
+long total = pool.invoke(new SumTask(arr, 0, arr.length));
+// or use commonPool:
+long total = new SumTask(arr, 0, arr.length).invoke();</code></pre>
+          <h6 class="text-warning mt-3">⚠️ fork/compute order matters</h6>
+          <p class="mb-0">Always <code>fork()</code> the left, <code>compute()</code> the right directly (uses current thread), then <code>join()</code> the left. Never fork both.</p>
+          <hr>
+          <h6 class="mt-2">RecursiveAction — no return value</h6>
+          <p class="mb-0">Same pattern, <code>extends RecursiveAction</code>, <code>compute()</code> returns void. Use for in-place operations.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info mb-0 small">
+    <strong>THRESHOLD matters:</strong> Too small → too many tasks → scheduling overhead beats parallelism. Too large → not enough tasks → idle threads. Rule of thumb: ~100μs–10ms per task.
+  </div>
+</div></section>
+
+<section class="frame-section" id="item-1-frame-4"><h4 class="frame-heading">5 — When to use which</h4><div class="container py-4">
+  <h2 class="mb-1">Decision: ExecutorService vs ForkJoinPool</h2>
+  <p class="text-muted mb-4">Frame 5 / 6</p>
+  <div class="card mb-4">
+    <div class="card-body">
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-dark">
+          <tr><th></th><th>ExecutorService (fixed pool)</th><th>ForkJoinPool</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Task type</strong></td><td>Independent, uniform tasks</td><td>Recursive, divide-and-conquer</td></tr>
+          <tr><td><strong>Work type</strong></td><td>I/O-bound or CPU-bound</td><td>CPU-bound only</td></tr>
+          <tr><td><strong>Task splitting</strong></td><td>Tasks don't spawn subtasks</td><td>Tasks fork subtasks</td></tr>
+          <tr><td><strong>Blocking I/O</strong></td><td>Fine — use more threads than cores</td><td>Dangerous — blocks work-stealing</td></tr>
+          <tr><td><strong>Result collection</strong></td><td><code>Future</code> / <code>invokeAll</code></td><td><code>join()</code> on subtasks</td></tr>
+          <tr><td><strong>Pool size</strong></td><td>Tune manually per workload</td><td>Defaults to CPU cores − 1</td></tr>
+          <tr><td><strong>Java 8+ parallel streams</strong></td><td>No</td><td>Yes — uses commonPool</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card border-primary h-100">
+        <div class="card-header bg-primary text-white small">Use ExecutorService for:</div>
+        <div class="card-body small"><ul class="mb-0">
+          <li>Validate 500 orders in parallel (independent)</li>
+          <li>Call 10 external APIs concurrently</li>
+          <li>Process Kafka messages from a topic</li>
+          <li>Write audit events to DB in background</li>
+        </ul></div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-success h-100">
+        <div class="card-header bg-success text-white small">Use ForkJoinPool for:</div>
+        <div class="card-body small"><ul class="mb-0">
+          <li>Sum P&amp;L across 1M trade records (array split)</li>
+          <li>Merge sort a large in-memory dataset</li>
+          <li>Parallel tree traversal (portfolio hierarchy)</li>
+          <li><code>Arrays.parallelSort()</code> — uses it internally</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section class="frame-section" id="item-1-frame-5"><h4 class="frame-heading">6 — OMS trading example</h4><div class="container py-4">
+  <h2 class="mb-1">OMS Example — Both in One System</h2>
+  <p class="text-muted mb-4">Frame 6 / 6 — Trading domain</p>
+  <div class="card mb-3">
+    <div class="card-body small">
+      <h6>Order Management System — two concurrency needs</h6>
+      <pre><code>// 1. ExecutorService — validate N independent orders in parallel
+ExecutorService validator = Executors.newFixedThreadPool(
+    Runtime.getRuntime().availableProcessors());
+
+List&lt;Future&lt;ValidationResult&gt;&gt; results = orders.stream()
+    .map(o -> validator.submit(() -> riskEngine.validate(o)))
+    .toList();
+
+List&lt;ValidationResult&gt; validated = results.stream()
+    .map(f -> f.get()).toList();
+
+
+// 2. ForkJoinPool — aggregate P&amp;L across millions of positions (CPU-bound)
+class PnLTask extends RecursiveTask&lt;BigDecimal&gt; {
+    protected BigDecimal compute() {
+        if (positions.size() &lt;= THRESHOLD)
+            return positions.stream()
+                .map(Position::unrealisedPnL)
+                .reduce(ZERO, BigDecimal::add);
+        var left  = new PnLTask(positions.subList(0, mid));
+        var right = new PnLTask(positions.subList(mid, positions.size()));
+        left.fork();
+        return right.compute().add(left.join());
+    }
+}
+
+BigDecimal totalPnL = ForkJoinPool.commonPool()
+    .invoke(new PnLTask(allPositions));</code></pre>
+    </div>
+  </div>
+  <div class="alert alert-warning mb-3 small">
+    <strong>Interview trap — commonPool starvation:</strong> <code>CompletableFuture.supplyAsync()</code> without a custom executor uses <code>commonPool</code>. A blocking DB call inside starves all parallel streams. Always pass a dedicated <code>ExecutorService</code> for I/O-bound chains.
+  </div>
+  <div class="alert alert-success mb-0 small">
+    <strong>Interview-ready sentence:</strong> <em>"ExecutorService suits independent, pre-defined tasks — fixed pool, get Future back. ForkJoinPool suits recursive divide-and-conquer CPU work — work-stealing keeps all threads busy. In an OMS I'd use ExecutorService for parallel order validation, ForkJoinPool for in-memory P&amp;L aggregation over millions of positions."</em>
+  </div>
+</div></section>
+
+</section></section></main>
+</body>
+</html>

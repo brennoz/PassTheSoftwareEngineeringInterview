@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMS — Order Management System (OOD Walkthrough)</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<h1>Order Management System — OOD Walkthrough</h1>
+<span class="mission-tag">TradingCo prep &nbsp;·&nbsp; OOD Lesson 1 &nbsp;·&nbsp; ~25 min</span>
+
+<p>An Order Management System (OMS) tracks the path of a trade order from submission to final
+outcome. It is the central object in a trading platform — every participant (risk engine, P&amp;L
+calculator, audit trail) reacts to order state changes. This lesson walks through the three
+patterns required for q129: <strong>State Machine</strong>, <strong>Strategy</strong>, and
+<strong>Observer</strong> — applied to the trading domain.</p>
+
+<!-- ================================================================ -->
+<h2>1 — The Order Lifecycle</h2>
+
+<p>An order is not simply "open" or "closed". It moves through a precise sequence of states,
+each triggered by an external event (venue acknowledgement, execution report, cancel confirm).
+The state machine must enforce which transitions are legal — an order cannot jump from
+<code>NEW</code> to <code>FILLED</code>; it must travel through every intermediate step.</p>
+
+<pre><code>NEW  ──submit──▶  PENDING_ACK  ──ack──▶  ACKNOWLEDGED  ──partial fill──▶  PARTIALLY_FILLED
+                      │                        │                                    │
+                      ▼                        ├──── cancel ──────────────▶  CANCELLED  (terminal)
+                  REJECTED (terminal)          ├──── expire ──────────────▶  EXPIRED    (terminal)
+                                               └──── full fill ──────────▶  FILLED      (terminal)
+                                               (PARTIALLY_FILLED also → FILLED / CANCELLED)</code></pre>
+
+<div class="callout">
+  <strong>Key insight — partial fills:</strong>
+  A single order can receive many execution reports before it is completely filled.
+  Each partial fill adds to the running total. The order auto-transitions to
+  <code>FILLED</code> only when <code>remainingQuantity() == 0</code>.
+</div>
+
+<h3>State Machine Implementation — enum with abstract method</h3>
+
+<pre><code>// Pattern: guards live on the SOURCE state, not in a central switch statement.
+// Adding a new status (e.g. PENDING_CANCEL) only requires editing that new constant.
+public enum OrderStatus {
+
+    NEW {
+        @Override public boolean canTransitionTo(OrderStatus next) {
+            return next == PENDING_ACK;
+        }
+    },
+    PENDING_ACK {
+        @Override public boolean canTransitionTo(OrderStatus next) {
+            return next == ACKNOWLEDGED || next == REJECTED;
+        }
+    },
+    ACKNOWLEDGED {
+        @Override public boolean canTransitionTo(OrderStatus next) {
+            return next == PARTIALLY_FILLED || next == FILLED || next == CANCELLED || next == EXPIRED;
+        }
+    },
+    PARTIALLY_FILLED {
+        @Override public boolean canTransitionTo(OrderStatus next) {
+            return next == PARTIALLY_FILLED || next == FILLED || next == CANCELLED;
+        }
+    },
+    FILLED    { @Override public boolean canTransitionTo(OrderStatus next) { return false; } },
+    CANCELLED { @Override public boolean canTransitionTo(OrderStatus next) { return false; } },
+    REJECTED  { @Override public boolean canTransitionTo(OrderStatus next) { return false; } },
+    EXPIRED   { @Override public boolean canTransitionTo(OrderStatus next) { return false; } };
+
+    public abstract boolean canTransitionTo(OrderStatus next);
+}</code></pre>
+
+<div class="callout warn">
+  <strong>What NOT to do:</strong> Put a big <code>switch (currentStatus)</code> inside
+  <code>Order.java</code>. Adding a new state then requires finding and editing that switch —
+  scattered logic, easy to forget a case, OCP violation. With the enum-per-constant approach,
+  you edit one constant and nothing else changes.
+</div>
+
+<!-- ================================================================ -->
+<h2>2 — Data-Carrying Enums (OrderType, TimeInForce)</h2>
+
+<p>Order types and time-in-force map directly to FIX protocol tag values on the wire.
+Storing those values in the enum eliminates a translation lookup in the routing layer.</p>
+
+<pre><code>// FIX tag 40 — OrdType
+public enum OrderType {
+    MARKET("1"),  // execute at best available price; no limit price
+    LIMIT("2"),   // execute only at limitPrice or better
+    STOP("3");    // triggers as MARKET when stop price is hit
+
+    private final String fixOrdType;
+    OrderType(String fixOrdType) { this.fixOrdType = fixOrdType; }
+    public String getFixOrdType() { return fixOrdType; }
+}
+
+// FIX tag 59 — TimeInForce
+public enum TimeInForce {
+    DAY("0"),   // cancel at market close
+    GTC("1"),   // Good Till Cancelled
+    IOC("3"),   // Immediate Or Cancel
+    FOK("4");   // Fill Or Kill
+    ...
+}</code></pre>
+
+<div class="callout green">
+  <strong>Why data-carrying enums here?</strong> Without the FIX value stored on the enum, every routing
+  strategy would need a separate mapping table (a <code>Map&lt;OrderType, String&gt;</code>).
+  The enum owns its own wire representation — one less moving part to keep in sync.
+</div>
+
+<!-- ================================================================ -->
+<h2>3 — Value Objects: Price and Execution</h2>
+
+<pre><code>// Why BigDecimal: double cannot represent 0.1 exactly.
+// In a regulated trading environment, floating-point drift = wrong fills = regulatory breach.
+public record Price(BigDecimal value, String currency) {
+    public Price {
+        if (value == null || value.compareTo(BigDecimal.ZERO) &lt; 0)
+            throw new IllegalArgumentException("Price must be non-negative: " + value);
+        value = value.setScale(6, RoundingMode.HALF_UP);  // normalise scale for .equals() safety
+    }
+    public static Price of(String currency, String value) {
+        return new Price(new BigDecimal(value), currency);
+    }
+}
+
+// Immutable record — a single fill event from the venue.
+// An order may receive many Executions before reaching FILLED.
+public record Execution(
+        String executionId,
+        Price executionPrice,
+        BigDecimal filledQuantity,
+        Instant timestamp          // UTC — never LocalDateTime for cross-venue reconciliation
+) { ... }</code></pre>
+
+<!-- ================================================================ -->
+<h2>4 — Strategy: Order Routing</h2>
+
+<p>Different order types route differently: a MARKET order sends no price; a LIMIT order
+must include the limit price. The Strategy pattern isolates each routing variant behind
+an interface, so adding a new order type is a new class, not an edit to existing code.</p>
+
+<pre><code>public interface OrderRoutingStrategy {
+    // Contract: must call order.pendingAck() before returning.
+    void route(Order order);
+}
+
+// MARKET strategy — guards against a limit price being present
+public class MarketOrderRoutingStrategy implements OrderRoutingStrategy {
+    @Override
+    public void route(Order order) {
+        if (order.getLimitPrice() != null)
+            throw new IllegalArgumentException("MARKET order must not carry a limit price");
+        order.pendingAck();   // NEW → PENDING_ACK
+        // Production: serialise to FIX NewOrderSingle (tag 35=D, tag 40=1)
+    }
+}
+
+// LIMIT strategy — guards against a missing limit price
+public class LimitOrderRoutingStrategy implements OrderRoutingStrategy {
+    @Override
+    public void route(Order order) {
+        if (order.getLimitPrice() == null)
+            throw new IllegalArgumentException("LIMIT order requires a limit price");
+        order.pendingAck();   // NEW → PENDING_ACK
+        // Production: serialise to FIX NewOrderSingle (tag 35=D, tag 40=2, tag 44=limitPrice)
+    }
+}
+
+// OrderManager wires the strategies — EnumMap for O(1) lookup by enum ordinal
+public class OrderManager {
+    private final Map&lt;OrderType, OrderRoutingStrategy&gt; strategies = new EnumMap&lt;&gt;(OrderType.class);
+
+    public OrderManager() {
+        strategies.put(OrderType.MARKET, new MarketOrderRoutingStrategy());
+        strategies.put(OrderType.LIMIT,  new LimitOrderRoutingStrategy());
+        strategies.put(OrderType.STOP,   new MarketOrderRoutingStrategy()); // STOP executes at market
+    }
+
+    public Order submit(Order order) {
+        globalListeners.forEach(order::addListener);
+        strategies.get(order.getOrderType()).route(order);  // NEW → PENDING_ACK
+        globalListeners.forEach(l -&gt; l.onOrderSubmitted(order));
+        return order;
+    }
+}</code></pre>
+
+<!-- ================================================================ -->
+<h2>5 — Observer: Order Events</h2>
+
+<p>Multiple downstream systems react to order state changes: a risk engine needs to know
+about fills, an audit logger needs every transition, a P&amp;L calculator needs execution prices.
+The Observer pattern lets Order fire events without knowing who is listening.</p>
+
+<pre><code>public interface OrderEventListener {
+    void onOrderSubmitted(Order order);
+    void onExecutionReceived(Order order, Execution execution);
+    void onOrderTerminated(Order order);  // FILLED, CANCELLED, REJECTED, or EXPIRED
+}
+
+// Inside Order.applyExecution():
+public void applyExecution(Execution execution) {
+    executions.add(execution);
+    BigDecimal remaining = remainingQuantity();
+    if (remaining.compareTo(BigDecimal.ZERO) == 0) {
+        transitionTo(OrderStatus.FILLED);
+        listeners.forEach(l -&gt; l.onExecutionReceived(this, execution));
+        listeners.forEach(l -&gt; l.onOrderTerminated(this));  // fires BOTH callbacks on final fill
+    } else if (remaining.compareTo(BigDecimal.ZERO) &gt; 0) {
+        transitionTo(OrderStatus.PARTIALLY_FILLED);
+        listeners.forEach(l -&gt; l.onExecutionReceived(this, execution));
+    } else {
+        executions.remove(executions.size() - 1);          // roll back overfill
+        throw new IllegalStateException("Execution would overfill order " + id);
+    }
+}</code></pre>
+
+<div class="callout redux">
+  <strong>Common bug to avoid:</strong>
+  On a final fill (remaining → 0), you must fire BOTH <code>onExecutionReceived</code>
+  AND <code>onOrderTerminated</code>. Only firing the terminal event loses the execution
+  details (price, quantity) that the audit trail needs. Only firing the execution event means
+  downstream systems never know the order is done.
+</div>
+
+<!-- ================================================================ -->
+<h2>6 — The Order Aggregate (core logic)</h2>
+
+<pre><code>public class Order {
+    // Static factory: order always starts NEW — no public constructor with status param
+    public static Order create(OrderSide side, String instrument, OrderType orderType,
+            TimeInForce timeInForce, BigDecimal requestedQuantity, Price limitPrice) {
+        if (orderType == OrderType.LIMIT &amp;&amp; limitPrice == null)
+            throw new IllegalArgumentException("LIMIT order requires a limit price");
+        return new Order(...);
+    }
+
+    // remainingQuantity: stream over all executions, sum filledQuantity, subtract from requested
+    public BigDecimal remainingQuantity() {
+        BigDecimal filled = executions.stream()
+                .map(Execution::filledQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return requestedQuantity.subtract(filled);
+    }
+
+    // Single private guard — all state changes go through here
+    private void transitionTo(OrderStatus next) {
+        if (!status.canTransitionTo(next))
+            throw new IllegalStateException(
+                "Order " + id + ": illegal transition " + status + " → " + next);
+        this.status = next;
+    }
+
+    // pendingAck() is package-private — only OrderRoutingStrategy calls it
+    void pendingAck() { transitionTo(OrderStatus.PENDING_ACK); }
+}</code></pre>
+
+<!-- ================================================================ -->
+<h2>7 — Interview Talking Points</h2>
+
+<table>
+  <thead><tr><th>Question</th><th>Strong answer</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Why a separate PARTIALLY_FILLED status rather than just tracking a quantity field?</td>
+      <td>Explicit status makes the lifecycle readable in logs, dashboards, and MiFID II audit trails. A reader sees "partially filled then cancelled" without inspecting quantity fields — and it enforces correct transition logic: a PARTIALLY_FILLED order can cancel, but a FILLED one cannot.</td>
+    </tr>
+    <tr>
+      <td>Why EnumMap for strategy lookup?</td>
+      <td>EnumMap uses the enum ordinal as an array index — O(1) with no hash computation or bucket collision. Correct here because OrderType is a fixed, compile-time-known set. Also communicates intent: this map is enum-keyed, not String-keyed.</td>
+    </tr>
+    <tr>
+      <td>What happens if two executions arrive simultaneously?</td>
+      <td>The current design is single-threaded (correct for the OOD scope). In production, the OMS would process execution reports on a dedicated thread (or LMAX Disruptor event handler), so applyExecution() is always called by one thread — no synchronization needed in the core domain object. External synchronization at the messaging layer.</td>
+    </tr>
+    <tr>
+      <td>Why BigDecimal for price and quantity?</td>
+      <td>double cannot represent 0.1 exactly — floating-point drift in accumulated fills produces wrong totals. At scale, being wrong by a fraction of a cent is a regulatory non-compliance issue under MiFID II best-execution rules. BigDecimal gives exact decimal arithmetic at the cost of verbosity.</td>
+    </tr>
+    <tr>
+      <td>How does this relate to Event Sourcing?</td>
+      <td>The execution list in Order is an append-only event log — the current state (filled quantity, status) is derived by replaying executions. A fully event-sourced OMS stores each transition as an immutable event in a journal (Kafka, Chronicle) and rebuilds state on replay. This design is a step toward that: the executions list is the raw data, not just a running total.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================================================================ -->
+<div class="primary-source">
+  <strong>📖 Primary source — read this next:</strong>
+  <a href="https://martinfowler.com/bliki/DomainDrivenDesign.html" target="_blank">
+    Martin Fowler — Domain-Driven Design
+  </a>
+  — Explains why the Order is an aggregate root, why value objects (Price, Execution) are immutable,
+  and where the strategy/observer patterns fit in a DDD layered architecture. Essential vocabulary
+  for the "domain as much as the engineering" expectation in this role.
+</div>
+
+<!-- ================================================================ -->
+<h2>Quiz — check your understanding</h2>
+
+<div class="quiz-block">
+
+  <div class="question" id="q1">
+    <p>Q1. Where should the canTransitionTo() logic live in the state machine pattern?</p>
+    <ul class="options" data-correct="1">
+      <li>On each enum constant — guards on the source state</li>
+      <li>In Order.java as a switch statement on currentStatus</li>
+      <li>In a separate OrderStatusValidator utility class</li>
+      <li>In OrderManager, before calling any state-change method</li>
+    </ul>
+    <div class="explanation">Guards on the source state (each enum constant) mean adding a new status only requires editing that constant. A central switch in Order.java forces you to find and edit that switch every time — a scattered, OCP-violating design that has caused real bugs when engineers added a new status and missed a case.</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. applyExecution() receives a fill for the remaining 40 shares of a 100-share order (60 already filled). What should happen?</p>
+    <ul class="options" data-correct="2">
+      <li>Transition to PARTIALLY_FILLED and fire onExecutionReceived only</li>
+      <li>Transition to FILLED and fire both onExecutionReceived and onOrderTerminated</li>
+      <li>Transition to FILLED and fire onOrderTerminated only</li>
+      <li>Remain in PARTIALLY_FILLED until the caller explicitly calls complete()</li>
+    </ul>
+    <div class="explanation">When remaining quantity reaches zero, the order auto-transitions to FILLED and must fire BOTH callbacks. Firing only onOrderTerminated loses the execution details (price, quantity) needed by the audit trail and P&L calculator. Firing only onExecutionReceived means downstream systems never know the order is complete. The caller must not decide the terminal state.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Why does Order.create() validate that MARKET orders have no limit price?</p>
+    <ul class="options" data-correct="3">
+      <li>FIX protocol requires tag 44 to be absent for OrdType=1</li>
+      <li>Market orders with a price are treated as limit orders by all venues</li>
+      <li>Venue behaviour for a MARKET with a limit price is undefined and inconsistent</li>
+      <li>The MarketOrderRoutingStrategy would null-pointer without the guard</li>
+    </ul>
+    <div class="explanation">Venue behaviour varies: some reject the order outright, some silently ignore the price, some treat it as a LIMIT order. All three outcomes are wrong — you get either a rejection or an unexpected fill type. The guard at construction time prevents the wrong combination from ever reaching the routing layer, regardless of which venue is connected.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. What is the correct collection type for storing routing strategies keyed by OrderType?</p>
+    <ul class="options" data-correct="4">
+      <li>HashMap&lt;OrderType, OrderRoutingStrategy&gt; — standard map, correct result</li>
+      <li>TreeMap&lt;OrderType, OrderRoutingStrategy&gt; — sorted, log(N) lookup</li>
+      <li>LinkedHashMap&lt;OrderType, OrderRoutingStrategy&gt; — insertion-order iteration</li>
+      <li>EnumMap&lt;OrderType, OrderRoutingStrategy&gt; — array-backed, O(1), enum-safe</li>
+    </ul>
+    <div class="explanation">EnumMap is purpose-built for enum keys: it uses the enum's ordinal as an array index, giving O(1) lookup with no hash computation or collision. For a fixed, compile-time-known key set like OrderType, it's strictly better than HashMap — and it communicates the intent (this is an enum-keyed map) more clearly than a generic Map.</div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<div class="ask-me">
+  <strong>Stuck or want to go deeper?</strong>
+  Ask your teacher: <em>"Explain how partial fills interact with the state machine"</em> /
+  <em>"How would this change with event sourcing?"</em> /
+  <em>"Walk me through the FIX NewOrderSingle message"</em>
+</div>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.querySelector('.correct') || ul.querySelector('.wrong')) return;
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (i + 1 === correct) {
+        li.classList.add('correct');
+      } else {
+        li.classList.add('wrong');
+        ul.querySelectorAll('li')[correct - 1].classList.add('reveal');
+      }
+      if (exp) exp.classList.add('show');
+    });
+  });
+});
+</script>
+</body>
+</html>

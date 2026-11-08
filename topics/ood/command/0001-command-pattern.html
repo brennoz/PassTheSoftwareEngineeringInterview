@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OOD — Command Pattern</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 840px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #2563eb; padding-bottom: 8px; }
+  h2 { border-left: 5px solid #2563eb; padding-left: 12px; margin-top: 40px; }
+  h3 { color: #374151; margin-top: 24px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 0.9em; background: #f1f5f9; padding: 2px 5px; border-radius: 3px; }
+  pre code { background: transparent; padding: 0; font-size: inherit; border-radius: 0; }
+  .callout { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .warn { background: #fffbeb; border-left-color: #f59e0b; }
+  .pass { background: #f0fdf4; border-left-color: #16a34a; }
+  .question { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .options { list-style: none; padding: 0; }
+  .options li { padding: 8px 12px; margin: 6px 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.93em; }
+  .options li:hover { background: #f0f9ff; }
+  .options li.correct { border-color: #16a34a; background: #f0fdf4; }
+  .options li.wrong { border-color: #dc2626; background: #fef2f2; }
+  .options li.reveal { border-color: #16a34a; background: #f0fdf4; opacity: 0.7; }
+  .explanation { margin-top: 10px; padding: 10px; background: #fffbeb; border-left: 4px solid #f59e0b; display: none; font-size: 0.9em; }
+  .explanation.show { display: block; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92em; }
+  th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; background: #f8fafc; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+</style>
+</head>
+<body>
+
+<h1>Command Pattern — Payment Transaction Log with Undo</h1>
+<p><strong>Question this lesson prepares you for:</strong> q126 — implement a wallet payment
+processor using the Command pattern with execute, undo, and audit log.</p>
+
+<h2>The problem without Command</h2>
+
+<p>A naive payment service hard-codes operations directly:</p>
+
+<pre><code>public void debit(Wallet wallet, BigDecimal amount) {
+    wallet.setBalance(wallet.getBalance().subtract(amount));
+}
+
+public void credit(Wallet wallet, BigDecimal amount) {
+    wallet.setBalance(wallet.getBalance().add(amount));
+}</code></pre>
+
+<p>Three problems: (1) <strong>undo is impossible</strong> — nothing records what happened, so
+reversing a transaction requires knowing which method was called with which arguments;
+(2) <strong>audit log requires manual plumbing</strong> — you must add logging to every new operation
+method; (3) <strong>operations are not first-class objects</strong> — you cannot queue them, delay
+them, retry them, or pass them around as data.</p>
+
+<h2>Command pattern — four roles</h2>
+
+<table>
+<tr><th>Role</th><th>Who</th><th>Responsibility</th></tr>
+<tr><td><strong>Command</strong></td><td><code>PaymentCommand</code> interface</td><td>Declares <code>execute()</code> and <code>undo()</code></td></tr>
+<tr><td><strong>Concrete Command</strong></td><td><code>DebitCommand</code>, <code>CreditCommand</code></td><td>Holds receiver + amount; implements both methods</td></tr>
+<tr><td><strong>Receiver</strong></td><td><code>Wallet</code></td><td>Owns the balance; performs the real work</td></tr>
+<tr><td><strong>Invoker</strong></td><td><code>PaymentProcessor</code></td><td>Executes commands; maintains history stack + audit log</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Key insight:</strong> the Invoker knows <em>nothing</em> about what a command does.
+  It only calls <code>execute()</code> and <code>undo()</code>. Adding a new operation
+  (e.g. <code>FreezeCommand</code>) requires zero changes to <code>PaymentProcessor</code>.
+</div>
+
+<h2>The Command interface</h2>
+
+<pre><code>// execute() performs the operation; undo() reverses it exactly
+public interface PaymentCommand {
+    void execute();
+    void undo();
+    String description(); // for audit log
+}</code></pre>
+
+<h2>Receiver — Wallet</h2>
+
+<pre><code>public class Wallet {
+    private BigDecimal balance;
+
+    public Wallet(BigDecimal initialBalance) {
+        this.balance = initialBalance;
+    }
+
+    // Raw balance mutations — no business logic here.
+    // Validation (e.g. insufficient funds) belongs in the Command or Invoker.
+    public void debit(BigDecimal amount) {
+        balance = balance.subtract(amount);
+    }
+
+    public void credit(BigDecimal amount) {
+        balance = balance.add(amount);
+    }
+
+    public BigDecimal getBalance() { return balance; }
+}</code></pre>
+
+<h2>Concrete Commands</h2>
+
+<pre><code>public class DebitCommand implements PaymentCommand {
+    private final Wallet wallet;
+    private final BigDecimal amount;
+    private final String description;
+
+    public DebitCommand(Wallet wallet, BigDecimal amount, String description) {
+        this.wallet = wallet;
+        this.amount = amount;
+        this.description = description;
+    }
+
+    @Override
+    public void execute() { wallet.debit(amount); }
+
+    // Undo a debit by crediting the same amount — compensation transaction
+    @Override
+    public void undo() { wallet.credit(amount); }
+
+    @Override
+    public String description() { return description; }
+}
+
+public class CreditCommand implements PaymentCommand {
+    private final Wallet wallet;
+    private final BigDecimal amount;
+    private final String description;
+
+    // ... same constructor pattern ...
+
+    @Override
+    public void execute() { wallet.credit(amount); }
+
+    // Undo a credit by debiting the same amount
+    @Override
+    public void undo() { wallet.debit(amount); }
+
+    @Override
+    public String description() { return description; }
+}</code></pre>
+
+<div class="callout warn">
+  <strong>BigDecimal — never double for money.</strong>
+  <code>new BigDecimal(0.1)</code> is <code>0.1000000000000000055511151231257827021181583404541015625</code>.
+  Always use <code>new BigDecimal("0.10")</code> or <code>BigDecimal.valueOf(10, 2)</code>.
+  Operations: <code>add</code>, <code>subtract</code>, <code>multiply</code>; for division always
+  supply <code>scale</code> + <code>RoundingMode.HALF_UP</code>.
+  Comparisons: <code>compareTo</code>, never <code>equals</code> (scale-sensitive:
+  <code>new BigDecimal("10.0").equals(new BigDecimal("10.00"))</code> is <em>false</em>).
+</div>
+
+<h2>Invoker — PaymentProcessor</h2>
+
+<pre><code>public class PaymentProcessor {
+    // Deque used as a stack: push = addFirst, pop = removeFirst
+    // Why not Stack? Stack extends Vector (synchronized, legacy); ArrayDeque is modern.
+    private final Deque&lt;PaymentCommand&gt; history = new ArrayDeque&lt;&gt;();
+
+    // All executed commands recorded here — including undone ones.
+    // In production this would be a durable outbox / event log.
+    private final List&lt;String&gt; auditLog = new ArrayList&lt;&gt;();
+
+    public void execute(PaymentCommand command) {
+        command.execute();
+        history.addFirst(command);            // push
+        auditLog.add("EXECUTED: " + command.description());
+    }
+
+    public void undoLast() {
+        if (history.isEmpty()) throw new IllegalStateException("Nothing to undo");
+        PaymentCommand last = history.removeFirst(); // pop
+        last.undo();
+        auditLog.add("UNDONE: " + last.description());
+    }
+
+    public List&lt;String&gt; getAuditLog() {
+        return Collections.unmodifiableList(auditLog);
+    }
+}</code></pre>
+
+<h3>Why Deque not Stack?</h3>
+<p><code>java.util.Stack</code> extends <code>Vector</code> — which is synchronized on every
+method and considered legacy. <code>ArrayDeque</code> is the modern unsynchronized alternative
+and faster for single-threaded use. Use <code>addFirst</code>/<code>removeFirst</code> for stack
+semantics (LIFO).</p>
+
+<h2>TDD walkthrough</h2>
+
+<p><strong>Red:</strong></p>
+<pre><code>@Test
+void debit_reduces_wallet_balance() {
+    Wallet wallet = new Wallet(new BigDecimal("100.00"));
+    PaymentProcessor processor = new PaymentProcessor();
+
+    processor.execute(new DebitCommand(wallet, new BigDecimal("30.00"), "purchase"));
+
+    assertEquals(0, new BigDecimal("70.00").compareTo(wallet.getBalance()));
+}</code></pre>
+
+<p>Fails: <code>DebitCommand</code> and <code>PaymentProcessor</code> don't exist yet.</p>
+
+<p><strong>Green:</strong> implement minimum code — <code>Wallet.debit</code>, <code>DebitCommand.execute</code>,
+<code>PaymentProcessor.execute</code>.</p>
+
+<p><strong>Red (undo):</strong></p>
+<pre><code>@Test
+void undo_last_reverses_debit() {
+    Wallet wallet = new Wallet(new BigDecimal("100.00"));
+    PaymentProcessor processor = new PaymentProcessor();
+    processor.execute(new DebitCommand(wallet, new BigDecimal("30.00"), "purchase"));
+
+    processor.undoLast();
+
+    assertEquals(0, new BigDecimal("100.00").compareTo(wallet.getBalance()));
+}</code></pre>
+
+<p><strong>Green:</strong> implement <code>DebitCommand.undo</code> (credit back) + <code>PaymentProcessor.undoLast</code>.</p>
+
+<h2>Extension without modification</h2>
+
+<p>Open/Closed in practice: adding a <code>FreezeCommand</code> (locks the wallet, undo unlocks it)
+requires:</p>
+<ul>
+  <li>New class <code>FreezeCommand implements PaymentCommand</code></li>
+  <li>New method on <code>Wallet</code>: <code>freeze()</code> / <code>unfreeze()</code></li>
+  <li><strong>Zero changes to <code>PaymentProcessor</code></strong></li>
+</ul>
+
+<h2>Where Command appears in real systems</h2>
+
+<table>
+<tr><th>System</th><th>Command analogy</th><th>Undo / compensation</th></tr>
+<tr><td>Event Sourcing</td><td>Each domain event is a Command record</td><td>Compensating event</td></tr>
+<tr><td>Saga (payment)</td><td>Each saga step is a Command</td><td>Rollback step reverses it</td></tr>
+<tr><td>Kafka producer</td><td>Message = command to the consumer</td><td>Dead Letter Queue + reprocess</td></tr>
+<tr><td>Git commit</td><td>Commit = Command on repo state</td><td><code>git revert</code> = undo()</td></tr>
+<tr><td>SQL transaction</td><td>DML statement = Command</td><td>ROLLBACK = undo()</td></tr>
+</table>
+
+<div class="callout pass">
+  <strong>Command vs Strategy vs Template Method</strong><br>
+  <strong>Strategy:</strong> swaps <em>how</em> one algorithm is performed (e.g. discount calculation).<br>
+  <strong>Template Method:</strong> fixes <em>when</em> steps run; subclasses fill in the steps.<br>
+  <strong>Command:</strong> wraps an <em>entire operation</em> as an object — enabling undo, queuing, logging.
+  The difference: Command is about <em>what to do and when to reverse it</em>.
+</div>
+
+<hr>
+<h2>Quiz</h2>
+
+<div class="question" id="q1">
+  <p><strong>Q1.</strong> In the Command pattern, which class should contain the undo logic — the Invoker or the Concrete Command?</p>
+  <ul class="options" data-correct="1">
+    <li onclick="answer(this,0)">Invoker — it owns the history stack so it knows what to reverse</li>
+    <li onclick="answer(this,1)">Concrete Command — it knows what it did and how to reverse exactly that operation</li>
+    <li onclick="answer(this,2)">Receiver — it owns the state so it should also own reversal</li>
+    <li onclick="answer(this,3)">A separate UndoManager class outside the pattern</li>
+  </ul>
+  <div class="explanation">
+    The Concrete Command holds the receiver reference <em>and</em> the exact parameters used in
+    <code>execute()</code>. Only it knows "I debited £30 from <em>this</em> wallet" — so only it
+    can reverse that precisely. The Invoker just calls <code>command.undo()</code> blindly.
+  </div>
+</div>
+
+<div class="question" id="q2">
+  <p><strong>Q2.</strong> Why use <code>ArrayDeque</code> instead of <code>Stack</code> for the history stack in PaymentProcessor?</p>
+  <ul class="options" data-correct="0">
+    <li onclick="answer(this,0)">Stack extends Vector which is synchronized on every method — unnecessary overhead and legacy design; ArrayDeque is the modern unsynchronized replacement</li>
+    <li onclick="answer(this,1)">ArrayDeque supports FIFO ordering which is required for correct undo sequencing</li>
+    <li onclick="answer(this,2)">Stack doesn't support generics</li>
+    <li onclick="answer(this,3)">ArrayDeque has O(1) random access which is needed for multi-level undo</li>
+  </ul>
+  <div class="explanation">
+    <code>java.util.Stack</code> extends <code>Vector</code> — a synchronized, legacy class from Java 1.0.
+    The synchronization is coarse-grained and unnecessary in single-threaded contexts.
+    <code>ArrayDeque</code> (Java 6+) is faster, not synchronized, and explicitly recommended by the
+    Javadoc as the stack/deque replacement. Use <code>addFirst</code>/<code>removeFirst</code> for LIFO.
+  </div>
+</div>
+
+<script>
+function answer(el, idx) {
+  const ul = el.parentElement;
+  if (ul.dataset.answered) return;
+  ul.dataset.answered = true;
+  const correct = parseInt(ul.dataset.correct);
+  const items = ul.querySelectorAll('li');
+  items[correct].classList.add('reveal');
+  if (idx === correct) { el.classList.add('correct'); } else { el.classList.add('wrong'); }
+  el.closest('.question').querySelector('.explanation').classList.add('show');
+}
+</script>
+</body>
+</html>

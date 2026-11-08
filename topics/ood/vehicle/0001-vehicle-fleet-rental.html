@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OOD — Vehicle Fleet Rental: State Machine + Strategy + Observer</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #2563eb; padding-bottom: 8px; }
+  h2 { border-left: 5px solid #2563eb; padding-left: 12px; margin-top: 40px; }
+  h3 { color: #374151; margin-top: 24px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 0.9em; background: #f1f5f9; padding: 2px 5px; border-radius: 3px; }
+  pre code { background: transparent; padding: 0; font-size: inherit; border-radius: 0; }
+  .callout { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .warn { background: #fffbeb; border-left-color: #f59e0b; }
+  .pass { background: #f0fdf4; border-left-color: #16a34a; }
+  .question { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .options { list-style: none; padding: 0; }
+  .options li { padding: 8px 12px; margin: 6px 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.93em; }
+  .options li:hover { background: #f0f9ff; }
+  .options li.correct { border-color: #16a34a; background: #f0fdf4; }
+  .options li.wrong { border-color: #dc2626; background: #fef2f2; }
+  .options li.reveal { border-color: #16a34a; background: #f0fdf4; opacity: 0.7; }
+  .explanation { margin-top: 10px; padding: 10px; background: #fffbeb; border-left: 4px solid #f59e0b; display: none; font-size: 0.9em; }
+  .explanation.show { display: block; }
+  svg { width: 100%; height: auto; display: block; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92em; }
+  th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; background: #f8fafc; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+</style>
+</head>
+<body>
+
+<h1>Vehicle Fleet Rental — State Machine + Strategy + Observer</h1>
+<p><strong>Lesson prepares you for:</strong> q127 — implement a fleet rental system combining
+an enum state machine with transition guards, a pricing strategy with duration tiers,
+and a maintenance observer that fires exactly when a mileage threshold is crossed.</p>
+
+<h2>The domain in one paragraph</h2>
+
+<p>A fleet rental company manages vehicles through a lifecycle: available → reserved → in use →
+awaiting inspection → available (or maintenance → available or retired). Pricing differs by
+vehicle class (Economy/Standard/Premium/Luxury) and rental duration — 7+ days earns a 15%
+discount, 28+ days earns 25%. When a vehicle is returned and its odometer reading has crossed
+a configured threshold <em>during this rental</em>, a maintenance observer is notified.</p>
+
+<p>Three classic OO patterns compose here without coupling: state machine governs what is
+<em>allowed</em>, strategy governs <em>pricing</em>, observer governs <em>side effects</em>.
+Each is independently testable; <code>Vehicle</code> is the aggregate root that wires them.</p>
+
+<h2>Pattern 1 — Enum state machine with canTransitionTo</h2>
+
+<h3>Why not a String field?</h3>
+<p>Storing status as <code>String</code> means: (1) typos compile silently; (2) any method can
+set <code>vehicle.setStatus("RETIRED")</code> regardless of current state; (3) transition rules
+scatter across every caller. An enum encodes the rules where they belong — on the state itself.</p>
+
+<h3>canTransitionTo vs canTransitionFrom</h3>
+<p>Two equivalent choices:</p>
+<ul>
+  <li><strong>Source-state guard</strong> <code>current.canTransitionTo(next)</code> — "what can I become?"
+    reads naturally at the call site in <code>transitionTo()</code>.</li>
+  <li><strong>Target-state guard</strong> <code>next.canTransitionFrom(current)</code> — "who may enter me?"
+    used in q081 (booking lifecycle).</li>
+</ul>
+<p>Both work. This solution uses <strong>canTransitionTo</strong> so the enum constant owns an
+explicit list of valid successors rather than valid predecessors — the successor set is smaller
+and easier to reason about for most states.</p>
+
+<pre><code>public enum VehicleStatus {
+
+    AVAILABLE {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            // Direct path to IN_USE is blocked — RESERVED is mandatory so the system
+            // records who holds the vehicle before keys change hands.
+            return next == RESERVED || next == RETIRED;
+        }
+    },
+    RESERVED {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            return next == AVAILABLE || next == IN_USE;
+        }
+    },
+    IN_USE {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            // Every return triggers an inspection — no shortcut to AVAILABLE.
+            // Skipping inspection would let hidden damage go undetected.
+            return next == AWAITING_INSPECTION;
+        }
+    },
+    AWAITING_INSPECTION {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            return next == AVAILABLE || next == MAINTENANCE;
+        }
+    },
+    MAINTENANCE {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            return next == AVAILABLE || next == RETIRED;
+        }
+    },
+    RETIRED {
+        @Override public boolean canTransitionTo(VehicleStatus next) {
+            return false; // terminal state
+        }
+    };
+
+    public abstract boolean canTransitionTo(VehicleStatus next);
+}</code></pre>
+
+<div class="callout">
+  <strong>Open/Closed in practice:</strong> adding an <code>UNDER_RECALL</code> state requires one
+  new enum constant and updating the constants whose successor sets should include it. No change to
+  <code>Vehicle.transitionTo()</code> — it always delegates to <code>status.canTransitionTo(next)</code>.
+</div>
+
+<h3>transitionTo in Vehicle</h3>
+<pre><code>private void transitionTo(VehicleStatus next) {
+    if (!status.canTransitionTo(next)) {
+        throw new InvalidStateTransitionException(id, status, next);
+    }
+    this.status = next;
+}</code></pre>
+
+<p>Every public state-change method calls <code>transitionTo()</code>. No caller can bypass the guard
+by writing <code>this.status = VehicleStatus.RETIRED</code> directly — the field is private.</p>
+
+<h2>Pattern 2 — Strategy: PricingStrategy with duration tiers</h2>
+
+<h3>Why Strategy and not a switch in Vehicle?</h3>
+<p>A switch on <code>VehicleClass</code> inside <code>Vehicle</code> would hard-code four pricing
+blocks. Adding a corporate discount tier, a peak-season surcharge, or a subscription model
+requires editing <code>Vehicle</code> — a class that has nothing to do with pricing logic.
+Strategy isolates the concern.</p>
+
+<pre><code>public interface PricingStrategy {
+    Money calculateCost(RentalPeriod period);
+}
+
+public class VehiclePricingStrategy implements PricingStrategy {
+
+    private static final BigDecimal WEEKLY_MULTIPLIER  = new BigDecimal("0.85");
+    private static final BigDecimal MONTHLY_MULTIPLIER = new BigDecimal("0.75");
+
+    private final BigDecimal dailyRate;
+    private final String currency;
+
+    public VehiclePricingStrategy(BigDecimal dailyRate, String currency) {
+        this.dailyRate = dailyRate;
+        this.currency  = currency;
+    }
+
+    @Override
+    public Money calculateCost(RentalPeriod period) {
+        long days = period.durationDays();
+        BigDecimal multiplier = discountMultiplierFor(days);
+        BigDecimal total = dailyRate
+            .multiply(BigDecimal.valueOf(days))
+            .multiply(multiplier)
+            .setScale(2, RoundingMode.HALF_UP);
+        return new Money(total, currency);
+    }
+
+    private BigDecimal discountMultiplierFor(long days) {
+        if (days >= 28) return MONTHLY_MULTIPLIER;
+        if (days >= 7)  return WEEKLY_MULTIPLIER;
+        return BigDecimal.ONE;
+    }
+}</code></pre>
+
+<div class="callout warn">
+  <strong>Off-by-one trap:</strong> the boundary is <code>&gt;= 7</code>, not <code>&gt; 7</code>.
+  A 7-day rental earns the weekly discount. Writing <code>&gt; 7</code> silently excludes
+  exactly-one-week rentals — a pricing bug that's invisible in tests unless you test
+  the exact boundary value.
+</div>
+
+<h3>Why one implementation, not four?</h3>
+<p>Economy, Standard, Premium, and Luxury use <em>identical</em> tier logic — only the base rate
+differs. Four separate classes would be DRY-violating duplication. The rate travels with the
+enum constant (<code>VehicleClass.STANDARD.getDailyRateGbp()</code>); the factory wires it to
+a single strategy implementation.</p>
+
+<pre><code>public enum VehicleClass {
+    ECONOMY(new BigDecimal("30.00")),
+    STANDARD(new BigDecimal("50.00")),
+    PREMIUM(new BigDecimal("80.00")),
+    LUXURY(new BigDecimal("130.00"));
+
+    private final BigDecimal dailyRateGbp;
+    VehicleClass(BigDecimal dailyRateGbp) { this.dailyRateGbp = dailyRateGbp; }
+    public BigDecimal getDailyRateGbp()   { return dailyRateGbp; }
+}
+
+public final class PricingStrategyFactory {
+    public static PricingStrategy forClass(VehicleClass vehicleClass) {
+        return new VehiclePricingStrategy(vehicleClass.getDailyRateGbp(), "GBP");
+    }
+    private PricingStrategyFactory() {}
+}</code></pre>
+
+<h3>Money as an immutable record</h3>
+<pre><code>public record Money(BigDecimal amount, String currency) {
+    public Money multiply(BigDecimal factor) {
+        return new Money(amount.multiply(factor).setScale(2, RoundingMode.HALF_UP), currency);
+    }
+    public Money add(Money other) {
+        if (!currency.equals(other.currency))
+            throw new IllegalArgumentException("Cannot add " + currency + " and " + other.currency);
+        return new Money(amount.add(other.amount).setScale(2, RoundingMode.HALF_UP), currency);
+    }
+}</code></pre>
+
+<div class="callout warn">
+  <strong>Test with compareTo, not assertEquals:</strong>
+  <code>BigDecimal.equals()</code> is scale-sensitive — <code>150.00</code> and <code>150.0</code>
+  are equal numerically but <em>not</em> by <code>.equals()</code>. Always use
+  <code>assertEquals(0, actual.amount().compareTo(new BigDecimal("150.00")))</code> in tests.
+</div>
+
+<h2>Pattern 3 — Observer: MaintenanceObserver</h2>
+
+<h3>Why Observer and not a return value?</h3>
+<p>Returning <code>boolean maintenanceRequired</code> from <code>returnVehicle()</code> pushes
+dispatch responsibility to every caller — a controller, a service, a scheduled job. Each must
+check the flag and decide what to do. When a second listener is added (compliance logger,
+customer notification), every caller needs updating. Observer keeps the <em>what happened</em>
+inside the domain; the <em>what to do about it</em> belongs to the listeners.</p>
+
+<pre><code>public interface MaintenanceObserver {
+    void onMaintenanceRequired(String vehicleId, BigDecimal currentMileageKm);
+}</code></pre>
+
+<h3>The threshold-crossing constraint</h3>
+<p>The observer must fire <em>only when the threshold is crossed during this rental</em>. If the
+vehicle was already past the threshold at checkout, a maintenance order was already raised —
+firing again creates a duplicate work order and may double-book a technician.</p>
+
+<pre><code>public void checkout(BigDecimal mileageAtStart) {
+    transitionTo(VehicleStatus.IN_USE);
+    this.mileageAtCheckout  = mileageAtStart;
+    this.currentMileage     = mileageAtStart;
+}
+
+public void returnVehicle(BigDecimal mileageAtReturn) {
+    transitionTo(VehicleStatus.AWAITING_INSPECTION);
+    this.currentMileage = mileageAtReturn;
+    boolean wasBeforeThreshold  = mileageAtCheckout.compareTo(maintenanceThresholdKm) &lt; 0;
+    boolean isAtOrPastThreshold = mileageAtReturn.compareTo(maintenanceThresholdKm) &gt;= 0;
+    if (wasBeforeThreshold &amp;&amp; isAtOrPastThreshold) {
+        notifyObservers();
+    }
+}
+
+private void notifyObservers() {
+    for (MaintenanceObserver observer : observers) {
+        observer.onMaintenanceRequired(id, currentMileage);
+    }
+}</code></pre>
+
+<div class="callout">
+  <strong>Test this with Mockito, not a boolean flag:</strong>
+  <code>verify(observer, times(1)).onMaintenanceRequired("V-001", new BigDecimal("50200"))</code>
+  asserts both that the observer was called <em>and</em> what arguments it received.
+  A hand-rolled <code>boolean[] called = {false}</code> lambda only tells you <em>whether</em>
+  the observer fired — not whether the correct vehicleId or mileage was passed.
+</div>
+
+<h2>TDD walkthrough — one cycle</h2>
+
+<h3>Red: write the test first</h3>
+<pre><code>@Test
+void observer_notified_when_mileage_threshold_crossed_on_return() {
+    MaintenanceObserver observer = mock(MaintenanceObserver.class);
+    Vehicle vehicle = new Vehicle("V-003", VehicleClass.PREMIUM,
+            new BigDecimal("49000"), new BigDecimal("50000"));
+    vehicle.addObserver(observer);
+
+    vehicle.reserve("CUST-3");
+    vehicle.checkout(new BigDecimal("49000"));
+    vehicle.returnVehicle(new BigDecimal("50200")); // crosses 50,000
+
+    // Fails: Vehicle.returnVehicle() doesn't notify anyone yet
+    verify(observer, times(1)).onMaintenanceRequired("V-003", new BigDecimal("50200"));
+}</code></pre>
+
+<h3>Green: minimum code to pass</h3>
+<p>Add <code>mileageAtCheckout</code> field, store it in <code>checkout()</code>, add the
+threshold-crossing check in <code>returnVehicle()</code>, iterate <code>observers</code>.
+Run the test — green. The test for "not notified below threshold" was already failing before
+this fix; add it now to pin the boundary condition.</p>
+
+<h3>Refactor: extract notifyObservers()</h3>
+<p>Inline notification logic in <code>returnVehicle()</code> would make the method 12 lines
+long. Extracting <code>notifyObservers()</code> separates "when to notify" (in
+<code>returnVehicle</code>) from "how to notify" (in <code>notifyObservers</code>) —
+each stays testable independently.</p>
+
+<h2>Pattern composition — how Vehicle wires all three</h2>
+
+<table>
+  <thead><tr><th>Concern</th><th>Pattern</th><th>Where it lives</th><th>Vehicle's role</th></tr></thead>
+  <tbody>
+    <tr><td>What transitions are legal</td><td>State machine</td><td>VehicleStatus enum</td><td>Calls <code>status.canTransitionTo(next)</code></td></tr>
+    <tr><td>What a rental costs</td><td>Strategy</td><td>PricingStrategy impl</td><td>Calls <code>pricingStrategy.calculateCost(period)</code></td></tr>
+    <tr><td>Who to tell when threshold crossed</td><td>Observer</td><td>MaintenanceObserver list</td><td>Iterates <code>observers</code> when condition met</td></tr>
+  </tbody>
+</table>
+
+<p><code>Vehicle</code> never contains any tier logic, mileage threshold formulas, or
+notification dispatch code — it delegates each concern to the object responsible for it.</p>
+
+<h2>Design alternatives comparison</h2>
+
+<table>
+  <thead><tr><th>Decision</th><th>Chosen</th><th>Alternative</th><th>Why alternative rejected</th></tr></thead>
+  <tbody>
+    <tr><td>Transition guard location</td><td>Enum (canTransitionTo)</td><td>Map in Vehicle</td><td>Map splits state definition from its rules — easy to add a status and forget to update the map</td></tr>
+    <tr><td>Pricing variation</td><td>Single VehiclePricingStrategy parameterised by rate</td><td>Four separate strategy classes</td><td>Identical tier logic, only rate differs — duplication without benefit</td></tr>
+    <tr><td>Maintenance signal</td><td>Observer interface</td><td>boolean return value from returnVehicle</td><td>Every caller would need to check the flag and dispatch — cross-cutting concern escapes the domain</td></tr>
+    <tr><td>Money type</td><td>record (BigDecimal + currency)</td><td>double field</td><td>Floating point: 7 × 80 × 0.85 = 475.99999… not 476.00. BigDecimal is exact</td></tr>
+    <tr><td>RentalPeriod type</td><td>record (start + end)</td><td>int durationDays only</td><td>A record preserves the actual dates — calendar-aware duration, auditable, easier to display</td></tr>
+  </tbody>
+</table>
+
+<!-- Quiz -->
+<h2>Quiz</h2>
+
+<div class="question" id="q1">
+  <p><strong>Q1.</strong> In <code>VehicleStatus</code>, why is the path
+  <code>AVAILABLE → IN_USE</code> (skipping RESERVED) blocked?</p>
+  <ul class="options" data-correct="2">
+    <li>To reduce the number of valid transitions and simplify unit tests</li>
+    <li>The RESERVED step records who holds the vehicle before keys change hands — skipping it would mean keys were handed over with no record of the customer</li>
+    <li>IN_USE cannot follow AVAILABLE because they share the same database table row</li>
+    <li>Only MAINTENANCE can follow AVAILABLE in a valid fleet lifecycle</li>
+  </ul>
+  <div class="explanation">The state machine encodes a business rule: hand-over accountability. RESERVED is not ceremony — it creates an explicit record linking the vehicle to a customer before any physical handover. A Vehicle going directly to IN_USE has no reservation record, so you can't determine who is responsible for it.</div>
+</div>
+
+<div class="question" id="q2">
+  <p><strong>Q2.</strong> A vehicle has <code>maintenanceThresholdKm = 50,000</code>. It was
+  checked out at <code>51,000 km</code> (already past threshold) and returned at
+  <code>52,000 km</code>. How many times does the observer fire?</p>
+  <ul class="options" data-correct="1">
+    <li>Zero — the threshold was already passed at checkout, so <code>wasBeforeThreshold</code> is false and the condition short-circuits</li>
+    <li>Once — the vehicle is still past the threshold so the observer fires on every return</li>
+    <li>Twice — once at checkout and once at return</li>
+    <li>It throws IllegalStateException because the mileage at checkout already exceeded the threshold</li>
+  </ul>
+  <div class="explanation">The guard is: <code>mileageAtCheckout &lt; threshold &amp;&amp; mileageAtReturn &gt;= threshold</code>. If checkout mileage is already 51,000 and the threshold is 50,000, <code>wasBeforeThreshold</code> is false — the entire condition is false regardless of return mileage. Zero notifications. This prevents duplicate maintenance work orders for the same threshold crossing.</div>
+</div>
+
+<div class="question" id="q3">
+  <p><strong>Q3.</strong> A test asserts
+  <code>assertEquals(new BigDecimal("476.00"), cost.amount())</code> for a 7-day
+  LUXURY rental (£130/day × 0.85). The production code calculates
+  <code>130 × 7 × 0.85 = 773.50</code> using PREMIUM (£80/day) by mistake, but the
+  test still passes. What is the likely cause?</p>
+  <ul class="options" data-correct="3">
+    <li>BigDecimal.equals() ignores the value when scale differs</li>
+    <li>RoundingMode.HALF_UP always returns 476.00 for three-digit inputs</li>
+    <li>The test was accidentally written against PREMIUM (£80/day) rate rather than LUXURY (£130/day), so 80 × 7 × 0.85 = 476.00 — the test matches the wrong implementation</li>
+    <li>multiply() on BigDecimal silently caps at four significant digits</li>
+  </ul>
+  <div class="explanation">This is a "tests pass but the spec is wrong" failure — the test was written for the wrong vehicle class (PREMIUM at £80 gives 80 × 7 × 0.85 = 476.00; LUXURY at £130 gives 773.50). The assertion and the production code agree with each other and both disagree with the requirement. Always pick test inputs that would distinguish the classes being tested — and assert on the correct expected value for the class under test.</div>
+</div>
+
+<!-- AI Engineering Extension -->
+<h2 style="border-color: #7c3aed">🤖 AI Engineering Extension</h2>
+
+<h3>Where AI fits</h3>
+<p>Two components in the vehicle fleet system are strong candidates for AI augmentation:</p>
+<ul>
+  <li><strong>Predictive maintenance:</strong> instead of a fixed odometer threshold, a model
+    predicts failure probability from mileage, vehicle age, usage pattern (daily vs long-haul),
+    and past repair history. The <code>MaintenanceObserver</code> interface accepts this model
+    as a listener without changing <code>Vehicle</code>.</li>
+  <li><strong>Dynamic pricing:</strong> a model learns that a LUXURY vehicle rented on a Friday
+    in a city during a major event commands a higher rate. The <code>PricingStrategy</code>
+    interface can be swapped for an ML-backed implementation without touching <code>Vehicle</code>.</li>
+</ul>
+
+<h3>Pattern</h3>
+<p>Predictive maintenance: <strong>classification / regression model</strong> trained on historical
+inspection outcomes (pass/fail, what was replaced, at what mileage). Input: vehicle age,
+class, mileage since last service, usage intensity. Output: failure probability score.
+Observer fires when score exceeds a threshold, not when a raw odometer number does.</p>
+
+<p>Dynamic pricing: <strong>real-time inference</strong> via an ML model (gradient boosting or
+a neural net) serving through a REST endpoint. <code>MLPricingStrategy</code> calls the endpoint
+with (vehicleClass, rentalPeriod, location, time-of-year) and returns a <code>Money</code> quote.
+Fallback to rule-based <code>VehiclePricingStrategy</code> if inference is unavailable.</p>
+
+<h3>Architecture delta</h3>
+<ul>
+  <li>New: <code>MLPricingStrategy</code> implementing <code>PricingStrategy</code> — same interface, AI-backed</li>
+  <li>New: <code>PredictiveMaintenanceObserver</code> implementing <code>MaintenanceObserver</code> — calls inference endpoint instead of checking raw mileage</li>
+  <li>New: ML inference service (SageMaker endpoint or Bedrock hosted model)</li>
+  <li>New: feature store (ElastiCache) for real-time vehicle usage features</li>
+  <li>No changes to <code>Vehicle</code>, <code>VehicleStatus</code>, or any existing strategy/observer classes</li>
+</ul>
+
+<h3>Tradeoffs</h3>
+<table>
+  <thead><tr><th>Concern</th><th>Rule-based</th><th>ML-based</th></tr></thead>
+  <tbody>
+    <tr><td>Latency</td><td>~0ms (in-process)</td><td>5–20ms (inference call)</td></tr>
+    <tr><td>Accuracy</td><td>Fixed threshold — misses early failures, over-triggers on low-use vehicles</td><td>Adapts to usage patterns — fewer false positives</td></tr>
+    <tr><td>Explainability</td><td>Trivial — "mileage &gt;= N"</td><td>Harder — "why did the model flag V-003?"</td></tr>
+    <tr><td>Cost</td><td>Free (CPU only)</td><td>Inference cost per prediction</td></tr>
+    <tr><td>Cold start</td><td>None</td><td>Model loading latency on first request</td></tr>
+  </tbody>
+</table>
+
+<h3>AWS managed services</h3>
+<ul>
+  <li><strong>Amazon SageMaker Real-Time Inference</strong> — host the maintenance predictor and pricing model; auto-scales with fleet activity</li>
+  <li><strong>Amazon Bedrock</strong> — if the pricing or maintenance advisory needs natural-language explanation ("why is this vehicle flagged?"), an LLM via Bedrock can generate a human-readable justification from the model's feature importance output</li>
+  <li><strong>Amazon ElastiCache</strong> — feature store for real-time vehicle usage data (mileage per day, idle time, weather exposure) — low-latency features at inference time</li>
+  <li><strong>Amazon S3 + SageMaker Pipelines</strong> — training pipeline: daily dump of inspection outcomes → feature engineering → model retrain → A/B deploy to the endpoint</li>
+</ul>
+
+<div class="question" id="ai-q1">
+  <p><strong>AI-Q:</strong> Your <code>MLPricingStrategy</code> calls a SageMaker endpoint for
+  every <code>getRentalCost()</code> call. During a promotional campaign, the fleet website
+  generates 5,000 quote requests per second. What is the most operationally important
+  addition to <code>MLPricingStrategy</code>?</p>
+  <ul class="options" data-correct="2">
+    <li>Increase SageMaker instance size to handle the load</li>
+    <li>A fallback to <code>VehiclePricingStrategy</code> (rule-based) when the inference call times out or returns an error — the service must remain available even when the model is unavailable</li>
+    <li>Cache every model output in a local HashMap keyed by vehicle class</li>
+    <li>Run inference asynchronously and return a default price immediately</li>
+  </ul>
+  <div class="explanation">A fallback to the rule-based strategy is mandatory for production resilience. SageMaker endpoints can cold-start, throttle, or fail. Without a fallback, every pricing failure becomes a customer-visible outage. The HashMap cache (option C) causes stale prices during a campaign and is wrong per-instance on a multi-pod deployment — use ElastiCache for shared cache if caching is needed at all.</div>
+</div>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.querySelector('.correct') || ul.querySelector('.wrong')) return;
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (i + 1 === correct) { li.classList.add('correct'); }
+      else { li.classList.add('wrong'); ul.querySelectorAll('li')[correct - 1].classList.add('reveal'); }
+      if (exp) exp.classList.add('show');
+    });
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>React + Redux — Overview for BillingCo</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<h1>React + Redux — Overview</h1>
+<span class="mission-tag">BillingCo prep &nbsp;·&nbsp; Lesson 1 of ? &nbsp;·&nbsp; ~20 min</span>
+
+<p>You've already built the BillingCo backend: Invoice entity, state machine, REST endpoints (q128).
+This lesson maps that backend onto a React + Redux frontend — so when you're asked
+<em>"describe a feature you built and how it interacted with the backend"</em>, you can walk
+through the full stack fluently.</p>
+
+<!-- ================================================================ -->
+<h2>1 — React in one paragraph</h2>
+
+<p>React is a JavaScript library for building UIs from <strong>components</strong> —
+small, reusable functions that return HTML-like JSX. Data flows <em>down</em> (parent → child
+via props); events flow <em>up</em> (child calls a callback passed as a prop).
+React re-renders a component when its <strong>state</strong> or <strong>props</strong> change —
+never by mutation, always by replacement.</p>
+
+<div class="callout green">
+  <strong>Angular analogy (if Angular is stronger for you):</strong>
+  React component ≈ Angular component.
+  <code>useState</code> ≈ class field + <code>ChangeDetectionStrategy</code>.
+  Props ≈ <code>@Input()</code>.
+  Callback props ≈ <code>@Output() EventEmitter</code>.
+  Redux ≈ NgRx.
+</div>
+
+<h3>Component anatomy</h3>
+<pre><code>// InvoiceCard.jsx — a pure presentational component
+// Receives data via props, emits events via callback props
+function InvoiceCard({ invoice, onSelect }) {
+  return (
+    &lt;div className="invoice-card" onClick={() =&gt; onSelect(invoice.id)}&gt;
+      &lt;span&gt;{invoice.id}&lt;/span&gt;
+      &lt;span className={`badge badge--${invoice.status.toLowerCase()}`}&gt;
+        {invoice.status}
+      &lt;/span&gt;
+      &lt;span&gt;£{invoice.amountDue.toFixed(2)} due&lt;/span&gt;
+    &lt;/div&gt;
+  );
+}
+
+// InvoiceList.jsx — composes InvoiceCard
+function InvoiceList({ invoices, onSelect }) {
+  if (invoices.length === 0) return &lt;p&gt;No invoices found.&lt;/p&gt;;
+  return (
+    &lt;ul&gt;
+      {invoices.map(inv =&gt; (
+        &lt;InvoiceCard key={inv.id} invoice={inv} onSelect={onSelect} /&gt;
+      ))}
+    &lt;/ul&gt;
+  );
+}</code></pre>
+
+<div class="callout">
+  <strong>Key rule — data down, events up:</strong>
+  <code>InvoiceList</code> never modifies the invoice list — it only displays what it receives.
+  When the user clicks, it calls <code>onSelect</code> (passed from the parent) which owns the decision.
+  This is why React is "one-directional data flow."
+</div>
+
+<h3>State and effects</h3>
+<pre><code>// Without Redux: local state for a simple case
+function InvoiceDetailPage({ invoiceId }) {
+  const [invoice, setInvoice] = useState(null);   // local state
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() =&gt; {
+    // useEffect fires after render — good place for API calls
+    fetch(`/api/invoices/${invoiceId}`)
+      .then(r =&gt; r.json())
+      .then(data =&gt; { setInvoice(data); setLoading(false); });
+  }, [invoiceId]);  // re-runs whenever invoiceId changes
+
+  if (loading) return &lt;p&gt;Loading...&lt;/p&gt;;
+  return &lt;InvoiceDetail invoice={invoice} /&gt;;
+}</code></pre>
+
+<div class="callout warn">
+  <strong>When NOT to use local state:</strong>
+  If two unrelated components both need the invoice list (e.g. a sidebar summary AND a main table),
+  you'd have to "lift state" to a common ancestor — and threading props down becomes painful.
+  That's exactly when Redux earns its place.
+</div>
+
+<!-- ================================================================ -->
+<h2>2 — Redux: the pattern</h2>
+
+<div class="callout redux">
+  <strong>Redux in one sentence:</strong> one global JavaScript object (the <em>store</em>)
+  holds all shared state; components read from it via <em>selectors</em> and change it
+  by dispatching <em>actions</em> that are processed by <em>reducers</em>.
+</div>
+
+<h3>The three pieces</h3>
+
+<table>
+  <thead><tr><th>Piece</th><th>What it is</th><th>BillingCo example</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Store</strong></td>
+      <td>Single global JS object — the single source of truth</td>
+      <td><code>{ invoices: { list: [], loading: false }, selectedId: null }</code></td>
+    </tr>
+    <tr>
+      <td><strong>Action</strong></td>
+      <td>Plain object: <code>{ type: "invoices/fetchAll/fulfilled", payload: [...] }</code></td>
+      <td>User clicks "Load invoices" → action dispatched → reducer runs</td>
+    </tr>
+    <tr>
+      <td><strong>Reducer</strong></td>
+      <td>Pure function: <code>(currentState, action) => nextState</code>. Never mutates — returns a new object.</td>
+      <td>On <code>fetchAll/fulfilled</code>: return <code>{ ...state, list: action.payload, loading: false }</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Old Redux (why it existed, why RTK replaced it)</h3>
+<pre><code>// Old Redux — verbose, error-prone, lots of boilerplate
+const FETCH_INVOICES_SUCCESS = "FETCH_INVOICES_SUCCESS"; // manual string constant
+
+function invoicesReducer(state = { list: [], loading: false }, action) {
+  switch (action.type) {
+    case FETCH_INVOICES_SUCCESS:
+      return { ...state, list: action.payload, loading: false }; // manual spread
+    default:
+      return state;
+  }
+}
+
+// Problem: string typos compile silently, spread-or-mutate errors, 3 files per feature</code></pre>
+
+<!-- ================================================================ -->
+<h2>3 — Redux Toolkit (RTK): modern Redux</h2>
+
+<p>Redux Toolkit is the <strong>official, recommended</strong> way to write Redux since 2020.
+It eliminates the boilerplate while keeping the same mental model.</p>
+
+<h3>createSlice — reducer + action creators in one call</h3>
+<pre><code>import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+
+// createAsyncThunk: wraps an async operation, auto-dispatches
+// pending / fulfilled / rejected actions
+export const fetchInvoices = createAsyncThunk(
+  "invoices/fetchAll",
+  async (customerId) =&gt; {
+    const res = await fetch(`/api/invoices?customerId=${customerId}`);
+    return res.json(); // becomes action.payload on fulfilled
+  }
+);
+
+const invoicesSlice = createSlice({
+  name: "invoices",
+  initialState: { list: [], loading: false, error: null, selectedId: null },
+
+  // reducers: synchronous actions (no API calls)
+  reducers: {
+    selectInvoice(state, action) {
+      state.selectedId = action.payload; // RTK uses Immer — looks like mutation, IS immutable
+    },
+    clearSelection(state) {
+      state.selectedId = null;
+    },
+  },
+
+  // extraReducers: handle async thunk lifecycle
+  extraReducers: (builder) =&gt; {
+    builder
+      .addCase(fetchInvoices.pending,   (state)         =&gt; { state.loading = true; })
+      .addCase(fetchInvoices.fulfilled, (state, action) =&gt; {
+        state.loading = false;
+        state.list    = action.payload;
+      })
+      .addCase(fetchInvoices.rejected,  (state, action) =&gt; {
+        state.loading = false;
+        state.error   = action.error.message;
+      });
+  },
+});
+
+// Slice auto-generates action creators from reducers:
+export const { selectInvoice, clearSelection } = invoicesSlice.actions;
+export default invoicesSlice.reducer;</code></pre>
+
+<div class="callout redux">
+  <strong>Immer magic (the mutation illusion):</strong>
+  Inside RTK reducers, <code>state.loading = true</code> <em>looks</em> like mutation but isn't —
+  RTK wraps every reducer with Immer, which tracks changes and produces a new immutable object.
+  You write imperative code; Redux receives pure functional output.
+  Outside reducers, state is still read-only — mutating it directly will throw.
+</div>
+
+<h3>Store setup</h3>
+<pre><code>// store.js
+import { configureStore } from "@reduxjs/toolkit";
+import invoicesReducer from "./invoicesSlice";
+
+export const store = configureStore({
+  reducer: {
+    invoices: invoicesReducer,
+    // add more slices here as the app grows
+  },
+});
+
+// main.jsx — wrap the whole app
+import { Provider } from "react-redux";
+root.render(
+  &lt;Provider store={store}&gt;
+    &lt;App /&gt;
+  &lt;/Provider&gt;
+);</code></pre>
+
+<h3>Reading and dispatching in components</h3>
+<pre><code>// InvoiceDashboard.jsx
+import { useSelector, useDispatch } from "react-redux";
+import { fetchInvoices, selectInvoice } from "./invoicesSlice";
+
+function InvoiceDashboard() {
+  const dispatch = useDispatch();
+
+  // useSelector: subscribes to a slice of the store, re-renders when it changes
+  const { list, loading, error } = useSelector(state =&gt; state.invoices);
+
+  useEffect(() =&gt; {
+    dispatch(fetchInvoices("CUST-001")); // triggers pending→fulfilled→rejected cycle
+  }, [dispatch]);
+
+  if (loading) return &lt;p&gt;Loading invoices…&lt;/p&gt;;
+  if (error)   return &lt;p&gt;Error: {error}&lt;/p&gt;;
+
+  return (
+    &lt;InvoiceList
+      invoices={list}
+      onSelect={(id) =&gt; dispatch(selectInvoice(id))} // sync action
+    /&gt;
+  );
+}</code></pre>
+
+<!-- ================================================================ -->
+<h2>4 — BillingCo component tree</h2>
+
+<p>When asked "describe a feature you personally built", you can walk through this tree:</p>
+
+<pre><code>&lt;App&gt;
+  &lt;Provider store={store}&gt;         {/* Redux store available everywhere below */}
+    &lt;InvoiceDashboard&gt;             {/* reads invoices from Redux, dispatches fetchInvoices */}
+      &lt;InvoiceList&gt;                {/* maps list → InvoiceCard items */}
+        &lt;InvoiceCard /&gt;            {/* presentational: invoice row, onSelect callback */}
+      &lt;/InvoiceList&gt;
+      &lt;InvoiceDetail&gt;              {/* reads selectedId from Redux, shows detail */}
+        &lt;PaymentForm /&gt;            {/* dispatches recordPayment thunk → POST /api/invoices/{id}/payments */}
+      &lt;/InvoiceDetail&gt;
+    &lt;/InvoiceDashboard&gt;
+  &lt;/Provider&gt;
+&lt;/App&gt;</code></pre>
+
+<p>The Redux store shape that supports this tree:</p>
+<pre><code>{
+  invoices: {
+    list:       Invoice[],   // all invoices for the customer
+    loading:    boolean,     // true while fetching
+    error:      string|null, // set on fetch failure
+    selectedId: string|null  // which invoice is open in detail panel
+  }
+}</code></pre>
+
+<!-- ================================================================ -->
+<h2>5 — Interview talking points</h2>
+
+<table>
+  <thead><tr><th>Question</th><th>Strong answer in one sentence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>When would you use local state vs Redux?</td>
+      <td>Local state for UI-only concerns (is this dropdown open?); Redux for data shared across multiple unrelated components or pages, or for data that persists across navigation.</td>
+    </tr>
+    <tr>
+      <td>What is a reducer?</td>
+      <td>A pure function <code>(state, action) => newState</code> — same input always produces the same output, no side effects, returns a new object rather than mutating the old one.</td>
+    </tr>
+    <tr>
+      <td>What does createAsyncThunk do?</td>
+      <td>Wraps an async function and auto-dispatches three actions — <code>pending</code>, <code>fulfilled</code>, <code>rejected</code> — matching the promise lifecycle, so you handle loading and error states in one place.</td>
+    </tr>
+    <tr>
+      <td>What does useSelector do?</td>
+      <td>Subscribes a component to a specific slice of the Redux store; the component re-renders only when that slice changes — not on every store update.</td>
+    </tr>
+    <tr>
+      <td>What problem does Immer solve in RTK?</td>
+      <td>It lets you write reducers that look like direct mutation but produce immutable state — eliminating the error-prone spread operators that made old Redux reducers verbose and fragile.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================================================================ -->
+<div class="primary-source">
+  <strong>📖 Primary source — read this next:</strong>
+  <a href="https://redux-toolkit.js.org/tutorials/quick-start" target="_blank">
+    Redux Toolkit Quick Start (official)
+  </a>
+  — 15 minutes. Covers configureStore, createSlice, useSelector, useDispatch with a working example.
+  Everything in this lesson traces back to this guide.
+</div>
+
+<!-- ================================================================ -->
+<h2>Quiz — check your understanding</h2>
+
+<div class="quiz-block">
+
+  <div class="question" id="q1">
+    <p>Q1. In React, how does data flow between a parent and child component?</p>
+    <ul class="options" data-correct="1">
+      <li>Parent passes data down to child via props</li>
+      <li>Child pushes data up to parent via props</li>
+      <li>Both share data through a direct ref object</li>
+      <li>State flows up from child to parent via hooks</li>
+    </ul>
+    <div class="explanation">Data flows one way: parent → child via props. Children communicate back by calling callback functions passed as props — they never directly push data to the parent. This is "one-directional data flow."</div>
+  </div>
+
+  <div class="question" id="q2">
+    <p>Q2. A Redux reducer must be:</p>
+    <ul class="options" data-correct="1">
+      <li>A pure function: (currentState, action) => newState</li>
+      <li>An async function that calls the backend API</li>
+      <li>A class method that mutates the store directly</li>
+      <li>A React hook that reads from the global store</li>
+    </ul>
+    <div class="explanation">Reducers are pure functions: same input always produces the same output, no API calls, no mutations. Side effects (API calls) belong in thunks or middleware, not reducers. Hooks (useSelector) read from the store — they don't change it.</div>
+  </div>
+
+  <div class="question" id="q3">
+    <p>Q3. Which RTK function bundles a reducer and action creators together?</p>
+    <ul class="options" data-correct="1">
+      <li>createSlice — bundles reducer and action creators</li>
+      <li>createStore — sets up the global Redux store</li>
+      <li>createReducer — generates reducer logic standalone</li>
+      <li>createAction — builds individual action types only</li>
+    </ul>
+    <div class="explanation">createSlice takes a name, initial state, and a map of reducer functions and auto-generates both the reducer AND typed action creators for each case. This is the RTK pattern that replaced writing separate action type constants, action creators, and switch-case reducers in three different files.</div>
+  </div>
+
+  <div class="question" id="q4">
+    <p>Q4. createAsyncThunk dispatches how many actions over its lifecycle?</p>
+    <ul class="options" data-correct="2">
+      <li>One action: fulfilled when the promise resolves</li>
+      <li>Three actions: pending, fulfilled, and rejected</li>
+      <li>Two actions: loading-start and loading-end only</li>
+      <li>Four actions: start, retry, success, and failure</li>
+    </ul>
+    <div class="explanation">createAsyncThunk dispatches exactly three: pending (immediately on dispatch), fulfilled (on resolve), rejected (on error/reject). Your extraReducers handles all three. This is why you can set loading: true on pending and loading: false on both fulfilled and rejected — it always resolves to one of the two terminal actions.</div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<div class="ask-me">
+  <strong>Stuck or want to go deeper?</strong>
+  Ask your teacher: <em>"Explain the Immer mutation model"</em> /
+  <em>"Show me how to add a recordPayment thunk"</em> /
+  <em>"What's the difference between useSelector and useStore?"</em>
+</div>
+
+<script>
+document.querySelectorAll('.options').forEach(ul => {
+  const correct = parseInt(ul.dataset.correct, 10);
+  ul.querySelectorAll('li').forEach((li, i) => {
+    li.addEventListener('click', () => {
+      if (ul.querySelector('.correct') || ul.querySelector('.wrong')) return;
+      const exp = ul.closest('.question').querySelector('.explanation');
+      if (i + 1 === correct) {
+        li.classList.add('correct');
+      } else {
+        li.classList.add('wrong');
+        ul.querySelectorAll('li')[correct - 1].classList.add('reveal');
+      }
+      if (exp) exp.classList.add('show');
+    });
+  });
+});
+</script>
+</body>
+</html>

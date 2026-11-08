@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 01 — ExecutorService & ForkJoinPool</title>
+  <link rel="stylesheet" href="../../../assets/lesson.css">
+</head>
+<body>
+
+<h1>ExecutorService &amp; ForkJoinPool</h1>
+<div class="meta">
+  <span class="tag">Java Concurrency</span>
+  <span class="tag">Lesson 01</span>
+  <span>~15 min</span>
+  <span>Trading OMS context</span>
+</div>
+
+<p>
+  Java's two main concurrency abstractions serve different shapes of work.
+  Getting the choice wrong in an interview — or in production — means either
+  deadlocked threads or idle CPUs. This lesson draws the line clearly.
+</p>
+
+<div class="callout">
+  <strong>Primary source</strong>
+  <a href="https://docs.oracle.com/en/java/docs/books/effective-java/" target="_blank">Effective Java 3rd ed — Item 80: Prefer executors, tasks, and streams to threads</a>
+  and <a href="https://jcip.net/" target="_blank">Java Concurrency in Practice (Goetz)</a>, Chapter 8 (thread pools).
+</div>
+
+<h2>1. The raw-thread problem</h2>
+
+<p>
+  <code>new Thread(() -&gt; task.run()).start()</code> creates an OS thread for every task.
+  One OS thread costs ~1 MB of stack. A thousand tasks = a gigabyte of RAM just for
+  stacks, plus ~1 ms of OS overhead per thread creation. At OMS scale (thousands of
+  order validations per second) this collapses immediately.
+</p>
+
+<p>
+  A <strong>thread pool</strong> fixes this: create N threads once, reuse them forever,
+  queue tasks to drain.
+</p>
+
+<h2>2. ExecutorService</h2>
+
+<p>
+  <code>ExecutorService</code> is the standard thread-pool interface. You submit tasks;
+  it returns <code>Future&lt;T&gt;</code> handles you can block on later.
+</p>
+
+<h3>Pool flavours</h3>
+<table>
+  <tr><th>Factory</th><th>Threads</th><th>Use when</th></tr>
+  <tr><td><code>newFixedThreadPool(n)</code></td><td>Fixed N</td><td>CPU-bound — set N = core count</td></tr>
+  <tr><td><code>newCachedThreadPool()</code></td><td>Grows/shrinks</td><td>Short I/O bursts</td></tr>
+  <tr><td><code>newSingleThreadExecutor()</code></td><td>1</td><td>Serial ordering required</td></tr>
+  <tr><td><code>newVirtualThreadPerTaskExecutor()</code></td><td>Virtual (Java 21)</td><td>Massive I/O concurrency</td></tr>
+</table>
+
+<h3>Core pattern</h3>
+<pre><code>ExecutorService pool = Executors.newFixedThreadPool(
+    Runtime.getRuntime().availableProcessors());
+try {
+    // submit returns Future — non-blocking
+    Future&lt;ValidationResult&gt; f = pool.submit(() -> riskEngine.validate(order));
+
+    // do other work here...
+
+    ValidationResult result = f.get();             // blocks until done
+    // f.get(500, TimeUnit.MILLISECONDS);           // with timeout
+} finally {
+    pool.shutdown();                               // stop accepting tasks
+    pool.awaitTermination(10, TimeUnit.SECONDS);   // wait for in-flight tasks
+}</code></pre>
+
+<div class="callout danger">
+  <strong>Always shutdown.</strong>
+  Forgetting <code>shutdown()</code> leaves threads alive — the JVM never exits.
+  Java 19+ <code>ExecutorService</code> implements <code>AutoCloseable</code>, so
+  try-with-resources works: <code>try (var pool = Executors.newFixedThreadPool(4)) { ... }</code>
+</div>
+
+<h3>Batch pattern — invokeAll</h3>
+<pre><code>List&lt;Callable&lt;ValidationResult&gt;&gt; tasks = orders.stream()
+    .map(o -> (Callable&lt;ValidationResult&gt;) () -> riskEngine.validate(o))
+    .toList();
+
+// submits all, blocks until ALL complete
+List&lt;Future&lt;ValidationResult&gt;&gt; futures = pool.invokeAll(tasks);
+
+List&lt;ValidationResult&gt; results = futures.stream()
+    .map(f -> f.get())
+    .toList();</code></pre>
+
+<h2>3. ForkJoinPool</h2>
+
+<p>
+  ExecutorService struggles with <strong>recursive divide-and-conquer</strong> tasks:
+  a task that splits itself into subtasks and waits for them. With a fixed pool,
+  the waiting thread holds a slot but does no work — pool exhaustion is likely.
+</p>
+
+<p>
+  <code>ForkJoinPool</code> solves this with <strong>work stealing</strong>: each
+  thread has its own deque. Idle threads steal tasks from the top of busy threads'
+  deques. No thread ever spins idle while work exists.
+</p>
+
+<h3>RecursiveTask — the pattern</h3>
+<pre><code>class PnLTask extends RecursiveTask&lt;BigDecimal&gt; {
+    private final List&lt;Position&gt; positions;
+    private static final int THRESHOLD = 500;
+
+    @Override
+    protected BigDecimal compute() {
+        if (positions.size() &lt;= THRESHOLD) {
+            // base case — compute directly
+            return positions.stream()
+                .map(Position::unrealisedPnL)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        int mid = positions.size() / 2;
+        var left  = new PnLTask(positions.subList(0, mid));
+        var right = new PnLTask(positions.subList(mid, positions.size()));
+
+        left.fork();                        // submit left async to pool
+        BigDecimal rightResult = right.compute();  // compute right on THIS thread
+        BigDecimal leftResult  = left.join();      // block for left result
+
+        return leftResult.add(rightResult);
+    }
+}
+
+// invoke via commonPool
+BigDecimal total = ForkJoinPool.commonPool()
+    .invoke(new PnLTask(allPositions));</code></pre>
+
+<div class="callout warn">
+  <strong>fork/compute order.</strong>
+  Always <code>fork()</code> one half, <code>compute()</code> the other on the current thread,
+  then <code>join()</code> the forked half. Never fork both — that wastes a thread doing nothing but joining.
+</div>
+
+<h2>4. Comparison</h2>
+
+<div class="decision">
+  <div class="decision-card">
+    <h4>ExecutorService</h4>
+    <ul>
+      <li>Independent, uniform tasks</li>
+      <li>I/O-bound or CPU-bound</li>
+      <li>Tasks don't spawn subtasks</li>
+      <li>Results via <code>Future</code></li>
+      <li><strong>OMS use:</strong> parallel order validation</li>
+    </ul>
+  </div>
+  <div class="decision-card right">
+    <h4>ForkJoinPool</h4>
+    <ul>
+      <li>Recursive, divide-and-conquer</li>
+      <li>CPU-bound only — no blocking I/O</li>
+      <li>Tasks fork subtasks</li>
+      <li>Results via <code>join()</code></li>
+      <li><strong>OMS use:</strong> P&amp;L aggregation over millions of positions</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout danger">
+  <strong>commonPool starvation trap.</strong>
+  <code>CompletableFuture.supplyAsync()</code> without a custom executor uses
+  <code>commonPool</code>. A blocking call inside (DB, HTTP) starves <em>all</em>
+  parallel streams in the JVM. Always pass a dedicated <code>ExecutorService</code>
+  for I/O-bound <code>CompletableFuture</code> chains.
+</div>
+
+<h2>Quiz</h2>
+
+<div class="quiz" id="q1">
+  <div class="quiz-header">Question 1 of 3</div>
+  <div class="quiz-question">You need to call 50 external pricing APIs concurrently and collect all results. Which pool is correct?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q1" value="a"> ForkJoinPool.commonPool() with RecursiveTask</label></li>
+    <li><label><input type="radio" name="q1" value="b"> Executors.newFixedThreadPool(50) with invokeAll</label></li>
+    <li><label><input type="radio" name="q1" value="c"> Executors.newSingleThreadExecutor() with submit</label></li>
+    <li><label><input type="radio" name="q1" value="d"> new Thread() per API call, join all</label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q1','b','Tasks are independent I/O calls — not recursive. ExecutorService with invokeAll submits all 50, blocks until all done, returns all Futures. ForkJoinPool is for recursive CPU work. Single thread would serialise all 50 calls. Raw threads waste OS resources.')">Check</button>
+  <div class="quiz-feedback" id="q1-fb"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-header">Question 2 of 3</div>
+  <div class="quiz-question">In a RecursiveTask, you have left and right subtasks. What is the correct order of calls?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q2" value="a"> left.fork(); right.fork(); left.join(); right.join()</label></li>
+    <li><label><input type="radio" name="q2" value="b"> left.fork(); right.compute(); left.join()</label></li>
+    <li><label><input type="radio" name="q2" value="c"> left.compute(); right.compute()</label></li>
+    <li><label><input type="radio" name="q2" value="d"> left.join(); right.fork(); left.fork()</label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q2','b','fork() the left (submits it async), compute() the right on the current thread (uses it productively rather than blocking), then join() the left to get its result. Forking both wastes a thread that does nothing but wait on join.')">Check</button>
+  <div class="quiz-feedback" id="q2-fb"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-header">Question 3 of 3</div>
+  <div class="quiz-question">What is the risk of using CompletableFuture.supplyAsync() with a blocking DB call and no custom executor?</div>
+  <ul class="quiz-options">
+    <li><label><input type="radio" name="q3" value="a"> The call runs on the main thread and blocks the HTTP handler</label></li>
+    <li><label><input type="radio" name="q3" value="b"> The call starves commonPool, degrading all parallel streams in the JVM</label></li>
+    <li><label><input type="radio" name="q3" value="c"> The Future never completes because DB calls are not Callable</label></li>
+    <li><label><input type="radio" name="q3" value="d"> It throws IllegalStateException at runtime</label></li>
+  </ul>
+  <button class="quiz-btn" onclick="check('q3','b','supplyAsync() with no executor uses ForkJoinPool.commonPool(). That pool is sized to CPU cores − 1 and is shared by all parallel streams. A blocking DB call holds a thread there, starving all other parallel work. Fix: always pass a dedicated ExecutorService for I/O-bound async chains.')">Check</button>
+  <div class="quiz-feedback" id="q3-fb"></div>
+</div>
+
+<div class="ask-me">
+  💬 <strong>Ask me anything.</strong> Confused about work stealing? Want to see a deadlock example with a fixed pool? Want to know how virtual threads (Java 21) change this picture? Ask your teaching agent.
+</div>
+
+<div class="lesson-nav">
+  <span>← <a href="../../ood/bank/0001-domain-model.html">OOD: Bank Domain Model</a></span>
+  <span><a href="0002-completable-future.html">Next: CompletableFuture →</a></span>
+</div>
+
+<script>
+function check(qid, correct, explanation) {
+  const selected = document.querySelector(`input[name="${qid}"]:checked`);
+  const fb = document.getElementById(`${qid}-fb`);
+  if (!selected) return;
+  if (selected.value === correct) {
+    fb.className = 'quiz-feedback correct';
+    fb.textContent = '✅ Correct. ' + explanation;
+  } else {
+    fb.className = 'quiz-feedback wrong';
+    fb.textContent = '❌ Not quite. ' + explanation;
+  }
+  fb.style.display = 'block';
+}
+</script>
+
+</body>
+</html>
